@@ -1,4 +1,4 @@
-package com.spectrayan.spector.index;
+package com.spectrayan.spector.commons;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,7 +61,6 @@ public final class ContentExtractor {
 
         StringBuilder sb = new StringBuilder();
         Matcher m = JSON_STRING_VALUE.matcher(json);
-        boolean isKey = true;
 
         int lastEnd = 0;
         while (m.find()) {
@@ -71,18 +70,13 @@ public final class ContentExtractor {
 
             // After a colon, we have a value; after comma/open bracket, we have a key
             if (between.endsWith(":")) {
-                // This is a value
                 sb.append(m.group(1)).append(' ');
             } else if (between.isEmpty() || between.endsWith(",") || between.endsWith("[")
                     || between.endsWith("{")) {
-                // This could be a key in an object or a value in an array
-                // Look ahead for colon
                 String after = json.substring(m.end()).stripLeading();
                 if (!after.startsWith(":")) {
-                    // It's a value (in an array or standalone)
                     sb.append(m.group(1)).append(' ');
                 }
-                // else it's a key — skip
             }
         }
 
@@ -129,7 +123,6 @@ public final class ContentExtractor {
         Matcher m = JAVA_FIELD.matcher(toStringOutput);
         while (m.find()) {
             String value = m.group(2).trim();
-            // Skip numeric-only values and booleans for text search
             if (!value.matches("^-?\\d+\\.?\\d*$")
                     && !value.equals("true") && !value.equals("false")
                     && !value.equals("null")) {
@@ -156,7 +149,7 @@ public final class ContentExtractor {
         return content; // plain text
     }
 
-    private static String normalizeWhitespace(String text) {
+    static String normalizeWhitespace(String text) {
         return text.replaceAll("\\s+", " ").trim();
     }
 }

@@ -1,4 +1,4 @@
-package com.spectrayan.spector.index;
+package com.spectrayan.spector.commons;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -89,7 +89,7 @@ class ContentExtractorTest {
         String obj = "Document{id=doc-1, title=Hello World, content=Search engine test, score=0.95}";
         String text = ContentExtractor.fromJavaObject(obj);
         assertThat(text).contains("Hello World", "Search engine test");
-        assertThat(text).doesNotContain("0.95"); // numeric values skipped
+        assertThat(text).doesNotContain("0.95");
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.spectrayan.spector.index;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.spectrayan.spector.commons.ContentExtractor;
 import com.spectrayan.spector.core.SimilarityFunction;
 
 import org.junit.jupiter.api.Test;

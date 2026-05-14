@@ -31,6 +31,10 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-query</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

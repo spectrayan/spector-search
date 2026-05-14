@@ -23,6 +23,10 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-storage</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
     </dependencies>
 
 </project>
