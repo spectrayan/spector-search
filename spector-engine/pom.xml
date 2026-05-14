@@ -35,6 +35,10 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-commons</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-embed-api</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

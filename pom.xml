@@ -27,6 +27,8 @@
         <module>spector-storage</module>
         <module>spector-index</module>
         <module>spector-query</module>
+        <module>spector-embed-api</module>
+        <module>spector-embed-ollama</module>
         <module>spector-engine</module>
         <module>spector-server</module>
         <module>spector-bench</module>
@@ -95,6 +97,23 @@
                 <groupId>com.spectrayan</groupId>
                 <artifactId>spector-commons</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-embed-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-embed-ollama</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- ── Jackson (JSON) ── -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
             </dependency>
 
             <!-- ── Logging ── -->

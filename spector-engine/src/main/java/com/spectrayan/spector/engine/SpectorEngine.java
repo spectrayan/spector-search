@@ -5,6 +5,8 @@ import com.spectrayan.spector.commons.StreamingChunker;
 import com.spectrayan.spector.commons.TextChunker;
 import com.spectrayan.spector.commons.TokenChunker;
 import com.spectrayan.spector.core.SimdCapability;
+import com.spectrayan.spector.embed.EmbeddingProvider;
+import com.spectrayan.spector.embed.EmbeddingResult;
 import com.spectrayan.spector.index.BM25Index;
 import com.spectrayan.spector.index.HnswIndex;
 import com.spectrayan.spector.index.ScoredResult;
@@ -47,6 +49,7 @@ public class SpectorEngine implements AutoCloseable {
     private final HnswIndex vectorIndex;
     private final BM25Index keywordIndex;
     private final HybridSearchOrchestrator orchestrator;
+    private final EmbeddingProvider embeddingProvider; // nullable
     private volatile boolean closed;
 
     /**
@@ -55,26 +58,34 @@ public class SpectorEngine implements AutoCloseable {
      * @param config the engine configuration
      */
     public SpectorEngine(SpectorConfig config) {
+        this(config, null);
+    }
+
+    /**
+     * Creates an engine with configuration and an embedding provider.
+     *
+     * <p>When an embedding provider is set, documents can be ingested
+     * with just text — vectors are generated automatically.</p>
+     *
+     * @param config   the engine configuration
+     * @param provider the embedding provider (nullable)
+     */
+    public SpectorEngine(SpectorConfig config, EmbeddingProvider provider) {
         this.config = config;
+        this.embeddingProvider = provider;
         this.closed = false;
 
-        log.info("Initializing SpectorEngine: dims={}, capacity={}, similarity={}, {}",
+        log.info("Initializing SpectorEngine: dims={}, capacity={}, similarity={}, embedding={}, {}",
                 config.dimensions(), config.capacity(), config.similarityFunction(),
+                provider != null ? provider.modelName() : "none",
                 SimdCapability.report());
 
-        // Initialize storage
         this.vectorStore = new InMemoryVectorStore(config.dimensions(), config.capacity());
         this.documentStore = new DocumentStore(config.capacity());
-
-        // Initialize indexes
         this.vectorIndex = new HnswIndex(
-                config.dimensions(),
-                config.capacity(),
-                config.similarityFunction(),
-                config.hnswParams());
+                config.dimensions(), config.capacity(),
+                config.similarityFunction(), config.hnswParams());
         this.keywordIndex = new BM25Index();
-
-        // Initialize query orchestrator
         this.orchestrator = new HybridSearchOrchestrator(keywordIndex, vectorIndex);
 
         log.info("SpectorEngine initialized successfully");
@@ -269,6 +280,66 @@ public class SpectorEngine implements AutoCloseable {
         return chunks.size();
     }
 
+    // ─────────────── Auto-Embed Ingestion ───────────────
+
+    /**
+     * Ingests a document with automatic embedding generation.
+     * Requires an {@link EmbeddingProvider} to be configured.
+     *
+     * @param id      unique document identifier
+     * @param content text content
+     * @throws IllegalStateException if no embedding provider is configured
+     */
+    public void ingest(String id, String content) {
+        ensureOpen();
+        requireEmbeddingProvider();
+        float[] vector = embeddingProvider.embed(content).vector();
+        ingest(id, content, vector);
+    }
+
+    /**
+     * Ingests a document with title and automatic embedding.
+     *
+     * @param id      unique document identifier
+     * @param title   document title
+     * @param content text content
+     */
+    public void ingest(String id, String title, String content) {
+        ensureOpen();
+        requireEmbeddingProvider();
+        float[] vector = embeddingProvider.embed(title + " " + content).vector();
+        ingest(id, title, content, vector);
+    }
+
+    /**
+     * Auto-embed chunked ingestion for large documents.
+     *
+     * @param id      document ID
+     * @param content full document text
+     * @return number of chunks ingested
+     */
+    public int ingestChunkedAuto(String id, String content) {
+        requireEmbeddingProvider();
+        return ingestChunked(id, content, text -> embeddingProvider.embed(text).vector());
+    }
+
+    /**
+     * Auto-embed file ingestion with streaming.
+     *
+     * @param path       path to the text file
+     * @param documentId parent document ID
+     * @param chunkSize  target chunk size in characters
+     * @param overlap    overlap between chunks
+     * @return number of chunks ingested
+     * @throws java.io.IOException if the file cannot be read
+     */
+    public int ingestFileAuto(java.nio.file.Path path, String documentId,
+                              int chunkSize, int overlap) throws java.io.IOException {
+        requireEmbeddingProvider();
+        return ingestFile(path, documentId,
+                text -> embeddingProvider.embed(text).vector(), chunkSize, overlap);
+    }
+
     // ─────────────── Search ───────────────
 
     /**
@@ -316,6 +387,20 @@ public class SpectorEngine implements AutoCloseable {
         return search(SearchQuery.hybrid(text, vector, topK));
     }
 
+    /**
+     * Auto-embed search: embeds the query text and performs hybrid search.
+     *
+     * @param text query text
+     * @param topK max results
+     * @return search response
+     */
+    public SearchResponse search(String text, int topK) {
+        ensureOpen();
+        requireEmbeddingProvider();
+        float[] queryVector = embeddingProvider.embed(text).vector();
+        return hybridSearch(text, queryVector, topK);
+    }
+
     // ─────────────── Accessors ───────────────
 
     /** Returns the engine configuration. */
@@ -330,6 +415,12 @@ public class SpectorEngine implements AutoCloseable {
     /** Returns the vector store. */
     public VectorStore vectorStore() { return vectorStore; }
 
+    /** Returns the embedding provider, or null if none configured. */
+    public EmbeddingProvider embeddingProvider() { return embeddingProvider; }
+
+    /** Returns true if an embedding provider is configured. */
+    public boolean hasEmbeddingProvider() { return embeddingProvider != null; }
+
     // ─────────────── Lifecycle ───────────────
 
     @Override
@@ -341,6 +432,7 @@ public class SpectorEngine implements AutoCloseable {
                 keywordIndex.close();
                 vectorStore.close();
                 documentStore.close();
+                if (embeddingProvider != null) embeddingProvider.close();
             } catch (Exception e) {
                 log.warn("Error during engine shutdown", e);
             }
@@ -350,5 +442,12 @@ public class SpectorEngine implements AutoCloseable {
 
     private void ensureOpen() {
         if (closed) throw new IllegalStateException("SpectorEngine is closed");
+    }
+
+    private void requireEmbeddingProvider() {
+        if (embeddingProvider == null) {
+            throw new IllegalStateException(
+                    "No EmbeddingProvider configured. Use SpectorEngine(config, provider) or supply vectors manually.");
+        }
     }
 }
