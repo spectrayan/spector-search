@@ -1,7 +1,9 @@
 package com.spectrayan.spector.engine;
 
 import com.spectrayan.spector.commons.ContentExtractor;
+import com.spectrayan.spector.commons.StreamingChunker;
 import com.spectrayan.spector.commons.TextChunker;
+import com.spectrayan.spector.commons.TokenChunker;
 import com.spectrayan.spector.core.SimdCapability;
 import com.spectrayan.spector.index.BM25Index;
 import com.spectrayan.spector.index.HnswIndex;
@@ -197,6 +199,74 @@ public class SpectorEngine implements AutoCloseable {
     public void ingestStructured(String id, String content, float[] vector) {
         String extracted = ContentExtractor.extract(content);
         ingest(id, extracted, vector);
+    }
+
+    /**
+     * Ingests a large file using streaming chunking with bounded memory.
+     *
+     * <p>Only ~2× chunkSize characters are held in memory at any time,
+     * making this suitable for multi-GB files.</p>
+     *
+     * @param path           path to the text file
+     * @param documentId     parent document ID
+     * @param vectorProvider function mapping chunk text to an embedding vector
+     * @param chunkSize      target chunk size in characters
+     * @param overlap        overlap between chunks in characters
+     * @return number of chunks ingested
+     * @throws java.io.IOException if the file cannot be read
+     */
+    public int ingestFile(java.nio.file.Path path, String documentId,
+                          java.util.function.Function<String, float[]> vectorProvider,
+                          int chunkSize, int overlap) throws java.io.IOException {
+        ensureOpen();
+        int count = 0;
+
+        try (var stream = StreamingChunker.chunkFile(path, documentId, chunkSize, overlap)) {
+            var iter = stream.iterator();
+            while (iter.hasNext()) {
+                var chunk = iter.next();
+                float[] vector = vectorProvider.apply(chunk.text());
+                int storeIndex = vectorStore.put(chunk.chunkId(), vector);
+                vectorIndex.add(chunk.chunkId(), storeIndex, vector);
+                keywordIndex.index(chunk.chunkId(), chunk.text());
+                count++;
+            }
+        }
+
+        log.info("Streaming-ingested file '{}' as {} chunks (chunkSize={}, overlap={})",
+                path.getFileName(), count, chunkSize, overlap);
+        return count;
+    }
+
+    /**
+     * Ingests a large document using token-level chunking for precise token limits.
+     *
+     * @param id            document ID
+     * @param content       full document text
+     * @param vectorProvider function mapping chunk text to an embedding vector
+     * @param maxTokens     maximum tokens per chunk
+     * @param overlapTokens overlap tokens between chunks
+     * @return number of chunks ingested
+     */
+    public int ingestTokenChunked(String id, String content,
+                                  java.util.function.Function<String, float[]> vectorProvider,
+                                  int maxTokens, int overlapTokens) {
+        ensureOpen();
+
+        var chunker = new TokenChunker(maxTokens, overlapTokens);
+        documentStore.put(Document.of(id, content));
+
+        var chunks = chunker.chunk(id, content);
+        for (var chunk : chunks) {
+            float[] vector = vectorProvider.apply(chunk.text());
+            int storeIndex = vectorStore.put(chunk.chunkId(), vector);
+            vectorIndex.add(chunk.chunkId(), storeIndex, vector);
+            keywordIndex.index(chunk.chunkId(), chunk.text());
+        }
+
+        log.info("Token-chunked '{}' into {} chunks (maxTokens={}, overlap={})",
+                id, chunks.size(), maxTokens, overlapTokens);
+        return chunks.size();
     }
 
     // ─────────────── Search ───────────────
