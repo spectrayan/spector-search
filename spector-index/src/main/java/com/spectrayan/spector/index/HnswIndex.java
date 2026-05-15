@@ -6,8 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -240,7 +239,8 @@ public class HnswIndex implements VectorIndex {
      * (worst score on top for bounded eviction).
      */
     private NeighborQueue searchLayer(float[] query, int entryNode, int ef, int layer) {
-        Set<Integer> visited = new HashSet<>();
+        int currentNodeCount = nodeCount;  // snapshot for BitSet sizing
+        BitSet visited = new BitSet(currentNodeCount);
         // candidates: max-heap (worst on top) for bounded top-K tracking
         NeighborQueue candidates = new NeighborQueue(ef + 1, ef, maxHeap());
         // workQueue: min-heap (best on top) for BFS expansion
@@ -249,11 +249,12 @@ public class HnswIndex implements VectorIndex {
         float entryDist = distance(query, entryNode);
         candidates.add(entryNode, entryDist);
         workQueue.add(entryNode, entryDist);
-        visited.add(entryNode);
+        visited.set(entryNode);
 
         while (!workQueue.isEmpty()) {
+            // Retrieve score before polling to avoid recomputing distance
+            float currentDist = workQueue.topScore();
             int current = workQueue.poll();
-            float currentDist = distance(query, current);
 
             // Stop if current best candidate is worse than worst in result set
             if (candidates.size() >= ef && !isBetter(currentDist, candidates.topScore())) {
@@ -262,7 +263,8 @@ public class HnswIndex implements VectorIndex {
 
             int[] nbrs = getNeighbors(current, layer);
             for (int neighbor : nbrs) {
-                if (visited.add(neighbor)) {
+                if (!visited.get(neighbor)) {
+                    visited.set(neighbor);
                     float dist = distance(query, neighbor);
                     if (candidates.size() < ef || isBetter(dist, candidates.topScore())) {
                         candidates.add(neighbor, dist);
@@ -300,8 +302,9 @@ public class HnswIndex implements VectorIndex {
         }
 
         if (currentNeighbors.length < maxConn) {
-            // Room available — just append
-            int[] newNeighbors = Arrays.copyOf(currentNeighbors, currentNeighbors.length + 1);
+            // Room available — append (pre-sized array avoids repeated growth)
+            int[] newNeighbors = new int[currentNeighbors.length + 1];
+            System.arraycopy(currentNeighbors, 0, newNeighbors, 0, currentNeighbors.length);
             newNeighbors[currentNeighbors.length] = toNode;
             setNeighbors(fromNode, layer, newNeighbors);
         } else {
@@ -377,5 +380,33 @@ public class HnswIndex implements VectorIndex {
         double r = ThreadLocalRandom.current().nextDouble();
         int level = (int) (-Math.log(r) * params.levelMultiplier());
         return Math.max(0, level);
+    }
+
+    // ─────────────── Serialization accessors ───────────────
+
+    /** Returns the HNSW parameters. */
+    public HnswParams params() { return params; }
+
+    /** Returns the dimensionality. */
+    public int dimensions() { return dimensions; }
+
+    /** Returns the entry point node index. */
+    public int entryPoint() { return entryPoint; }
+
+    /** Returns the max level in the graph. */
+    public int maxLevel() { return maxLevel; }
+
+    /** Returns the ID for the given node. */
+    public String getId(int nodeIdx) { return ids[nodeIdx]; }
+
+    /** Returns the inline vector copy for the given node. */
+    public float[] getVector(int nodeIdx) { return vectors[nodeIdx]; }
+
+    /** Returns the level for the given node. */
+    public int getLevel(int nodeIdx) { return nodeLevels[nodeIdx]; }
+
+    /** Returns the neighbor indices at the specified layer. */
+    public int[] getNeighborsAtLayer(int nodeIdx, int layer) {
+        return getNeighbors(nodeIdx, layer);
     }
 }
