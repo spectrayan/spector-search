@@ -29,8 +29,10 @@
         <module>spector-query</module>
         <module>spector-embed-api</module>
         <module>spector-embed-ollama</module>
+        <module>spector-gpu</module>
         <module>spector-engine</module>
         <module>spector-server</module>
+        <module>spector-cluster</module>
         <module>spector-bench</module>
     </modules>
 
@@ -106,6 +108,16 @@
             <dependency>
                 <groupId>com.spectrayan</groupId>
                 <artifactId>spector-embed-ollama</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-gpu</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-cluster</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -216,13 +228,13 @@
                     </configuration>
                 </plugin>
 
-                <!-- Surefire: pass Vector API module to test JVM -->
+                <!-- Surefire: pass Vector API module + native access to test JVM -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
-                        <argLine>--add-modules ${vector.api.module}</argLine>
+                        <argLine>--add-modules ${vector.api.module} --enable-native-access=ALL-UNNAMED</argLine>
                     </configuration>
                 </plugin>
 
