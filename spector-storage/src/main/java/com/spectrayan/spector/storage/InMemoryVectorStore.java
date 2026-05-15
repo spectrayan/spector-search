@@ -6,6 +6,7 @@ import java.lang.foreign.ValueLayout;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,7 @@ public class InMemoryVectorStore implements VectorStore {
     private final MemorySegment segment;
     private final Map<String, Integer> idToIndex;
     private final AtomicInteger count;
+    private final ReentrantLock writeLock = new ReentrantLock();
     private volatile boolean closed;
 
     /**
@@ -64,31 +66,36 @@ public class InMemoryVectorStore implements VectorStore {
     }
 
     @Override
-    public synchronized int put(String id, float[] vector) {
-        ensureOpen();
-        if (vector.length != layout.dimensions()) {
-            throw new IllegalArgumentException(
-                    "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
-        }
+    public int put(String id, float[] vector) {
+        writeLock.lock();
+        try {
+            ensureOpen();
+            if (vector.length != layout.dimensions()) {
+                throw new IllegalArgumentException(
+                        "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
+            }
 
-        // Check if ID already exists (update in-place)
-        Integer existingIndex = idToIndex.get(id);
-        if (existingIndex != null) {
-            layout.writeVector(segment, existingIndex, vector);
-            return existingIndex;
-        }
+            // Check if ID already exists (update in-place)
+            Integer existingIndex = idToIndex.get(id);
+            if (existingIndex != null) {
+                layout.writeVector(segment, existingIndex, vector);
+                return existingIndex;
+            }
 
-        // Allocate new slot
-        int index = count.getAndIncrement();
-        if (index >= capacity) {
-            count.decrementAndGet();
-            throw new IllegalStateException(
-                    "Store is full: capacity=" + capacity);
-        }
+            // Allocate new slot
+            int index = count.getAndIncrement();
+            if (index >= capacity) {
+                count.decrementAndGet();
+                throw new IllegalStateException(
+                        "Store is full: capacity=" + capacity);
+            }
 
-        layout.writeVector(segment, index, vector);
-        idToIndex.put(id, index);
-        return index;
+            layout.writeVector(segment, index, vector);
+            idToIndex.put(id, index);
+            return index;
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
@@ -139,11 +146,16 @@ public class InMemoryVectorStore implements VectorStore {
     }
 
     @Override
-    public synchronized void close() {
-        if (!closed) {
-            closed = true;
-            arena.close();
-            log.info("InMemoryVectorStore closed: released {} vectors", count.get());
+    public void close() {
+        writeLock.lock();
+        try {
+            if (!closed) {
+                closed = true;
+                arena.close();
+                log.info("InMemoryVectorStore closed: released {} vectors", count.get());
+            }
+        } finally {
+            writeLock.unlock();
         }
     }
 
