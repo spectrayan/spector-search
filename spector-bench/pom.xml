@@ -30,6 +30,13 @@
             <artifactId>jmh-generator-annprocess</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        <!-- Logging at runtime -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>runtime</scope>
+        </dependency>
     </dependencies>
 
     <!-- Skip tests by default for benchmarks module -->
@@ -40,6 +47,21 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <skip>true</skip>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>com.spectrayan.spector.bench.PerformanceTestRunner</mainClass>
+                    <arguments/>
+                    <systemProperties>
+                        <systemProperty>
+                            <key>logback.configurationFile</key>
+                            <value>logback-bench.xml</value>
+                        </systemProperty>
+                    </systemProperties>
                 </configuration>
             </plugin>
         </plugins>
