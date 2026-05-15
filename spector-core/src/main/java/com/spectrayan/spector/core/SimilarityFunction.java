@@ -6,6 +6,10 @@ package com.spectrayan.spector.core;
  * <p>Each variant encapsulates the corresponding SIMD kernel and provides
  * a uniform {@link #compute(float[], float[])} interface for use by indexes
  * and query engines.</p>
+ *
+ * <p>Also supports asymmetric quantized computation via
+ * {@link #computeQuantized(float[], byte[], float[], float[], int)} for
+ * float32 query × int8 document distance.</p>
  */
 public enum SimilarityFunction {
 
@@ -22,6 +26,12 @@ public enum SimilarityFunction {
         @Override
         public float compute(float[] a, int aOff, float[] b, int bOff, int len) {
             return CosineSimilarity.compute(a, aOff, b, bOff, len);
+        }
+
+        @Override
+        public float computeQuantized(float[] query, byte[] quantized,
+                                       float[] mins, float[] scales, int length) {
+            return QuantizedCosineSimilarity.compute(query, quantized, mins, scales, length);
         }
 
         @Override
@@ -46,6 +56,12 @@ public enum SimilarityFunction {
         }
 
         @Override
+        public float computeQuantized(float[] query, byte[] quantized,
+                                       float[] mins, float[] scales, int length) {
+            return QuantizedDotProduct.compute(query, quantized, mins, scales, length);
+        }
+
+        @Override
         public boolean higherIsBetter() {
             return true;
         }
@@ -64,6 +80,19 @@ public enum SimilarityFunction {
         @Override
         public float compute(float[] a, int aOff, float[] b, int bOff, int len) {
             return EuclideanDistance.compute(a, aOff, b, bOff, len);
+        }
+
+        @Override
+        public float computeQuantized(float[] query, byte[] quantized,
+                                       float[] mins, float[] scales, int length) {
+            // Dequantize and compute — no specialized Euclidean quantized kernel yet
+            float sum = 0;
+            for (int i = 0; i < length; i++) {
+                float d = Byte.toUnsignedInt(quantized[i]) * scales[i] + mins[i];
+                float diff = query[i] - d;
+                sum += diff * diff;
+            }
+            return (float) Math.sqrt(sum);
         }
 
         @Override
@@ -94,9 +123,24 @@ public enum SimilarityFunction {
     public abstract float compute(float[] a, int aOff, float[] b, int bOff, int len);
 
     /**
+     * Computes asymmetric similarity/distance between a float32 query
+     * and a quantized int8 document vector.
+     *
+     * @param query     query vector in float32
+     * @param quantized document vector in int8 (unsigned byte)
+     * @param mins      per-dimension minimums from calibration
+     * @param scales    per-dimension scales from calibration
+     * @param length    number of dimensions
+     * @return the similarity or distance score
+     */
+    public abstract float computeQuantized(float[] query, byte[] quantized,
+                                            float[] mins, float[] scales, int length);
+
+    /**
      * Whether higher scores indicate greater similarity.
      *
      * @return true for similarity metrics (cosine, dot), false for distance metrics (euclidean)
      */
     public abstract boolean higherIsBetter();
 }
+
