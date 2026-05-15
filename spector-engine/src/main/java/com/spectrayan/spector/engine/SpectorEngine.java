@@ -4,23 +4,32 @@ import com.spectrayan.spector.commons.ContentExtractor;
 import com.spectrayan.spector.commons.StreamingChunker;
 import com.spectrayan.spector.commons.TextChunker;
 import com.spectrayan.spector.commons.TokenChunker;
+import com.spectrayan.spector.core.QuantizationType;
 import com.spectrayan.spector.core.SimdCapability;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.embed.EmbeddingResult;
 import com.spectrayan.spector.index.BM25Index;
+import com.spectrayan.spector.index.DiskHnswIndex;
+import com.spectrayan.spector.index.DiskHnswWriter;
 import com.spectrayan.spector.index.HnswIndex;
+import com.spectrayan.spector.index.QuantizedHnswIndex;
 import com.spectrayan.spector.index.ScoredResult;
+import com.spectrayan.spector.index.VectorIndex;
+import com.spectrayan.spector.index.ivf.IvfPqIndex;
 import com.spectrayan.spector.query.HybridSearchOrchestrator;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 import com.spectrayan.spector.storage.Document;
 import com.spectrayan.spector.storage.DocumentStore;
 import com.spectrayan.spector.storage.InMemoryVectorStore;
+import com.spectrayan.spector.storage.PersistenceMode;
 import com.spectrayan.spector.storage.VectorStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -38,6 +47,14 @@ import java.util.List;
  *           SearchQuery.hybrid("hello", queryEmbedding, 10));
  *   }
  * }</pre>
+ *
+ * <h3>Quantization</h3>
+ * <p>When configured with {@link QuantizationType#SCALAR_INT8}, the engine
+ * uses a quantized HNSW index for 4× memory reduction with ~99% recall.</p>
+ *
+ * <h3>Persistence</h3>
+ * <p>When configured with {@link PersistenceMode#DISK}, the engine writes
+ * the HNSW graph to disk on close and can reload from a persisted index.</p>
  */
 public class SpectorEngine implements AutoCloseable {
 
@@ -46,11 +63,17 @@ public class SpectorEngine implements AutoCloseable {
     private final SpectorConfig config;
     private final VectorStore vectorStore;
     private final DocumentStore documentStore;
-    private final HnswIndex vectorIndex;
+    private final VectorIndex vectorIndex;
     private final BM25Index keywordIndex;
     private final HybridSearchOrchestrator orchestrator;
     private final EmbeddingProvider embeddingProvider; // nullable
     private volatile boolean closed;
+
+    // IVF-PQ training state — buffers vectors until enough for training
+    private java.util.List<float[]> ivfTrainingBuffer;
+    private java.util.List<String> ivfTrainingIds;
+    private java.util.List<String> ivfTrainingContents;
+    private volatile boolean ivfTrained;
 
     /**
      * Creates and initializes a new engine with the given configuration.
@@ -74,18 +97,81 @@ public class SpectorEngine implements AutoCloseable {
         this.config = config;
         this.embeddingProvider = provider;
         this.closed = false;
+        this.ivfTrained = false;
 
-        log.info("Initializing SpectorEngine: dims={}, capacity={}, similarity={}, embedding={}, {}",
+        log.info("Initializing SpectorEngine: dims={}, capacity={}, similarity={}, " +
+                        "quantization={}, persistence={}, indexType={}, embedding={}, {}",
                 config.dimensions(), config.capacity(), config.similarityFunction(),
+                config.quantization(), config.persistenceMode(), config.indexType(),
                 provider != null ? provider.modelName() : "none",
                 SimdCapability.report());
 
-        this.vectorStore = new InMemoryVectorStore(config.dimensions(), config.capacity());
-        this.documentStore = new DocumentStore(config.capacity());
-        this.vectorIndex = new HnswIndex(
-                config.dimensions(), config.capacity(),
-                config.similarityFunction(), config.hnswParams());
-        this.keywordIndex = new BM25Index();
+        VectorStore vs;
+        DocumentStore ds;
+        VectorIndex vi;
+        BM25Index ki;
+        boolean loadedFromDisk = false;
+
+        // Check for existing disk index
+        if (config.persistenceMode() == PersistenceMode.DISK) {
+            Path indexFile = config.dataDirectory().resolve("index.spct");
+            if (java.nio.file.Files.exists(indexFile)) {
+                try {
+                    log.info("Loading existing disk index from {}", indexFile);
+                    var diskIndex = DiskHnswIndex.open(indexFile);
+                    vs = new InMemoryVectorStore(config.dimensions(), config.capacity());
+                    ds = new DocumentStore(config.capacity());
+                    vi = diskIndex;
+                    ki = new BM25Index();
+                    loadedFromDisk = true;
+                    log.info("SpectorEngine loaded from disk: {} vectors", diskIndex.size());
+                } catch (IOException e) {
+                    log.warn("Failed to load disk index, creating fresh: {}", e.getMessage());
+                    vs = null; ds = null; vi = null; ki = null;
+                }
+            } else {
+                vs = null; ds = null; vi = null; ki = null;
+            }
+        } else {
+            vs = null; ds = null; vi = null; ki = null;
+        }
+
+        // Build fresh components if not loaded from disk
+        if (!loadedFromDisk) {
+            vs = new InMemoryVectorStore(config.dimensions(), config.capacity());
+            ds = new DocumentStore(config.capacity());
+            ki = new BM25Index();
+
+            if (config.indexType() == IndexType.IVF_PQ) {
+                // IVF-PQ: create index (training happens during ingestion)
+                vi = new IvfPqIndex(
+                        config.dimensions(),
+                        config.effectiveNlist(),
+                        config.effectiveNprobe(),
+                        config.effectivePqSubspaces(),
+                        config.similarityFunction());
+                // Initialize training buffer
+                int minTrainingSamples = Math.max(config.effectiveNlist() * 40, 256);
+                this.ivfTrainingBuffer = new java.util.ArrayList<>(minTrainingSamples);
+                this.ivfTrainingIds = new java.util.ArrayList<>(minTrainingSamples);
+                this.ivfTrainingContents = new java.util.ArrayList<>(minTrainingSamples);
+                log.info("IVF-PQ index created (untrained). Will auto-train after {} vectors.",
+                        minTrainingSamples);
+            } else if (config.quantization() == QuantizationType.SCALAR_INT8) {
+                vi = new QuantizedHnswIndex(
+                        config.dimensions(), config.capacity(),
+                        config.similarityFunction(), config.hnswParams());
+            } else {
+                vi = new HnswIndex(
+                        config.dimensions(), config.capacity(),
+                        config.similarityFunction(), config.hnswParams());
+            }
+        }
+
+        this.vectorStore = vs;
+        this.documentStore = ds;
+        this.vectorIndex = vi;
+        this.keywordIndex = ki;
         this.orchestrator = new HybridSearchOrchestrator(keywordIndex, vectorIndex);
 
         log.info("SpectorEngine initialized successfully");
@@ -108,13 +194,27 @@ public class SpectorEngine implements AutoCloseable {
     public void ingest(String id, String content, float[] vector) {
         ensureOpen();
 
-        // Store vector
+        // IVF-PQ auto-training: buffer vectors until we have enough to train
+        if (config.indexType() == IndexType.IVF_PQ && !ivfTrained) {
+            ivfTrainingBuffer.add(vector.clone());
+            ivfTrainingIds.add(id);
+            ivfTrainingContents.add(content);
+
+            int minSamples = Math.max(config.effectiveNlist() * 40, 256);
+            if (ivfTrainingBuffer.size() >= minSamples) {
+                trainAndFlushIvfPq();
+            } else {
+                // Still buffering — store document metadata for keyword search
+                documentStore.put(Document.of(id, content));
+                keywordIndex.index(id, content);
+                return;
+            }
+            return;
+        }
+
+        // Normal ingestion path
         int storeIndex = vectorStore.put(id, vector);
-
-        // Store document metadata
         documentStore.put(Document.of(id, content));
-
-        // Index in both engines
         vectorIndex.add(id, storeIndex, vector);
         keywordIndex.index(id, content);
     }
@@ -428,6 +528,20 @@ public class SpectorEngine implements AutoCloseable {
         if (!closed) {
             closed = true;
             try {
+                // Persist to disk if configured
+                if (config.persistenceMode() == PersistenceMode.DISK
+                        && vectorIndex instanceof HnswIndex hnswIdx
+                        && hnswIdx.size() > 0) {
+                    try {
+                        Path indexFile = config.dataDirectory().resolve("index.spct");
+                        DiskHnswWriter.write(hnswIdx, indexFile);
+                        log.info("HNSW index persisted to {}", indexFile);
+                    } catch (IOException e) {
+                        log.error("Failed to persist HNSW index to disk", e);
+                    }
+                }
+
+                orchestrator.close();
                 vectorIndex.close();
                 keywordIndex.close();
                 vectorStore.close();
@@ -449,5 +563,35 @@ public class SpectorEngine implements AutoCloseable {
             throw new IllegalStateException(
                     "No EmbeddingProvider configured. Use SpectorEngine(config, provider) or supply vectors manually.");
         }
+    }
+
+    /**
+     * Trains the IVF-PQ index on buffered vectors and flushes all buffered documents into the index.
+     */
+    private void trainAndFlushIvfPq() {
+        if (!(vectorIndex instanceof IvfPqIndex ivfPq)) return;
+
+        float[][] trainingData = ivfTrainingBuffer.toArray(float[][]::new);
+        log.info("Auto-training IVF-PQ with {} vectors...", trainingData.length);
+        ivfPq.train(trainingData);
+
+        // Flush all buffered vectors into the index
+        for (int i = 0; i < ivfTrainingBuffer.size(); i++) {
+            float[] vec = ivfTrainingBuffer.get(i);
+            String id = ivfTrainingIds.get(i);
+            String content = ivfTrainingContents.get(i);
+
+            int storeIndex = vectorStore.put(id, vec);
+            documentStore.put(Document.of(id, content));
+            vectorIndex.add(id, storeIndex, vec);
+            keywordIndex.index(id, content);
+        }
+
+        // Clear buffers
+        ivfTrainingBuffer = null;
+        ivfTrainingIds = null;
+        ivfTrainingContents = null;
+        ivfTrained = true;
+        log.info("IVF-PQ training complete. {} vectors indexed.", ivfPq.size());
     }
 }

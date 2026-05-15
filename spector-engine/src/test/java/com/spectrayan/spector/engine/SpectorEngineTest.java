@@ -115,6 +115,67 @@ class SpectorEngineTest {
         }
     }
 
+    // ─────────────── IVF-PQ Engine Integration ───────────────
+
+    @Test
+    void ivfPq_autoTrainsAndSearches() {
+        // IVF-PQ requires training — engine should auto-train after enough vectors
+        var config = testConfig()
+                .withCapacity(2000)
+                .withIvfPq(8, 4, 4); // nlist=8, nprobe=4, M=4
+
+        try (var engine = new SpectorEngine(config)) {
+            Random rng = new Random(42);
+
+            // Ingest enough vectors for auto-training (nlist*40 = 320)
+            for (int i = 0; i < 400; i++) {
+                engine.ingest("doc-" + i, "document about topic " + (i % 10), randomVector(DIM, rng));
+            }
+
+            // After training, search should work
+            SearchResponse response = engine.vectorSearch(randomVector(DIM, 999L), 5);
+            assertThat(response.results()).isNotEmpty();
+        }
+    }
+
+    @Test
+    void ivfPq_keywordSearchWorksBeforeTraining() {
+        // Keyword search should work even while IVF-PQ is still buffering
+        var config = testConfig()
+                .withCapacity(2000)
+                .withIvfPq(8, 4, 4);
+
+        try (var engine = new SpectorEngine(config)) {
+            engine.ingest("d1", "java programming language", randomVector(DIM, 1));
+            engine.ingest("d2", "python machine learning", randomVector(DIM, 2));
+
+            // Keyword search should still work (BM25 index populated during buffering)
+            SearchResponse response = engine.keywordSearch("java", 10);
+            assertThat(response.results()).hasSizeGreaterThanOrEqualTo(1);
+        }
+    }
+
+    @Test
+    void ivfPq_configBuilder() {
+        var config = SpectorConfig.DEFAULT.withIvfPq(100, 10, 48);
+        assertThat(config.indexType()).isEqualTo(IndexType.IVF_PQ);
+        assertThat(config.ivfNlist()).isEqualTo(100);
+        assertThat(config.ivfNprobe()).isEqualTo(10);
+        assertThat(config.pqSubspaces()).isEqualTo(48);
+    }
+
+    @Test
+    void ivfPq_autoDefaults() {
+        var config = SpectorConfig.DEFAULT.withIvfPq();
+        assertThat(config.indexType()).isEqualTo(IndexType.IVF_PQ);
+        // Auto defaults: nlist=√100000≈316, nprobe=10, M=384/8=48
+        assertThat(config.effectiveNlist()).isGreaterThan(16);
+        assertThat(config.effectiveNprobe()).isEqualTo(10);
+        assertThat(config.effectivePqSubspaces()).isGreaterThanOrEqualTo(4);
+    }
+
+    // ─────────────── Helpers ───────────────
+
     private static float[] randomVector(int dim, long seed) {
         return randomVector(dim, new Random(seed));
     }
