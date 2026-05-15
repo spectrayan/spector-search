@@ -3,6 +3,8 @@ package com.spectrayan.spector.query;
 import com.spectrayan.spector.index.KeywordIndex;
 import com.spectrayan.spector.index.ScoredResult;
 import com.spectrayan.spector.index.VectorIndex;
+import com.spectrayan.spector.query.ranking.Reranker;
+import com.spectrayan.spector.storage.DocumentStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,13 +27,21 @@ import java.util.concurrent.Future;
  *   <li>{@code VECTOR} — delegates to HNSW index only</li>
  *   <li>{@code HYBRID} — fans out both in parallel, fuses via RRF</li>
  * </ul>
+ *
+ * <h3>Performance</h3>
+ * <p>Uses a shared virtual-thread executor to avoid per-query lifecycle overhead.
+ * Virtual threads are extremely cheap (~few hundred bytes each), so a shared
+ * unbounded executor with per-task threads is optimal.</p>
  */
-public class HybridSearchOrchestrator {
+public class HybridSearchOrchestrator implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(HybridSearchOrchestrator.class);
 
     private final KeywordIndex keywordIndex;
     private final VectorIndex vectorIndex;
+    private final ExecutorService executor;
+    private final Reranker reranker;       // nullable
+    private final DocumentStore docStore;  // nullable, needed for re-ranking
 
     /**
      * Creates a hybrid search orchestrator.
@@ -40,8 +50,24 @@ public class HybridSearchOrchestrator {
      * @param vectorIndex  the HNSW vector index (may be null if keyword-only)
      */
     public HybridSearchOrchestrator(KeywordIndex keywordIndex, VectorIndex vectorIndex) {
+        this(keywordIndex, vectorIndex, null, null);
+    }
+
+    /**
+     * Creates a hybrid search orchestrator with optional LLM re-ranking.
+     *
+     * @param keywordIndex the BM25 keyword index (may be null)
+     * @param vectorIndex  the HNSW vector index (may be null)
+     * @param reranker     optional LLM re-ranker (may be null)
+     * @param docStore     document store for re-ranker context (may be null)
+     */
+    public HybridSearchOrchestrator(KeywordIndex keywordIndex, VectorIndex vectorIndex,
+                                     Reranker reranker, DocumentStore docStore) {
         this.keywordIndex = keywordIndex;
         this.vectorIndex = vectorIndex;
+        this.reranker = reranker;
+        this.docStore = docStore;
+        this.executor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
@@ -59,12 +85,27 @@ public class HybridSearchOrchestrator {
             case HYBRID -> executeHybridSearch(query);
         };
 
+        // Optional LLM re-ranking pass
+        if (reranker != null && query.text() != null && results.length > 0) {
+            try {
+                results = reranker.rerank(query.text(), results, docStore, query.topK());
+                log.debug("Re-ranked {} results with {}", results.length, reranker.modelName());
+            } catch (Exception e) {
+                log.warn("Re-ranking failed, using original order: {}", e.getMessage());
+            }
+        }
+
         long elapsed = (System.nanoTime() - startTime) / 1_000_000;
 
         log.debug("Search completed: mode={}, results={}, timeMs={}",
                 query.mode(), results.length, elapsed);
 
         return new SearchResponse(results, results.length, elapsed, query.mode());
+    }
+
+    @Override
+    public void close() {
+        executor.close();
     }
 
     // ─────────────── Mode handlers ───────────────
@@ -86,7 +127,7 @@ public class HybridSearchOrchestrator {
     /**
      * Executes hybrid search: parallel fan-out → RRF fusion.
      *
-     * <p>Uses a virtual-thread-per-task executor for lightweight parallelism.
+     * <p>Uses the shared virtual-thread executor for lightweight parallelism.
      * Each sub-search runs on its own virtual thread for maximum concurrency.</p>
      */
     private ScoredResult[] executeHybridSearch(SearchQuery query) {
@@ -100,7 +141,7 @@ public class HybridSearchOrchestrator {
         // Expand retrieval window for better fusion
         int retrievalK = Math.max(query.topK() * 2, 50);
 
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try {
             Future<ScoredResult[]> keywordFuture = executor.submit(
                     () -> keywordIndex.search(query.text(), retrievalK));
             Future<ScoredResult[]> vectorFuture = executor.submit(
@@ -124,3 +165,4 @@ public class HybridSearchOrchestrator {
         }
     }
 }
+
