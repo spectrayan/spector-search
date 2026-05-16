@@ -5,10 +5,13 @@ import com.spectrayan.spector.index.ScoredResult;
 
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +22,10 @@ import java.util.concurrent.TimeUnit;
  * <p>Wraps a gRPC channel and blocking stub to provide type-safe methods
  * for vector search, keyword search, hybrid search, and ingestion
  * on a remote {@link ShardNode}.</p>
+ *
+ * <h3>TLS Support</h3>
+ * <p>When TLS certificate paths are provided, the client uses encrypted
+ * communication. Otherwise, falls back to plaintext for development.</p>
  */
 public class RemoteShardClient implements AutoCloseable {
 
@@ -29,20 +36,50 @@ public class RemoteShardClient implements AutoCloseable {
     private final SpectorSearchServiceGrpc.SpectorSearchServiceBlockingStub stub;
 
     /**
-     * Creates a remote shard client.
+     * Creates a remote shard client with plaintext communication.
      *
      * @param endpoint the shard node endpoint
      */
     public RemoteShardClient(ClusterConfig.NodeEndpoint endpoint) {
+        this(endpoint, null, null, null);
+    }
+
+    /**
+     * Creates a remote shard client with optional TLS.
+     *
+     * @param endpoint      the shard node endpoint
+     * @param trustCertFile trusted CA certificate (null for plaintext)
+     * @param clientCert    client certificate for mutual TLS (null for server-only TLS)
+     * @param clientKey     client private key for mutual TLS (null for server-only TLS)
+     */
+    public RemoteShardClient(ClusterConfig.NodeEndpoint endpoint,
+                              File trustCertFile, File clientCert, File clientKey) {
         this.endpoint = endpoint;
-        this.channel = ManagedChannelBuilder
-                .forTarget(endpoint.target())
-                .usePlaintext()   // TODO: Add TLS for production
-                .build();
+
+        if (trustCertFile != null && trustCertFile.exists()) {
+            try {
+                var sslContext = GrpcSslContexts.forClient()
+                        .trustManager(trustCertFile);
+                if (clientCert != null && clientKey != null) {
+                    sslContext.keyManager(clientCert, clientKey);
+                }
+                this.channel = NettyChannelBuilder
+                        .forTarget(endpoint.target())
+                        .sslContext(sslContext.build())
+                        .build();
+                log.info("Connected to shard '{}' at {} (TLS)", endpoint.shardId(), endpoint.target());
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to configure TLS for shard: " + endpoint.shardId(), e);
+            }
+        } else {
+            this.channel = ManagedChannelBuilder
+                    .forTarget(endpoint.target())
+                    .usePlaintext()
+                    .build();
+            log.info("Connected to shard '{}' at {} (plaintext)", endpoint.shardId(), endpoint.target());
+        }
 
         this.stub = SpectorSearchServiceGrpc.newBlockingStub(channel);
-
-        log.info("Connected to shard '{}' at {}", endpoint.shardId(), endpoint.target());
     }
 
     /**
