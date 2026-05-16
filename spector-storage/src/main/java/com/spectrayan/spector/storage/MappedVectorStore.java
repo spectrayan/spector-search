@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +47,7 @@ public class MappedVectorStore implements VectorStore {
     private final FileChannel channel;
     private final Map<String, Integer> idToIndex;
     private final AtomicInteger count;
+    private final ReentrantLock writeLock = new ReentrantLock();
     private volatile boolean closed;
 
     /**
@@ -90,30 +92,35 @@ public class MappedVectorStore implements VectorStore {
     }
 
     @Override
-    public synchronized int put(String id, float[] vector) {
-        ensureOpen();
-        if (vector.length != layout.dimensions()) {
-            throw new IllegalArgumentException(
-                    "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
-        }
+    public int put(String id, float[] vector) {
+        writeLock.lock();
+        try {
+            ensureOpen();
+            if (vector.length != layout.dimensions()) {
+                throw new IllegalArgumentException(
+                        "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
+            }
 
-        // Update in-place if ID exists
-        Integer existingIndex = idToIndex.get(id);
-        if (existingIndex != null) {
-            layout.writeVector(segment, existingIndex, vector);
-            return existingIndex;
-        }
+            // Update in-place if ID exists
+            Integer existingIndex = idToIndex.get(id);
+            if (existingIndex != null) {
+                layout.writeVector(segment, existingIndex, vector);
+                return existingIndex;
+            }
 
-        // Allocate new slot
-        int index = count.getAndIncrement();
-        if (index >= capacity) {
-            count.decrementAndGet();
-            throw new IllegalStateException("Store is full: capacity=" + capacity);
-        }
+            // Allocate new slot
+            int index = count.getAndIncrement();
+            if (index >= capacity) {
+                count.decrementAndGet();
+                throw new IllegalStateException("Store is full: capacity=" + capacity);
+            }
 
-        layout.writeVector(segment, index, vector);
-        idToIndex.put(id, index);
-        return index;
+            layout.writeVector(segment, index, vector);
+            idToIndex.put(id, index);
+            return index;
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Override
@@ -173,20 +180,25 @@ public class MappedVectorStore implements VectorStore {
     }
 
     @Override
-    public synchronized void close() {
-        if (!closed) {
-            closed = true;
-            try {
-                // Force pending writes to disk
-                segment.force();
-                arena.close();
-                channel.close();
-                raf.close();
-                log.info("MappedVectorStore closed: released {} vectors, file={}",
-                        count.get(), filePath);
-            } catch (IOException e) {
-                log.warn("Error closing MappedVectorStore file channel", e);
+    public void close() {
+        writeLock.lock();
+        try {
+            if (!closed) {
+                closed = true;
+                try {
+                    // Force pending writes to disk
+                    segment.force();
+                    arena.close();
+                    channel.close();
+                    raf.close();
+                    log.info("MappedVectorStore closed: released {} vectors, file={}",
+                            count.get(), filePath);
+                } catch (IOException e) {
+                    log.warn("Error closing MappedVectorStore file channel", e);
+                }
             }
+        } finally {
+            writeLock.unlock();
         }
     }
 

@@ -153,13 +153,6 @@
                 <scope>test</scope>
             </dependency>
 
-            <!-- ── Jackson (JSON) ── -->
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
-
             <!-- ── JMH (Benchmarks) ── -->
             <dependency>
                 <groupId>org.openjdk.jmh</groupId>
