@@ -21,6 +21,11 @@ import java.nio.file.Path;
  * @param ivfNlist           IVF cluster count (only for IVF_PQ)
  * @param ivfNprobe          IVF probe count during search (only for IVF_PQ)
  * @param pqSubspaces        PQ subspace count M (only for IVF_PQ, must divide dimensions)
+ * @param gpuEnabled         whether to attempt GPU acceleration (auto-detects availability)
+ * @param rerankerEnabled    whether to enable LLM re-ranking
+ * @param rerankerOllamaUrl  Ollama server URL for re-ranking (e.g., "http://localhost:11434")
+ * @param rerankerModel      Ollama model name for re-ranking (e.g., "llama3.2")
+ * @param rerankerMaxCandidates max candidates to send to the LLM re-ranker
  */
 public record SpectorConfig(
         int dimensions,
@@ -33,20 +38,27 @@ public record SpectorConfig(
         IndexType indexType,
         int ivfNlist,
         int ivfNprobe,
-        int pqSubspaces
+        int pqSubspaces,
+        boolean gpuEnabled,
+        boolean rerankerEnabled,
+        String rerankerOllamaUrl,
+        String rerankerModel,
+        int rerankerMaxCandidates
 ) {
     /** Default: 384-dim embeddings, 100K capacity, cosine similarity, HNSW, no quantization, in-memory. */
     public static final SpectorConfig DEFAULT =
             new SpectorConfig(384, 100_000, SimilarityFunction.COSINE, HnswParams.DEFAULT,
                     QuantizationType.NONE, PersistenceMode.IN_MEMORY, null,
-                    IndexType.HNSW, 0, 0, 0);
+                    IndexType.HNSW, 0, 0, 0,
+                    false, false, null, null, 20);
 
     /** Backward-compatible constructor (HNSW, no quantization, in-memory). */
     public SpectorConfig(int dimensions, int capacity,
                           SimilarityFunction similarityFunction, HnswParams hnswParams) {
         this(dimensions, capacity, similarityFunction, hnswParams,
                 QuantizationType.NONE, PersistenceMode.IN_MEMORY, null,
-                IndexType.HNSW, 0, 0, 0);
+                IndexType.HNSW, 0, 0, 0,
+                false, false, null, null, 20);
     }
 
     /** Pre-quantization constructor (HNSW, in-memory). */
@@ -56,7 +68,20 @@ public record SpectorConfig(
                           Path dataDirectory) {
         this(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
-                IndexType.HNSW, 0, 0, 0);
+                IndexType.HNSW, 0, 0, 0,
+                false, false, null, null, 20);
+    }
+
+    /** Pre-IVF-PQ constructor (no GPU, no reranker). */
+    public SpectorConfig(int dimensions, int capacity,
+                          SimilarityFunction similarityFunction, HnswParams hnswParams,
+                          QuantizationType quantization, PersistenceMode persistenceMode,
+                          Path dataDirectory, IndexType indexType,
+                          int ivfNlist, int ivfNprobe, int pqSubspaces) {
+        this(dimensions, capacity, similarityFunction, hnswParams,
+                quantization, persistenceMode, dataDirectory,
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                false, false, null, null, 20);
     }
 
     public SpectorConfig {
@@ -69,41 +94,52 @@ public record SpectorConfig(
             throw new IllegalArgumentException(
                     "dimensions (" + dimensions + ") must be divisible by pqSubspaces (" + pqSubspaces + ")");
         }
+        if (rerankerEnabled && (rerankerOllamaUrl == null || rerankerOllamaUrl.isBlank())) {
+            throw new IllegalArgumentException("rerankerOllamaUrl is required when reranker is enabled");
+        }
+        if (rerankerMaxCandidates <= 0) {
+            rerankerMaxCandidates = 20;
+        }
     }
 
     /** Builder-style with custom dimensions. */
     public SpectorConfig withDimensions(int dims) {
         return new SpectorConfig(dims, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
-                indexType, ivfNlist, ivfNprobe, pqSubspaces);
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
     }
 
     /** Builder-style with custom capacity. */
     public SpectorConfig withCapacity(int cap) {
         return new SpectorConfig(dimensions, cap, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
-                indexType, ivfNlist, ivfNprobe, pqSubspaces);
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
     }
 
     /** Builder-style with custom similarity function. */
     public SpectorConfig withSimilarityFunction(SimilarityFunction sf) {
         return new SpectorConfig(dimensions, capacity, sf, hnswParams,
                 quantization, persistenceMode, dataDirectory,
-                indexType, ivfNlist, ivfNprobe, pqSubspaces);
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
     }
 
     /** Builder-style with quantization type. */
     public SpectorConfig withQuantization(QuantizationType qt) {
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 qt, persistenceMode, dataDirectory,
-                indexType, ivfNlist, ivfNprobe, pqSubspaces);
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
     }
 
     /** Builder-style with persistence mode and data directory. */
     public SpectorConfig withPersistence(PersistenceMode mode, Path directory) {
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, mode, directory,
-                indexType, ivfNlist, ivfNprobe, pqSubspaces);
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
     }
 
     /**
@@ -116,12 +152,53 @@ public record SpectorConfig(
     public SpectorConfig withIvfPq(int nlist, int nprobe, int subspaces) {
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
-                IndexType.IVF_PQ, nlist, nprobe, subspaces);
+                IndexType.IVF_PQ, nlist, nprobe, subspaces,
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
     }
 
     /** Builder-style to switch to IVF-PQ index with auto parameters. */
     public SpectorConfig withIvfPq() {
         return withIvfPq(0, 0, 0);
+    }
+
+    /**
+     * Builder-style to enable GPU acceleration.
+     *
+     * <p>When enabled, the engine will attempt to use CUDA GPU for batch
+     * similarity computations. Automatically falls back to CPU SIMD if
+     * no GPU is detected at runtime.</p>
+     *
+     * @param enabled true to enable GPU acceleration
+     */
+    public SpectorConfig withGpu(boolean enabled) {
+        return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
+                quantization, persistenceMode, dataDirectory,
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                enabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
+    }
+
+    /**
+     * Builder-style to enable LLM re-ranking via Ollama.
+     *
+     * @param ollamaUrl     Ollama server URL (e.g., "http://localhost:11434")
+     * @param model         model name (e.g., "llama3.2", "qwen2.5")
+     * @param maxCandidates max candidates to send to the LLM (cost control)
+     */
+    public SpectorConfig withReranker(String ollamaUrl, String model, int maxCandidates) {
+        return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
+                quantization, persistenceMode, dataDirectory,
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                gpuEnabled, true, ollamaUrl, model, maxCandidates);
+    }
+
+    /**
+     * Builder-style to enable LLM re-ranking with default max candidates (20).
+     *
+     * @param ollamaUrl Ollama server URL
+     * @param model     model name
+     */
+    public SpectorConfig withReranker(String ollamaUrl, String model) {
+        return withReranker(ollamaUrl, model, 20);
     }
 
     // ─────────────── IVF-PQ computed defaults ───────────────

@@ -39,6 +39,11 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-embed-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-gpu</artifactId>
+            <optional>true</optional>
+        </dependency>
     </dependencies>
 
 </project>
