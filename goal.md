@@ -1,7 +1,7 @@
 # **Spector‑Search**  
 **Ultra‑fast, SIMD‑accelerated semantic search engine built on Java Vector API + modern JVM technologies.**
 
-Spector‑Search is a high‑performance search engine designed for the next generation of intelligent applications. It combines **Java’s Vector API**, **virtual threads**, and **zero‑copy memory** to deliver blazing‑fast indexing and retrieval across large text corpora and vector embeddings.
+Spector‑Search is a high‑performance search engine designed for the next generation of intelligent applications. It combines **Java's Vector API**, **virtual threads**, and **zero‑copy memory** to deliver blazing‑fast indexing and retrieval across large text corpora and vector embeddings.
 
 Built for developers who want **NumPy‑level performance** with the reliability, safety, and scalability of the JVM.
 
@@ -45,18 +45,24 @@ No Python, no JNI overhead — pure Java, optimized by the JIT and Graal.
 
 ## 🏗 **Tech Stack**
 
-- **Java 22+**  
+- **Java 25**  
 - **Java Vector API (SIMD)**  
 - **Virtual Threads (Project Loom)**  
 - **Foreign Function & Memory API (Panama)**  
 - **Custom SIMD‑optimized math kernels**  
+- **CUDA GPU acceleration (optional)**  
+- **gRPC distributed search**  
 
 ---
 
 ## 📈 **Roadmap**
 
-- GPU acceleration via CUDA/ROCm bindings  
-- HNSW / IVF / PQ vector index  
-- Distributed search nodes  
-- LLM‑powered ranking  
-- WASM runtime for edge deployment  
+- [x] GPU acceleration via CUDA bindings  
+- [x] HNSW / IVF / PQ vector index  
+- [x] Distributed search nodes  
+- [x] LLM‑powered ranking  
+- [x] REST API with CORS, auth, metrics  
+- [x] Embedding provider SPI (Ollama)  
+- [x] Document deletion + bulk ingest  
+- [x] gRPC TLS support  
+- [ ] WASM runtime for edge deployment  

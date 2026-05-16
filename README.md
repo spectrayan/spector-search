@@ -19,13 +19,15 @@
 - **🖥️ GPU Acceleration** — CUDA kernel loader + SIMD batch similarity via Panama FFM
 - **🌐 Distributed Search** — gRPC-based coordinator/shard fan-out with consistent hash partitioning
 - **🧬 Embedding SPI** — Pluggable embedding providers (Ollama included out-of-the-box)
+- **📄 Chunked Ingestion** — Text, token-level, and streaming chunkers for large document support
 
 ## 🏗 Architecture
 
 ```
 spector-search/
 ├── spector-core/         # SIMD kernels (DotProduct, Cosine, Euclidean, VectorOps)
-├── spector-storage/      # Panama MemorySegment stores (InMemory + Mmap)
+├── spector-commons/      # Text chunkers, tokenizer, content extractor
+├── spector-storage/      # Panama MemorySegment stores (InMemory + Mmap + Quantized)
 ├── spector-index/        # HNSW + IVF-PQ vector indexes + BM25 keyword index
 │   ├── hnsw/             # HNSW graph-based ANN index
 │   ├── ivf/              # IVF inverted file index + posting lists
@@ -47,7 +49,10 @@ spector-search/
 cluster → engine → query → index → core
                         → index → storage → core
 server  → engine
-gpu     → core (standalone)
+engine  → gpu (optional)
+engine  → commons
+engine  → embed-api
+gpu     → core, storage
 ```
 
 ## 🚀 Quick Start
@@ -64,12 +69,17 @@ gpu     → core (standalone)
 git clone https://github.com/spectrayan/spector-search.git
 cd spector-search
 
-# Build and run all tests (212 tests)
+# Build and run all tests (316+ tests)
 mvn clean test
 
 # Start the REST server
 mvn exec:java -pl spector-server \
   -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer"
+
+# Start with API key authentication
+mvn exec:java -pl spector-server \
+  -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer" \
+  -Dexec.args="7070 384 my-secret-key"
 ```
 
 ### REST API
@@ -78,10 +88,10 @@ mvn exec:java -pl spector-server \
 # Health check
 curl http://localhost:7070/health
 
-# Engine status (includes SIMD capability)
+# Engine status (includes SIMD capability, GPU, reranker)
 curl http://localhost:7070/api/v1/status
 
-# Ingest a document
+# Ingest a document (with vector)
 curl -X POST http://localhost:7070/api/v1/ingest \
   -H "Content-Type: application/json" \
   -d '{
@@ -89,6 +99,25 @@ curl -X POST http://localhost:7070/api/v1/ingest \
     "title": "Java Vector API",
     "content": "SIMD-accelerated search engine on modern JVM",
     "vector": [0.1, 0.2, 0.3, ...]
+  }'
+
+# Auto-embed ingest (requires embedding provider)
+curl -X POST http://localhost:7070/api/v1/ingest/auto \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "doc-2",
+    "title": "Panama FFM",
+    "content": "Foreign Function & Memory API for zero-copy storage"
+  }'
+
+# Bulk ingest
+curl -X POST http://localhost:7070/api/v1/ingest/bulk \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [
+      {"id": "d1", "content": "first doc", "vector": [...]},
+      {"id": "d2", "content": "second doc", "vector": [...]}
+    ]
   }'
 
 # Search (auto-detects mode: keyword/vector/hybrid)
@@ -99,6 +128,12 @@ curl -X POST http://localhost:7070/api/v1/search \
     "vector": [0.1, 0.2, 0.3, ...],
     "topK": 10
   }'
+
+# Delete a document
+curl -X DELETE http://localhost:7070/api/v1/documents/doc-1
+
+# Request metrics
+curl http://localhost:7070/api/v1/metrics
 ```
 
 ## 🧩 Programmatic API
@@ -106,7 +141,9 @@ curl -X POST http://localhost:7070/api/v1/search \
 ```java
 var config = SpectorConfig.DEFAULT
     .withDimensions(384)
-    .withCapacity(100_000);
+    .withCapacity(100_000)
+    .withGpu(true)                                              // GPU auto-detection
+    .withReranker("http://localhost:11434", "llama3.2", 20);    // LLM re-ranking
 
 try (var engine = new SpectorEngine(config)) {
     // Ingest
@@ -118,6 +155,9 @@ try (var engine = new SpectorEngine(config)) {
     for (ScoredResult result : response.results()) {
         System.out.printf("%s → %.4f%n", result.id(), result.score());
     }
+
+    // Delete
+    engine.delete("doc-1");
 }
 ```
 
@@ -134,6 +174,10 @@ try (var engine = new SpectorEngine(config)) {
 | `k1` | 1.2 | BM25 term frequency saturation |
 | `b` | 0.75 | BM25 document length normalization |
 | `RRF k` | 60 | Reciprocal Rank Fusion constant |
+| `gpuEnabled` | false | Enable CUDA GPU acceleration |
+| `rerankerEnabled` | false | Enable LLM re-ranking via Ollama |
+| `rerankerModel` | — | Ollama model name (e.g., "llama3.2") |
+| `rerankerMaxCandidates` | 20 | Max docs sent to LLM for re-ranking |
 
 ## 🏎 Performance
 
@@ -150,7 +194,7 @@ SIMD auto-detection adapts to your hardware:
 Sub-microsecond vector math at every dimension:
 
 | Dimension | Cosine P50 | Cosine P99 | Dot Product P50 | Dot Product P99 |
-|-----------|-----------|-----------|-----------------|-----------------|
+|-----------|-----------|-----------|-----------------|-----------------| 
 | 32        | 500 ns    | 1,500 ns  | 200 ns          | 400 ns          |
 | 128       | <100 ns   | 100 ns    | 100 ns          | 1,300 ns        |
 | 384       | ~100 ns   | 100 ns    | ~100 ns         | 100 ns          |
@@ -161,7 +205,7 @@ Sub-microsecond vector math at every dimension:
 ### Search Latency (128-dim, top-10)
 
 | Scale | Keyword (BM25) | Vector (HNSW) | Hybrid (RRF) |
-|-------|---------------|---------------|--------------|
+|-------|---------------|---------------|--------------| 
 | **10K docs** | **0.15 ms** avg / 0.43 ms p99 | **0.05 ms** avg / 0.16 ms p99 | **0.14 ms** avg / 0.24 ms p99 |
 | **50K docs** | **0.35 ms** avg / 0.55 ms p99 | **0.04 ms** avg / 0.05 ms p99 | **0.25 ms** avg / 0.44 ms p99 |
 | **100K docs** | **0.60 ms** avg / 1.12 ms p99 | **0.05 ms** avg / 0.06 ms p99 | **0.47 ms** avg / 0.64 ms p99 |
@@ -277,8 +321,9 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Module | Tests | Coverage |
 |--------|-------|----------|
-| spector-core | 117 | SIMD kernels, similarity functions |
-| spector-storage | 38 | Off-heap stores, mmap persistence |
+| spector-core | 117 | SIMD kernels, similarity functions, scalar quantization |
+| spector-commons | 28 | Text chunkers, token chunker, streaming chunker, content extractor |
+| spector-storage | 38 | Off-heap stores, mmap persistence, quantized vector store |
 | spector-index | 79 | HNSW recall, BM25 scoring, IVF-PQ, PQ encode/decode |
 | spector-query | 29 | RRF fusion, hybrid orchestration, LLM re-ranking |
 | spector-embed-api | 9 | Embedding SPI contracts |
@@ -301,6 +346,10 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 - [x] LLM-powered re-ranking
 - [x] GPU acceleration (CUDA via Panama FFM)
 - [x] Distributed search (gRPC coordinator/shards)
+- [x] REST API with CORS, auth, metrics
+- [x] Document deletion
+- [x] Auto-embed + bulk ingest endpoints
+- [x] gRPC TLS support
 - [ ] WASM runtime for edge deployment
 
 ## 🤝 Contributing
