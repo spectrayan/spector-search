@@ -30,4 +30,13 @@ public interface KeywordIndex extends AutoCloseable {
      * @return document count
      */
     int size();
+
+    /**
+     * Removes a document from the index.
+     *
+     * @param id the document identifier to remove
+     */
+    default void remove(String id) {
+        // Default no-op; implementations may override for actual deletion.
+    }
 }

@@ -97,6 +97,11 @@ public class DiskHnswIndex implements VectorIndex {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public ScoredResult[] search(float[] query, int k) {
         if (query.length != header.dimensions()) {
             throw new IllegalArgumentException(

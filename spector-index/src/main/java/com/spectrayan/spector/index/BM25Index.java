@@ -303,6 +303,16 @@ public class BM25Index implements KeywordIndex {
     }
 
     @Override
+    public void remove(String id) {
+        rwLock.writeLock().lock();
+        try {
+            removeDoc(id);
+        } finally {
+            rwLock.writeLock().unlock();
+        }
+    }
+
+    @Override
     public void close() {
         rwLock.writeLock().lock();
         try {
