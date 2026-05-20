@@ -63,7 +63,7 @@ jobs:
       # ─── Test Results ────────────────────────────────────────────────
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: '**/target/surefire-reports/*.xml'
@@ -130,7 +130,7 @@ jobs:
 
       - name: Upload build provenance
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-provenance
           path: build-provenance.json
@@ -139,7 +139,7 @@ jobs:
       # ─── Upload JARs ─────────────────────────────────────────────────
       - name: Upload build artifacts
         if: success() && github.event_name == 'push'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jars
           path: '**/target/*.jar'
