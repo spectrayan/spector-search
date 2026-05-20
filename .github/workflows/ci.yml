@@ -54,7 +54,8 @@ jobs:
       - name: Verify no dynamic version ranges
         run: |
           # Fail if any dependency uses dynamic ranges like [1.0,2.0) or LATEST/RELEASE
-          if mvn -B dependency:tree --no-transfer-progress | grep -E '\[(.*,.*)\]|\[.*,\)|\(.*,.*\]|LATEST|RELEASE|SNAPSHOT' | grep -v 'spector-search'; then
+          # Exclude internal SNAPSHOT modules (com.spectrayan:spector-*)
+          if mvn -B dependency:tree --no-transfer-progress | grep -E '\[(.*,.*)\]|\[.*,\)|\(.*,.*\]|LATEST|RELEASE|SNAPSHOT' | grep -v 'com.spectrayan'; then
             echo "::error::Dynamic version ranges detected in dependencies. All versions must be pinned."
             exit 1
           fi
