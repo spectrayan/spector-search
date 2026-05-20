@@ -1,0 +1,15 @@
+{
+  "spector-commons": 0,
+  "spector-core": 0,
+  "spector-storage": 0,
+  "spector-index": 0,
+  "spector-query": 0,
+  "spector-embed-api": 0,
+  "spector-embed-ollama": 0,
+  "spector-gpu": 0,
+  "spector-engine": 0,
+  "spector-server": 0,
+  "spector-cluster": 0,
+  "spector-cli": 0,
+  "spector-client": 0
+}

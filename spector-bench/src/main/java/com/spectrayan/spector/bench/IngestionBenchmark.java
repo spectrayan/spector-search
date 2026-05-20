@@ -1,15 +1,28 @@
 package com.spectrayan.spector.bench;
 
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OperationsPerInvocation;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
+
 import com.spectrayan.spector.core.SimilarityFunction;
 import com.spectrayan.spector.engine.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.index.HnswParams;
-
-import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.infra.Blackhole;
-
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Benchmarks measuring ingestion throughput for SpectorEngine.
@@ -20,6 +33,8 @@ import java.util.concurrent.TimeUnit;
  *   <li>Batch ingestion (100 docs at a time)</li>
  *   <li>Impact of index size on insertion cost (HNSW graph growth)</li>
  * </ul>
+ *
+ * <p>Validates Requirements 19.3, 24.2, 24.4</p>
  */
 @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -28,13 +43,16 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 5, time = 3)
 @Fork(value = 1, jvmArgsAppend = {
         "--add-modules", "jdk.incubator.vector",
-        "-Xmx4g", "-Xms2g",
+        "-Xmx6g", "-Xms2g",
         "-XX:+UseZGC"
 })
 public class IngestionBenchmark {
 
-    @Param({"128", "384"})
+    @Param({"128", "384", "768"})
     int dimensions;
+
+    @Param({"10000", "50000"})
+    int preloadSize;
 
     private static final int MAX_CAPACITY = 200_000;
 

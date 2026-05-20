@@ -1,14 +1,24 @@
 package com.spectrayan.spector.bench;
 
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
+
 import com.spectrayan.spector.core.CosineSimilarity;
 import com.spectrayan.spector.core.DotProduct;
 import com.spectrayan.spector.core.EuclideanDistance;
-
-import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.infra.Blackhole;
-
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 /**
  * JMH benchmarks for SIMD similarity kernels.
@@ -28,7 +38,7 @@ import java.util.concurrent.TimeUnit;
 @Fork(value = 1, jvmArgsAppend = {"--add-modules", "jdk.incubator.vector"})
 public class SimdKernelBenchmark {
 
-    @Param({"32", "128", "384", "768"})
+    @Param({"32", "128", "384", "768", "1536"})
     int dimensions;
 
     float[] vectorA;

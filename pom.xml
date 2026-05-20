@@ -34,6 +34,9 @@
         <module>spector-server</module>
         <module>spector-cluster</module>
         <module>spector-bench</module>
+        <module>spector-cli</module>
+        <module>spector-client</module>
+        <module>spector-spring</module>
     </modules>
 
     <!-- ───────────────────────── Properties ───────────────────────── -->
@@ -64,6 +67,10 @@
         <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
         <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
         <maven-shade-plugin.version>3.6.0</maven-shade-plugin.version>
+        <jacoco-plugin.version>0.8.12</jacoco-plugin.version>
+
+        <!-- Reproducible builds: fixed timestamp for deterministic JARs -->
+        <project.build.outputTimestamp>2024-01-01T00:00:00Z</project.build.outputTimestamp>
     </properties>
 
     <!-- ───────────────────────── Dependency Management ───────────────────────── -->
@@ -118,6 +125,16 @@
             <dependency>
                 <groupId>com.spectrayan</groupId>
                 <artifactId>spector-cluster</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spring-ai-starter-vector-store-spector-search</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -217,6 +234,7 @@
                         <compilerArgs>
                             <arg>--add-modules</arg>
                             <arg>${vector.api.module}</arg>
+                            <arg>--enable-preview</arg>
                         </compilerArgs>
                     </configuration>
                 </plugin>
@@ -227,7 +245,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
-                        <argLine>--add-modules ${vector.api.module} --enable-native-access=ALL-UNNAMED</argLine>
+                        <argLine>--add-modules ${vector.api.module} --enable-native-access=ALL-UNNAMED --enable-preview</argLine>
                     </configuration>
                 </plugin>
 
@@ -244,6 +262,28 @@
                     <artifactId>maven-shade-plugin</artifactId>
                     <version>${maven-shade-plugin.version}</version>
                 </plugin>
+
+                <!-- JaCoCo for coverage -->
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>prepare-agent</id>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>report</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -255,6 +295,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
