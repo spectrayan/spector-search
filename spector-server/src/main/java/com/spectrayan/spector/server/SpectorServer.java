@@ -1,28 +1,25 @@
 package com.spectrayan.spector.server;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-
 import com.spectrayan.spector.core.SimdCapability;
 import com.spectrayan.spector.engine.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
-import com.spectrayan.spector.index.ScoredResult;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.LongAdder;
 
 /**
  * REST API server for the Spector Search engine.
@@ -39,6 +36,7 @@ import java.util.concurrent.atomic.LongAdder;
  *   <li>{@code POST /api/v1/ingest/auto}  — Ingest with auto-embedding (text only)</li>
  *   <li>{@code POST /api/v1/ingest/bulk}  — Bulk ingest multiple documents</li>
  *   <li>{@code POST /api/v1/search}       — Search (keyword/vector/hybrid)</li>
+ *   <li>{@code POST /api/v1/rag}          — RAG context retrieval</li>
  *   <li>{@code DELETE /api/v1/documents/{id}} — Delete a document</li>
  *   <li>{@code GET  /api/v1/metrics}      — Request metrics</li>
  * </ul>
@@ -54,6 +52,7 @@ public class SpectorServer {
     private final Javalin app;
     private final int port;
     private final String apiKey; // nullable — when set, requires X-API-Key header
+    private final RagHandler ragHandler;
 
     // ── Metrics ──
     private final LongAdder totalRequests = new LongAdder();
@@ -69,6 +68,7 @@ public class SpectorServer {
         this.engine = engine;
         this.port = port;
         this.apiKey = apiKey;
+        this.ragHandler = new RagHandler(engine);
 
         this.app = Javalin.create(config -> {
             config.useVirtualThreads = true;
@@ -173,6 +173,9 @@ public class SpectorServer {
 
         // Search
         app.post("/api/v1/search", this::handleSearch);
+
+        // RAG endpoint
+        app.post("/api/v1/rag", this::handleRag);
 
         // Delete
         app.delete("/api/v1/documents/{id}", this::handleDelete);
@@ -339,6 +342,17 @@ public class SpectorServer {
             ctx.json(Map.of("id", id, "deleted", true));
         } else {
             ctx.status(404).json(Map.of("error", "Document not found: " + id));
+        }
+    }
+
+    private void handleRag(Context ctx) throws Exception {
+        var request = MAPPER.readValue(ctx.body(), RagRequest.class);
+        RagHandler.RagResult result = ragHandler.handle(request);
+
+        if (result.isSuccess()) {
+            ctx.json(result.response());
+        } else {
+            ctx.status(result.statusCode()).json(Map.of("error", result.errorMessage()));
         }
     }
 
