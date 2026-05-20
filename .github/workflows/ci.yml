@@ -53,9 +53,9 @@ jobs:
       # ─── Dependency Pinning Verification ─────────────────────────────
       - name: Verify no dynamic version ranges
         run: |
-          # Fail if any dependency uses dynamic ranges like [1.0,2.0) or LATEST/RELEASE
-          # Exclude internal SNAPSHOT modules (com.spectrayan:spector-*)
-          if mvn -B dependency:tree --no-transfer-progress | grep -E '\[(.*,.*)\]|\[.*,\)|\(.*,.*\]|LATEST|RELEASE|SNAPSHOT' | grep -v 'com.spectrayan'; then
+          # Fail if any external dependency uses dynamic ranges like [1.0,2.0) or LATEST/RELEASE/SNAPSHOT
+          # Exclude internal modules (com.spectrayan) and Maven reactor build lines
+          if mvn -B dependency:tree --no-transfer-progress | grep -E '\[(.*,.*)\]|\[.*,\)|\(.*,.*\]|LATEST|RELEASE|SNAPSHOT' | grep -v 'com.spectrayan' | grep -v 'Building ' | grep -v 'Reactor Summary'; then
             echo "::error::Dynamic version ranges detected in dependencies. All versions must be pinned."
             exit 1
           fi
