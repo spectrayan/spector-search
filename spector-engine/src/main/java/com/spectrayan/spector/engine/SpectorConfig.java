@@ -1,11 +1,11 @@
 package com.spectrayan.spector.engine;
 
+import java.nio.file.Path;
+
 import com.spectrayan.spector.core.QuantizationType;
 import com.spectrayan.spector.core.SimilarityFunction;
 import com.spectrayan.spector.index.HnswParams;
 import com.spectrayan.spector.storage.PersistenceMode;
-
-import java.nio.file.Path;
 
 /**
  * Immutable configuration for a Spector Search engine instance.
@@ -26,6 +26,7 @@ import java.nio.file.Path;
  * @param rerankerOllamaUrl  Ollama server URL for re-ranking (e.g., "http://localhost:11434")
  * @param rerankerModel      Ollama model name for re-ranking (e.g., "llama3.2")
  * @param rerankerMaxCandidates max candidates to send to the LLM re-ranker
+ * @param oversamplingFactor   rescore oversampling factor (0 = use default based on quantization type)
  */
 public record SpectorConfig(
         int dimensions,
@@ -43,14 +44,15 @@ public record SpectorConfig(
         boolean rerankerEnabled,
         String rerankerOllamaUrl,
         String rerankerModel,
-        int rerankerMaxCandidates
+        int rerankerMaxCandidates,
+        int oversamplingFactor
 ) {
     /** Default: 384-dim embeddings, 100K capacity, cosine similarity, HNSW, no quantization, in-memory. */
     public static final SpectorConfig DEFAULT =
             new SpectorConfig(384, 100_000, SimilarityFunction.COSINE, HnswParams.DEFAULT,
                     QuantizationType.NONE, PersistenceMode.IN_MEMORY, null,
                     IndexType.HNSW, 0, 0, 0,
-                    false, false, null, null, 20);
+                    false, false, null, null, 20, 0);
 
     /** Backward-compatible constructor (HNSW, no quantization, in-memory). */
     public SpectorConfig(int dimensions, int capacity,
@@ -58,7 +60,7 @@ public record SpectorConfig(
         this(dimensions, capacity, similarityFunction, hnswParams,
                 QuantizationType.NONE, PersistenceMode.IN_MEMORY, null,
                 IndexType.HNSW, 0, 0, 0,
-                false, false, null, null, 20);
+                false, false, null, null, 20, 0);
     }
 
     /** Pre-quantization constructor (HNSW, in-memory). */
@@ -69,7 +71,7 @@ public record SpectorConfig(
         this(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
                 IndexType.HNSW, 0, 0, 0,
-                false, false, null, null, 20);
+                false, false, null, null, 20, 0);
     }
 
     /** Pre-IVF-PQ constructor (no GPU, no reranker). */
@@ -81,7 +83,7 @@ public record SpectorConfig(
         this(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                false, false, null, null, 20);
+                false, false, null, null, 20, 0);
     }
 
     public SpectorConfig {
@@ -107,7 +109,8 @@ public record SpectorConfig(
         return new SpectorConfig(dims, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                oversamplingFactor);
     }
 
     /** Builder-style with custom capacity. */
@@ -115,7 +118,8 @@ public record SpectorConfig(
         return new SpectorConfig(dimensions, cap, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                oversamplingFactor);
     }
 
     /** Builder-style with custom similarity function. */
@@ -123,7 +127,8 @@ public record SpectorConfig(
         return new SpectorConfig(dimensions, capacity, sf, hnswParams,
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                oversamplingFactor);
     }
 
     /** Builder-style with quantization type. */
@@ -131,7 +136,8 @@ public record SpectorConfig(
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 qt, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                oversamplingFactor);
     }
 
     /** Builder-style with persistence mode and data directory. */
@@ -139,7 +145,8 @@ public record SpectorConfig(
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, mode, directory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                oversamplingFactor);
     }
 
     /**
@@ -153,7 +160,8 @@ public record SpectorConfig(
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
                 IndexType.IVF_PQ, nlist, nprobe, subspaces,
-                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                oversamplingFactor);
     }
 
     /** Builder-style to switch to IVF-PQ index with auto parameters. */
@@ -174,7 +182,8 @@ public record SpectorConfig(
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                enabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates);
+                enabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                oversamplingFactor);
     }
 
     /**
@@ -188,7 +197,8 @@ public record SpectorConfig(
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                gpuEnabled, true, ollamaUrl, model, maxCandidates);
+                gpuEnabled, true, ollamaUrl, model, maxCandidates,
+                oversamplingFactor);
     }
 
     /**
@@ -199,6 +209,43 @@ public record SpectorConfig(
      */
     public SpectorConfig withReranker(String ollamaUrl, String model) {
         return withReranker(ollamaUrl, model, 20);
+    }
+
+    /**
+     * Builder-style to set the rescore oversampling factor.
+     *
+     * <p>The oversampling factor controls how many extra candidates are retrieved
+     * from the quantized index before rescoring with exact distances. A factor of 3
+     * means 3×K candidates are retrieved, then the top K are returned after rescoring.</p>
+     *
+     * @param oversamplingFactor positive integer (≥ 1); factor of 1 skips rescore
+     * @throws IllegalArgumentException if oversamplingFactor < 1
+     */
+    public SpectorConfig withRescore(int oversamplingFactor) {
+        if (oversamplingFactor < 1) {
+            throw new IllegalArgumentException(
+                    "oversamplingFactor must be >= 1, got: " + oversamplingFactor);
+        }
+        return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
+                quantization, persistenceMode, dataDirectory,
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                oversamplingFactor);
+    }
+
+    /**
+     * Returns the effective oversampling factor, applying defaults based on quantization type
+     * when no explicit value has been set.
+     *
+     * <p>Defaults: INT4 → 3, INT2 → 5, all others → 1 (no oversampling).</p>
+     */
+    public int effectiveOversamplingFactor() {
+        if (oversamplingFactor > 0) return oversamplingFactor;
+        return switch (quantization) {
+            case SCALAR_INT4 -> 3;
+            case SCALAR_INT2 -> 5;
+            default -> 1;
+        };
     }
 
     // ─────────────── IVF-PQ computed defaults ───────────────
