@@ -1,11 +1,12 @@
 name: Deploy Documentation
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'docs/**'
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger only until GitHub Pages is enabled in repo settings
+  # Uncomment below once Pages is enabled at https://github.com/spectrayan/spector-search/settings/pages
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - 'docs/**'
 
 permissions:
   contents: read
