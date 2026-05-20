@@ -14,6 +14,6 @@
     <name>Spector Commons</name>
     <description>Shared utilities: content extraction, text chunking, and normalization.</description>
 
-    <!-- No internal dependencies — this is a leaf module -->
+    <!-- No external dependencies for document readers — uses built-in Java APIs -->
 
 </project>

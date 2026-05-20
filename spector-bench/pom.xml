@@ -19,6 +19,14 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-engine</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-index</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-gpu</artifactId>
+        </dependency>
 
         <!-- JMH -->
         <dependency>
@@ -29,6 +37,12 @@
             <groupId>org.openjdk.jmh</groupId>
             <artifactId>jmh-generator-annprocess</artifactId>
             <scope>provided</scope>
+        </dependency>
+
+        <!-- Jackson for JSON baseline regression -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
 
         <!-- Logging at runtime -->
