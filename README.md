@@ -14,6 +14,7 @@
 - **🧵 Virtual Thread Native** — Designed for Project Loom's virtual threads, no `synchronized` blocks
 - **🎯 High Recall** — HNSW approximate nearest-neighbor search with configurable recall@K ≥ 80%
 - **⚡ Sub-Millisecond Queries** — Branchless SIMD kernels with masked tail handling
+- **🗜️ Multi-Level Quantization** — INT8 (4×), INT4 (8×), and INT2 (16×) scalar quantization with non-uniform calibration and configurable rescore
 - **🗜️ IVF-PQ Index** — Inverted file with product quantization for 32× memory compression at billion scale
 - **🤖 LLM Re-ranking** — Listwise relevance scoring via Ollama for precision-critical retrieval
 - **🖥️ GPU Acceleration** — CUDA kernel loader + SIMD batch similarity via Panama FFM
@@ -29,10 +30,11 @@ spector-search/
 ├── spector-commons/      # Text chunkers, tokenizer, content extractor
 ├── spector-storage/      # Panama MemorySegment stores (InMemory + Mmap + Quantized)
 ├── spector-index/        # HNSW + IVF-PQ vector indexes + BM25 keyword index
-│   ├── hnsw/             # HNSW graph-based ANN index
-│   ├── ivf/              # IVF inverted file index + posting lists
+│   ├── hnsw/             # HNSW graph-based ANN index (standard + quantized INT8/INT4/INT2)
+│   ├── ivf/              # IVF inverted file index + quantized IVF-PQ
 │   ├── pq/               # Product quantizer (K-Means++, ADC)
-│   └── bm25/             # BM25 keyword scoring + analyzers
+│   ├── text/             # BM25 keyword scoring + analyzers
+│   └── fuzz/             # Index fuzz testing framework
 ├── spector-query/        # Hybrid orchestrator + RRF fusion + LLM re-ranking
 ├── spector-embed-api/    # EmbeddingProvider SPI
 ├── spector-embed-ollama/ # Ollama embedding provider implementation
@@ -142,7 +144,9 @@ curl http://localhost:7070/api/v1/metrics
 var config = SpectorConfig.DEFAULT
     .withDimensions(384)
     .withCapacity(100_000)
-    .withGpu(true)                                              // GPU auto-detection
+    .withQuantization(QuantizationType.SCALAR_INT4)  // 8× compression
+    .withRescore(3)                                   // 3× oversampling for recall recovery
+    .withGpu(true)                                    // GPU auto-detection
     .withReranker("http://localhost:11434", "llama3.2", 20);    // LLM re-ranking
 
 try (var engine = new SpectorEngine(config)) {
@@ -175,6 +179,8 @@ try (var engine = new SpectorEngine(config)) {
 | `b` | 0.75 | BM25 document length normalization |
 | `RRF k` | 60 | Reciprocal Rank Fusion constant |
 | `gpuEnabled` | false | Enable CUDA GPU acceleration |
+| `quantization` | NONE | Quantization type: NONE, SCALAR_INT8, SCALAR_INT4, SCALAR_INT2 |
+| `oversamplingFactor` | auto | Rescore oversampling (INT4→3, INT2→5, INT8→1). Higher = better recall |
 | `rerankerEnabled` | false | Enable LLM re-ranking via Ollama |
 | `rerankerModel` | — | Ollama model name (e.g., "llama3.2") |
 | `rerankerMaxCandidates` | 20 | Max docs sent to LLM for re-ranking |
@@ -295,7 +301,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 | **Off-Heap Vectors** | ✅ Panama MemorySegment | ✅ Lucene MMapDir | ✅ MMapDir | ❌ Heap-only | ✅ Mmap | ✅ Mmap |
 | **Virtual Threads** | ✅ Native Loom | ❌ Platform threads | N/A | N/A | N/A | N/A |
 | **Zero Dependencies** | ✅ JDK only | ❌ Heavy stack | ✅ Standalone | ✅ Header-only | ❌ Tokio runtime | ❌ etcd, MinIO, Pulsar |
-| **Quantization** | ✅ Scalar INT8 + PQ | ✅ BBQ/Scalar | ✅ Scalar | ❌ None | ✅ Scalar/Binary | ✅ PQ/SQ |
+| **Quantization** | ✅ Scalar INT8/INT4/INT2 + PQ | ✅ BBQ/Scalar | ✅ Scalar | ❌ None | ✅ Scalar/Binary | ✅ PQ/SQ |
 | **Disk-based Index** | ✅ HNSW serialization | ✅ Segment merge | ✅ MMap | ❌ In-memory | ✅ On-disk HNSW | ✅ DiskANN |
 | **IVF-PQ** | ✅ 32× compression | ❌ None | ❌ None | ❌ None | ❌ None | ✅ IVF_PQ |
 | **GPU Acceleration** | ✅ CUDA (Panama FFM) | ❌ None | ❌ None | ❌ None | ❌ None | ✅ GPU |
@@ -339,7 +345,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 - [x] HNSW vector index with SIMD acceleration
 - [x] BM25 keyword search
 - [x] Hybrid search with RRF fusion
-- [x] Scalar INT8 quantization
+- [x] Scalar quantization (INT8, INT4, INT2) with non-uniform calibration and configurable rescore
 - [x] Disk-based HNSW persistence
 - [x] Embedding provider SPI (Ollama)
 - [x] IVF-PQ vector index (32× compression)
