@@ -19,8 +19,8 @@ The CLI JAR is at `spector-cli/target/spector-cli.jar`. Run it with:
 java -jar spector-cli/target/spector-cli.jar [command] [options]
 ```
 
-> [!TIP]
-> Create an alias for convenience:
+!!! tip
+    Create an alias for convenience:
 > ```bash
 > alias spectorctl='java -jar /path/to/spector-cli.jar'
 > ```
@@ -109,8 +109,8 @@ spectorctl search --text "search" --json
 | `--vector` | ❌* | Comma-separated query vector |
 | `--topK` | ❌ | Number of results (default: 10) |
 
-> [!IMPORTANT]
-> *At least one of `--text` or `--vector` is required.
+!!! important
+    *At least one of `--text` or `--vector` is required.
 
 ---
 

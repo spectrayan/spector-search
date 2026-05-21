@@ -16,8 +16,8 @@
 
 **Yes, completely.** GPU is optional. Without a GPU, Spector Search uses CPU SIMD acceleration (AVX2/AVX-512/NEON) which delivers sub-millisecond search at 100K documents. GPU helps primarily for high-concurrency batch workloads.
 
-> [!TIP]
-> See [GPU Acceleration](architecture/gpu-acceleration.md) for details on when GPU adds value (spoiler: batch sizes > 32).
+!!! tip
+    See [GPU Acceleration](architecture/gpu-acceleration.md) for details on when GPU adds value (spoiler: batch sizes > 32).
 
 ---
 
@@ -85,8 +85,8 @@ Any model that produces float32 vectors. Set `dimensions` to match:
 | nomic-embed-text | 768 | Ollama |
 | mxbai-embed-large | 1024 | Ollama |
 
-> [!NOTE]
-> Spector Search includes an Ollama embedding provider out of the box. Implement the `EmbeddingProvider` SPI for any other source.
+!!! note
+    Spector Search includes an Ollama embedding provider out of the box. Implement the `EmbeddingProvider` SPI for any other source.
 
 ---
 
@@ -125,8 +125,8 @@ flowchart LR
 3. LLM reorders based on semantic relevance
 4. Final top-K results reflect LLM judgment
 
-> [!WARNING]
-> Adds 100–500ms latency but significantly improves precision for ambiguous queries.
+!!! warning
+    Adds 100–500ms latency but significantly improves precision for ambiguous queries.
 
 ---
 

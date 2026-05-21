@@ -42,8 +42,8 @@ DocumentResult result = reader.read(Path.of("whitepaper.pdf"));
 | Failure isolation | Per-file (one failure doesn't halt pipeline) |
 | Output | Text string + metadata |
 
-> [!NOTE]
-> Unsupported formats return a descriptive error. Corrupted files report the failure without stopping the pipeline.
+!!! note
+    Unsupported formats return a descriptive error. Corrupted files report the failure without stopping the pipeline.
 
 ---
 
@@ -82,8 +82,8 @@ List<TextChunk> chunks = chunker.chunk(extractedText, config);
 - ✅ **Single chunk for short text** — Returns exactly one chunk if input fits
 - ✅ Empty/whitespace input returns an empty list
 
-> [!TIP]
-> Set `maxTokens` to match your embedding model's max input length. Increase `overlapTokens` (100–200) if chunks need more surrounding context for coherence.
+!!! tip
+    Set `maxTokens` to match your embedding model's max input length. Increase `overlapTokens` (100–200) if chunks need more surrounding context for coherence.
 
 ---
 
@@ -246,8 +246,8 @@ Question: Explain product quantization
 Answer:"""
 ```
 
-> [!TIP]
-> For Spring AI applications, use the `SpectorRagService` or `QuestionAnswerAdvisor` for automatic context retrieval. See [Spring AI Integration](../sdk-usage/spring-ai.md).
+!!! tip
+    For Spring AI applications, use the `SpectorRagService` or `QuestionAnswerAdvisor` for automatic context retrieval. See [Spring AI Integration](../sdk-usage/spring-ai.md).
 
 ---
 

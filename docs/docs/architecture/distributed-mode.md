@@ -101,8 +101,8 @@ sequenceDiagram
     Coord-->>Client: ✨ Global top-K results
 ```
 
-> [!NOTE]
-> If some shards timeout, the coordinator returns **partial results** from responding shards plus metadata indicating which shards were unreachable.
+!!! note
+    If some shards timeout, the coordinator returns **partial results** from responding shards plus metadata indicating which shards were unreachable.
 
 ---
 
@@ -227,8 +227,8 @@ graph TD
 | 8 nodes | 8–16 | Up to 5M | ~150K QPS |
 | 16 nodes | 16–32 | Up to 10M | ~250K QPS |
 
-> [!TIP]
-> Throughput estimates assume 128-dim vectors, top-10, hybrid search. Actual results depend on hardware and query complexity.
+!!! tip
+    Throughput estimates assume 128-dim vectors, top-10, hybrid search. Actual results depend on hardware and query complexity.
 
 ---
 

@@ -73,8 +73,8 @@ graph LR
     G --> H[✨ Results]
 ```
 
-> [!TIP]
-> New here? Start with [Getting Started](getting-started/quickstart.md) to build and run your first search in under 5 minutes.
+!!! tip
+    New here? Start with [Getting Started](getting-started/quickstart.md) to build and run your first search in under 5 minutes.
 
 ---
 

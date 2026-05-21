@@ -64,8 +64,8 @@ Spector Search uses a page-aligned binary format for HNSW persistence:
 [ID Table]          → External ID ↔ internal offset mapping
 ```
 
-> [!TIP]
-> Loading is a single `mmap` syscall — no deserialization needed. Startup is instant regardless of index size.
+!!! tip
+    Loading is a single `mmap` syscall — no deserialization needed. Startup is instant regardless of index size.
 
 ---
 
@@ -98,8 +98,8 @@ PQ compresses each vector from full float32 to compact codes:
 | Each quantized to 1 byte | `[42] [187] [3] ... [201]` | **16 bytes** |
 | **Compression ratio** | | **96×** |
 
-> [!IMPORTANT]
-> At 32 subspaces with 256 centroids, you get **32× compression** while maintaining recall@10 ≥ 80%.
+!!! important
+    At 32 subspaces with 256 centroids, you get **32× compression** while maintaining recall@10 ≥ 80%.
 
 ### ⚡ ADC (Asymmetric Distance Computation)
 
@@ -252,8 +252,8 @@ SIMD kernels achieve sub-microsecond latency:
 | 384 | ~100 ns | ~100 ns |
 | 768 | ~100 ns | ~100 ns |
 
-> [!NOTE]
-> Values at 384+ dimensions are at `System.nanoTime()` resolution floor. JMH confirms millions of ops/sec throughput.
+!!! note
+    Values at 384+ dimensions are at `System.nanoTime()` resolution floor. JMH confirms millions of ops/sec throughput.
 
 ### 🎨 Design Principles
 

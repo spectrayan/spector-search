@@ -17,8 +17,8 @@ Vector quantization does the same thing for embeddings. When a machine learning 
 
 Quantization reduces the precision of each number — or replaces groups of numbers with compact codes — so vectors take less space while still being "close enough" for similarity search.
 
-> [!NOTE]
-> **Quantization ≠ dimensionality reduction.** Dimensionality reduction (like PCA) removes dimensions entirely. Quantization keeps all dimensions but reduces the *precision* of each value.
+!!! note
+    **Quantization ≠ dimensionality reduction.** Dimensionality reduction (like PCA) removes dimensions entirely. Quantization keeps all dimensions but reduces the *precision* of each value.
 
 ---
 
@@ -42,8 +42,8 @@ Now scale that up:
 
 At billion scale, full-precision vectors require **1.5 terabytes** of RAM — far beyond what typical servers provide. With 32× compression (Product Quantization), that same dataset fits in 46 GB — a single machine with a decent memory budget.
 
-> [!TIP]
-> Even at smaller scales, compression matters. Less memory means better cache utilization, which means faster search. A 4× compressed index that fits in L3 cache will outperform a full-precision index that spills to RAM.
+!!! tip
+    Even at smaller scales, compression matters. Less memory means better cache utilization, which means faster search. A 4× compressed index that fits in L3 cache will outperform a full-precision index that spills to RAM.
 
 ---
 
@@ -77,8 +77,8 @@ reconstructed = min + quantized_value × (max - min) / 255
 | Complexity | Very low — simple min/max scaling |
 | Calibration | Linear (min/max per dimension) |
 
-> [!TIP]
-> Scalar INT8 is the "safe default" — you get meaningful memory savings with almost no recall loss. Start here unless you need more aggressive compression.
+!!! tip
+    Scalar INT8 is the "safe default" — you get meaningful memory savings with almost no recall loss. Start here unless you need more aggressive compression.
 
 ---
 
@@ -109,8 +109,8 @@ Packed:      [0x92, 0xE7]        (two nibbles per byte → 50% storage)
 | Calibration | Non-uniform (quantile-based boundaries per dimension) |
 | Rescore default | 3× oversampling |
 
-> [!TIP]
-> INT4 hits the sweet spot between INT8 and IVF-PQ: **8× compression with 85–95% recall** when paired with the configurable rescore strategy. Ideal for 10M–100M vector workloads that can't afford full PQ training complexity.
+!!! tip
+    INT4 hits the sweet spot between INT8 and IVF-PQ: **8× compression with 85–95% recall** when paired with the configurable rescore strategy. Ideal for 10M–100M vector workloads that can't afford full PQ training complexity.
 
 ---
 
@@ -141,8 +141,8 @@ Packed:      [0x8D]              (four crumbs per byte → 75% storage reduction
 | Calibration | Non-uniform (quantile-based boundaries per dimension) |
 | Rescore default | 5× oversampling |
 
-> [!IMPORTANT]
-> INT2 is aggressive — only 4 levels per dimension. The higher default oversampling (5×) compensates by rescoring more candidates with exact float32 distances. Best suited for memory-constrained environments where you accept some recall trade-off.
+!!! important
+    INT2 is aggressive — only 4 levels per dimension. The higher default oversampling (5×) compensates by rescoring more candidates with exact float32 distances. Best suited for memory-constrained environments where you accept some recall trade-off.
 
 ---
 
@@ -211,8 +211,8 @@ XOR      = 00001100  → popcount = 2 (Hamming distance = 2)
 | Speed impact | Extremely fast (bitwise ops + POPCNT) |
 | Complexity | Trivial — just sign extraction |
 
-> [!IMPORTANT]
-> Binary quantization loses significant information. It works best with **high-dimensional embeddings** (768+) where the sign pattern alone carries meaning. For 384-dim or lower, expect noticeable recall degradation. Always pair with rescoring (recompute exact distance on top candidates).
+!!! important
+    Binary quantization loses significant information. It works best with **high-dimensional embeddings** (768+) where the sign pattern alone carries meaning. For 384-dim or lower, expect noticeable recall degradation. Always pair with rescoring (recompute exact distance on top candidates).
 
 ---
 
@@ -274,8 +274,8 @@ graph TD
 | Speed impact | Fast — table lookups instead of floating-point math |
 | Complexity | High — requires training codebooks on representative data |
 
-> [!NOTE]
-> The "product" in Product Quantization refers to the Cartesian product of subspace codebooks. Each subspace is quantized independently, and the full approximation is the product of these independent approximations.
+!!! note
+    The "product" in Product Quantization refers to the Cartesian product of subspace codebooks. Each subspace is quantized independently, and the full approximation is the product of these independent approximations.
 
 ---
 
@@ -318,8 +318,8 @@ graph TD
 | Scale | **Billions of vectors** on a single node |
 | Complexity | Requires training (K-Means for partitions + PQ codebooks) |
 
-> [!TIP]
-> **Tuning `nprobe`** is the key recall/speed knob. Higher nprobe = more partitions searched = higher recall but slower queries. Start with nprobe=10 and increase until you hit your recall target.
+!!! tip
+    **Tuning `nprobe`** is the key recall/speed knob. Higher nprobe = more partitions searched = higher recall but slower queries. Start with nprobe=10 and increase until you hit your recall target.
 
 ---
 
@@ -387,8 +387,8 @@ All quantization modes support an **oversampling-based rescore** to recover reca
 | INT4 | 3× | 85–95% |
 | INT2 | 5× | 75–90% |
 
-> [!NOTE]
-> Set oversampling to 1 to disable rescore entirely (faster but lower recall). GPU acceleration for INT4/INT2 requires dimensions to be a multiple of 32; otherwise Spector automatically falls back to CPU/SIMD.
+!!! note
+    Set oversampling to 1 to disable rescore entirely (faster but lower recall). GPU acceleration for INT4/INT2 requires dimensions to be a multiple of 32; otherwise Spector automatically falls back to CPU/SIMD.
 
 ### The Full Spectrum
 

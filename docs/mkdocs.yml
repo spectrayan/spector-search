@@ -109,3 +109,6 @@ nav:
       - Performance Tuning: operations/performance-tuning.md
       - Contributing: operations/contributing.md
   - FAQ: faq.md
+
+extra_css:
+  - stylesheets/extra.css

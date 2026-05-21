@@ -26,8 +26,8 @@
 </dependency>
 ```
 
-> [!TIP]
-> Choose **embedded** for maximum performance (zero latency overhead). Choose **client** when you want a shared server across multiple services.
+!!! tip
+    Choose **embedded** for maximum performance (zero latency overhead). Choose **client** when you want a shared server across multiple services.
 
 ---
 
@@ -59,8 +59,8 @@ SpectorClient client = SpectorClient.builder()
 | `requestTimeout` | 30s | Per-request timeout |
 | `maxConnections` | 10 | HTTP connection pool size |
 
-> [!NOTE]
-> `SpectorClient` is fully **thread-safe**. It uses Java's `HttpClient` with internal connection pooling. Share a single instance across all threads.
+!!! note
+    `SpectorClient` is fully **thread-safe**. It uses Java's `HttpClient` with internal connection pooling. Share a single instance across all threads.
 
 ---
 

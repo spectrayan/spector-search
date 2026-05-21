@@ -12,8 +12,8 @@
 | `capacity` | 100,000 | 1–10,000,000 | Maximum document count |
 | `similarityFunction` | COSINE | COSINE, DOT_PRODUCT, EUCLIDEAN | Distance metric |
 
-> [!TIP]
-> **Quick model reference:**
+!!! tip
+    **Quick model reference:**
 > | Model | Dimensions |
 > |-------|-----------|
 > | all-MiniLM-L6-v2 | 384 |
@@ -44,8 +44,8 @@
 | 💾 Memory-first | INT2 | 5 | 16× | 75–90% | Fit large datasets in RAM |
 | 🚀 Billion-scale | IVF_PQ | — | 32× | 75–90% | Massive datasets |
 
-> [!TIP]
-> **Start with INT4** for most workloads. It gives 8× compression with excellent recall when paired with the default 3× rescore. Only go to INT2 if memory is the binding constraint, or IVF-PQ if you're at billion scale.
+!!! tip
+    **Start with INT4** for most workloads. It gives 8× compression with excellent recall when paired with the default 3× rescore. Only go to INT2 if memory is the binding constraint, or IVF-PQ if you're at billion scale.
 
 ### Oversampling Tuning
 
@@ -84,8 +84,8 @@ var config = SpectorConfig.DEFAULT
 | ⚡ Low latency | 8–12 | 100 | 20–30 | Faster search, lower recall |
 | 💾 Memory-constrained | 4–8 | 100 | 20 | Minimal memory, lower recall |
 
-> [!IMPORTANT]
-> `efSearch` should be ≥ `topK` for meaningful results. Setting `efSearch < topK` means you're asking for more results than the algorithm explores.
+!!! important
+    `efSearch` should be ≥ `topK` for meaningful results. Setting `efSearch < topK` means you're asking for more results than the algorithm explores.
 
 ---
 
@@ -126,8 +126,8 @@ var config = SpectorConfig.DEFAULT
 | `gpuBatchWindow` | 10 ms | 1–100 ms | Batching window for query collection |
 | `gpuMaxBatchSize` | 1024 | 1–1024 | Maximum queries per GPU batch |
 
-> [!NOTE]
-> Enable GPU for batch workloads with >10K vectors. Single queries are often faster on CPU SIMD due to zero kernel launch overhead.
+!!! note
+    Enable GPU for batch workloads with >10K vectors. Single queries are often faster on CPU SIMD due to zero kernel launch overhead.
 > For INT4/INT2 quantization, GPU acceleration requires dimensions to be a multiple of 32. Non-aligned dimensions automatically fall back to CPU/SIMD.
 
 ---
@@ -141,8 +141,8 @@ var config = SpectorConfig.DEFAULT
 | `rerankerEndpoint` | http://localhost:11434 | URL | Ollama API endpoint |
 | `rerankerMaxCandidates` | 20 | 1–100 | Max docs sent to LLM |
 
-> [!WARNING]
-> Re-ranking adds **100–500ms latency** per query. Use only when precision is critical and latency budget allows.
+!!! warning
+    Re-ranking adds **100–500ms latency** per query. Use only when precision is critical and latency budget allows.
 
 ---
 
@@ -173,8 +173,8 @@ mvn exec:java -pl spector-server \
 | `heartbeatTimeout` | 10s | 3s–120s | Node unavailability timeout |
 | `queryTimeout` | 10s | 1s–60s | Per-shard query timeout |
 
-> [!TIP]
-> Rule of thumb: **100K–500K docs per shard** for optimal balance. Set `heartbeatTimeout` to at least 5× `heartbeatInterval`.
+!!! tip
+    Rule of thumb: **100K–500K docs per shard** for optimal balance. Set `heartbeatTimeout` to at least 5× `heartbeatInterval`.
 
 ---
 

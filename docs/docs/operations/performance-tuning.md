@@ -17,8 +17,8 @@
 | 384 | ~100 ns | 100 ns | ~100 ns | 100 ns |
 | 768 | ~100 ns | 100 ns | ~100 ns | 100 ns |
 
-> [!NOTE]
-> Values at 384+ are at `System.nanoTime()` resolution floor. JMH confirms millions of ops/sec.
+!!! note
+    Values at 384+ are at `System.nanoTime()` resolution floor. JMH confirms millions of ops/sec.
 
 ### 🔍 Search Latency (128-dim, top-10)
 
@@ -63,8 +63,8 @@
 mvn -pl spector-bench exec:java
 ```
 
-> [!TIP]
-> Generates an HTML report at `spector-bench/target/performance-report.html`
+!!! tip
+    Generates an HTML report at `spector-bench/target/performance-report.html`
 
 ### Specific Benchmarks
 
@@ -233,8 +233,8 @@ java \
 | `-XX:+ZGenerational` | Generational ZGC for better throughput |
 | `-Xmx4g -Xms4g` | Fixed heap avoids resize pauses |
 
-> [!TIP]
-> Since all vectors live off-heap, GC pressure is minimal. The heap primarily holds the HNSW graph structure and BM25 inverted index.
+!!! tip
+    Since all vectors live off-heap, GC pressure is minimal. The heap primarily holds the HNSW graph structure and BM25 inverted index.
 
 ---
 

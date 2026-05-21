@@ -246,8 +246,8 @@ public class RagChatService {
 }
 ```
 
-> [!TIP]
-> Spring AI's `QuestionAnswerAdvisor` automatically retrieves relevant context from the VectorStore and includes it in the prompt — no manual context assembly needed.
+!!! tip
+    Spring AI's `QuestionAnswerAdvisor` automatically retrieves relevant context from the VectorStore and includes it in the prompt — no manual context assembly needed.
 
 ---
 

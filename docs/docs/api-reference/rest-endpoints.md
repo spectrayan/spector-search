@@ -13,8 +13,8 @@
 | Auth Header | `X-API-Key: <key>` | Optional, configured at startup |
 | CORS | Enabled | All origins by default |
 
-> [!NOTE]
-> When an API key is configured, requests without a valid key receive `401 Unauthorized`.
+!!! note
+    When an API key is configured, requests without a valid key receive `401 Unauthorized`.
 
 ---
 
@@ -196,8 +196,8 @@ curl -X POST http://localhost:7070/api/v1/search \
 | `vector` | float[] | ❌* | Query vector for similarity search |
 | `topK` | int | ❌ | Number of results (default: 10, max: 10000) |
 
-> [!IMPORTANT]
-> *At least one of `text` or `vector` must be provided.
+!!! important
+    *At least one of `text` or `vector` must be provided.
 
 **Response `200`:**
 ```json

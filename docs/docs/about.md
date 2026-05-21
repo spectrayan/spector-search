@@ -42,8 +42,8 @@ graph LR
 
 Unlike most vector databases that rely on C++, Rust, or Python bindings, Spector Search is 100% Java. It uses the JDK's own Vector API for SIMD acceleration — no JNI, no native libraries, no external infrastructure.
 
-> [!TIP]
-> Add the JAR to your classpath and you're done. No Docker, no clusters, no ops.
+!!! tip
+    Add the JAR to your classpath and you're done. No Docker, no clusters, no ops.
 
 ### 🚀 Modern JVM Technologies
 
@@ -75,8 +75,8 @@ At 100K documents (128 dimensions, top-10):
 
 Product quantization provides **32× memory compression** for billion-scale datasets while maintaining high recall.
 
-> [!IMPORTANT]
-> This means you can index **1 billion vectors** in the memory that would normally hold 31 million uncompressed vectors.
+!!! important
+    This means you can index **1 billion vectors** in the memory that would normally hold 31 million uncompressed vectors.
 
 ---
 
@@ -108,8 +108,8 @@ Product quantization provides **32× memory compression** for billion-scale data
 | **Distributed** | ✅ gRPC fan-out | ✅ Built-in sharding | ✅ Raft consensus | ✅ gRPC + etcd | ❌ |
 | **SIMD Acceleration** | ✅ Java Vector API | ✅ simdvec (Panama) | ✅ Native SIMD | ✅ AVX/NEON | ✅ AVX/SSE |
 
-> [!NOTE]
-> This comparison reflects publicly available information as of May 2025. Feature availability may vary by version and deployment mode. All products are actively evolving.
+!!! note
+    This comparison reflects publicly available information as of May 2025. Feature availability may vary by version and deployment mode. All products are actively evolving.
 
 ---
 
@@ -139,16 +139,16 @@ Drop Spector Search into existing Java applications without infrastructure chang
 
 ## ✅ When to Choose Spector Search
 
-> [!NOTE]
-> **Choose Spector Search when:**
+!!! note
+    **Choose Spector Search when:**
 > - You want sub-millisecond hybrid search without infrastructure complexity
 > - Your stack is Java/JVM and you want native integration
 > - You need an embedded search library with server-mode option
 > - You want GPU acceleration without leaving the JVM
 > - Zero external dependencies matters to your deployment
 
-> [!WARNING]
-> **Consider alternatives when:**
+!!! warning
+    **Consider alternatives when:**
 > - You need a managed cloud service with zero ops
 > - Your team primarily works in Python/Rust/Go
 > - You need built-in ML model serving (Weaviate, Milvus)

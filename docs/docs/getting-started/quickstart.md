@@ -12,8 +12,8 @@
 | 📦 Maven | 3.9+ | `mvn --version` |
 | 🔧 Git | 2.40+ | `git --version` |
 
-> [!IMPORTANT]
-> Spector Search requires **JDK 25 or later** with the Vector API incubator module. [OpenJDK builds](https://jdk.java.net/) include this by default.
+!!! important
+    Spector Search requires **JDK 25 or later** with the Vector API incubator module. [OpenJDK builds](https://jdk.java.net/) include this by default.
 
 ---
 
@@ -31,8 +31,8 @@ mvn clean test
 mvn clean package -DskipTests
 ```
 
-> [!TIP]
-> The full test suite runs 316+ tests across all modules. Expect ~2 minutes on a modern machine.
+!!! tip
+    The full test suite runs 316+ tests across all modules. Expect ~2 minutes on a modern machine.
 
 ---
 
@@ -75,8 +75,8 @@ curl http://localhost:7070/health
 {"status": "UP"}
 ```
 
-> [!NOTE]
-> The server starts on virtual threads — it can handle thousands of concurrent requests out of the box with no thread pool configuration needed.
+!!! note
+    The server starts on virtual threads — it can handle thousands of concurrent requests out of the box with no thread pool configuration needed.
 
 ---
 
@@ -217,8 +217,8 @@ try (var engine = new SpectorEngine(config)) {
 }
 ```
 
-> [!TIP]
-> Embedded mode has **zero network overhead** — perfect for microservices, desktop apps, and edge deployments.
+!!! tip
+    Embedded mode has **zero network overhead** — perfect for microservices, desktop apps, and edge deployments.
 
 ---
 

@@ -15,8 +15,8 @@ Every vector search engine faces the same fundamental problem: vectors are too b
 | GPU availability | Enables larger codebook training |
 | Disk vs. memory architecture | Changes what "compression" means |
 
-> [!NOTE]
-> There is no universally "best" quantization method. The right choice depends on your recall requirements, memory budget, dataset size, and which engine you're already using.
+!!! note
+    There is no universally "best" quantization method. The right choice depends on your recall requirements, memory budget, dataset size, and which engine you're already using.
 
 ---
 
@@ -55,8 +55,8 @@ This makes IVF-PQ challenging because:
 
 Binary quantization, by contrast, is **per-vector** — no global training needed, works perfectly with immutable segments.
 
-> [!TIP]
-> BBQ is clever engineering within Lucene's constraints. The rescoring step recovers much of the recall lost by binary compression, achieving ~90% recall@10 for high-dimensional embeddings (768+).
+!!! tip
+    BBQ is clever engineering within Lucene's constraints. The rescoring step recovers much of the recall lost by binary compression, achieving ~90% recall@10 for high-dimensional embeddings (768+).
 
 ### What is DiskBBQ?
 
@@ -118,8 +118,8 @@ graph LR
 | Works with segments | No (global index) | Yes |
 | Disk-friendly | Via mmap | Via DiskBBQ |
 
-> [!IMPORTANT]
-> At the same 32× compression ratio, PQ preserves more information than binary because it learns the data distribution. Binary quantization discards magnitude entirely — only direction (sign) survives.
+!!! important
+    At the same 32× compression ratio, PQ preserves more information than binary because it learns the data distribution. Binary quantization discards magnitude entirely — only direction (sign) survives.
 
 ---
 
@@ -163,8 +163,8 @@ Meta's FAISS library is the reference implementation for quantization research:
 | ScaNN | Anisotropic quantization (prioritizes angular error) |
 | Binary (LSH) | Locality-Sensitive Hashing for binary codes |
 
-> [!NOTE]
-> FAISS isn't a search engine — it's a library. Most production vector databases (including Milvus) build on FAISS's algorithms internally.
+!!! note
+    FAISS isn't a search engine — it's a library. Most production vector databases (including Milvus) build on FAISS's algorithms internally.
 
 ---
 
@@ -236,8 +236,8 @@ Which quantization methods are available in each engine:
 | **Qdrant** | 95–99% | — | — | 65–85% (Binary + oversample) | Per-segment quantization |
 | **FAISS** | 95–99% | — | — | 85–95% (OPQ) | Library, not engine |
 
-> [!TIP]
-> FAISS achieves the highest PQ recall because OPQ (Optimized Product Quantization) rotates the vector space before splitting into subspaces, minimizing quantization error. This is computationally expensive during training but pays off at query time.
+!!! tip
+    FAISS achieves the highest PQ recall because OPQ (Optimized Product Quantization) rotates the vector space before splitting into subspaces, minimizing quantization error. This is computationally expensive during training but pays off at query time.
 
 ---
 
