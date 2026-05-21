@@ -1,66 +1,205 @@
-# REST Endpoints
+# 🌐 REST API Reference
 
-## Ingest
+> **Complete reference for all Spector Search REST endpoints.** The API runs on an embedded Javalin server with virtual threads, accepting and returning JSON. Every request gets its own virtual thread — no connection limits to worry about.
 
-### POST /api/v1/ingest
+---
 
-Ingest a single document with a pre-computed vector.
+## 🔧 Base Configuration
 
-**Request:**
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Base URL | `http://localhost:7070` | Configurable port |
+| Content-Type | `application/json` | All requests and responses |
+| Auth Header | `X-API-Key: <key>` | Optional, configured at startup |
+| CORS | Enabled | All origins by default |
 
+> [!NOTE]
+> When an API key is configured, requests without a valid key receive `401 Unauthorized`.
+
+---
+
+## 💚 Health & Status
+
+### `GET /health`
+
+Quick health check for load balancers and monitoring.
+
+```bash
+curl http://localhost:7070/health
+```
+
+**Response `200`:**
+```json
+{"status": "UP"}
+```
+
+---
+
+### `GET /api/v1/status`
+
+Engine status including SIMD capabilities, GPU availability, and configuration.
+
+```bash
+curl http://localhost:7070/api/v1/status
+```
+
+**Response `200`:**
 ```json
 {
-  "id": "doc-1",
-  "title": "Java Vector API",
-  "content": "SIMD-accelerated search engine on modern JVM",
-  "vector": [0.1, 0.2, 0.3, 0.4, 0.5]
+  "status": "RUNNING",
+  "simd": "AVX2 (256-bit, 8 lanes)",
+  "gpuAvailable": false,
+  "rerankerEnabled": false,
+  "documentCount": 1250,
+  "dimensions": 384,
+  "capacity": 100000
 }
 ```
 
-**Response (200):**
+---
 
+### `GET /api/v1/metrics`
+
+Request metrics including query counts, latencies, and throughput.
+
+```bash
+curl http://localhost:7070/api/v1/metrics
+```
+
+**Response `200`:**
 ```json
 {
-  "id": "doc-1",
-  "status": "indexed"
+  "totalQueries": 4521,
+  "totalIngestions": 1250,
+  "avgLatencyMs": 0.34,
+  "p99LatencyMs": 1.12,
+  "queriesPerSecond": 8432.5
 }
 ```
 
-### POST /api/v1/ingest/bulk
+---
+
+## 📥 Ingest Endpoints
+
+### `POST /api/v1/ingest`
+
+Ingest a single document with a pre-computed vector embedding.
+
+```bash
+curl -X POST http://localhost:7070/api/v1/ingest \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: my-secret-key" \
+  -d '{
+    "id": "doc-1",
+    "title": "Java Vector API",
+    "content": "SIMD-accelerated search engine on modern JVM",
+    "vector": [0.1, 0.2, 0.3, 0.4, 0.5]
+  }'
+```
+
+**Request Schema:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | ✅ | Unique document identifier |
+| `title` | string | ❌ | Document title |
+| `content` | string | ✅ | Text content for BM25 indexing |
+| `vector` | float[] | ✅ | Embedding vector (must match configured dimensions) |
+| `metadata` | object | ❌ | Arbitrary key-value metadata |
+
+**Response `200`:**
+```json
+{"id": "doc-1", "status": "indexed"}
+```
+
+---
+
+### `POST /api/v1/ingest/auto`
+
+Ingest with automatic embedding generation. Requires a configured embedding provider (e.g., Ollama).
+
+```bash
+curl -X POST http://localhost:7070/api/v1/ingest/auto \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "doc-2",
+    "title": "Panama FFM",
+    "content": "Foreign Function and Memory API for zero-copy storage"
+  }'
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | ✅ | Unique document identifier |
+| `title` | string | ❌ | Document title |
+| `content` | string | ✅ | Text content (used for both BM25 and embedding) |
+| `metadata` | object | ❌ | Arbitrary key-value metadata |
+
+---
+
+### `POST /api/v1/ingest/bulk`
 
 Ingest multiple documents in a single request.
 
-**Request:**
+```bash
+curl -X POST http://localhost:7070/api/v1/ingest/bulk \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [
+      {"id": "d1", "content": "first document", "vector": [0.1, 0.2, 0.3]},
+      {"id": "d2", "content": "second document", "vector": [0.4, 0.5, 0.6]}
+    ]
+  }'
+```
 
+**Response `200`:**
 ```json
 {
-  "documents": [
-    {"id": "d1", "content": "first document", "vector": [0.1, 0.2, 0.3]},
-    {"id": "d2", "content": "second document", "vector": [0.4, 0.5, 0.6]}
+  "indexed": 2,
+  "failed": 0,
+  "results": [
+    {"id": "d1", "status": "indexed"},
+    {"id": "d2", "status": "indexed"}
   ]
 }
 ```
 
 ---
 
-## Search
+## 🔍 Search Endpoints
 
-### POST /api/v1/search
+### `POST /api/v1/search`
 
-Auto-detecting search. Provide `text` for keyword, `vector` for vector, or both for hybrid.
+Auto-detecting search endpoint. The mode is determined by which fields you provide:
 
-**Request:**
+| Fields Provided | Mode | Engine Used |
+|-----------------|------|-------------|
+| `text` only | 📝 KEYWORD | BM25 |
+| `vector` only | 🧠 VECTOR | HNSW |
+| `text` + `vector` | 🧬 HYBRID | RRF Fusion |
 
-```json
-{
-  "text": "vector search engine",
-  "vector": [0.1, 0.2, 0.3],
-  "topK": 10
-}
+```bash
+curl -X POST http://localhost:7070/api/v1/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "vector search engine",
+    "vector": [0.1, 0.2, 0.3, 0.4, 0.5],
+    "topK": 10
+  }'
 ```
 
-**Response (200):**
+**Request Schema:**
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `text` | string | ❌* | Query text for keyword search |
+| `vector` | float[] | ❌* | Query vector for similarity search |
+| `topK` | int | ❌ | Number of results (default: 10, max: 10000) |
+
+> [!IMPORTANT]
+> *At least one of `text` or `vector` must be provided.
+
+**Response `200`:**
 ```json
 {
   "results": [
@@ -68,50 +207,79 @@ Auto-detecting search. Provide `text` for keyword, `vector` for vector, or both 
       "id": "doc-1",
       "score": 0.9523,
       "title": "Java Vector API",
-      "content": "SIMD-accelerated search engine..."
+      "content": "SIMD-accelerated search engine on modern JVM"
     }
   ],
   "searchMode": "HYBRID",
-  "latencyMs": 0.47
+  "latencyMs": 0.47,
+  "totalResults": 1
 }
 ```
-
-### POST /api/v1/vector-search
-
-Vector-only similarity search.
-
-### POST /api/v1/bm25
-
-Keyword-only BM25 search. Only requires `text` field.
-
-### POST /api/v1/hybrid
-
-Explicit hybrid search combining vector + keyword via RRF.
 
 ---
 
-## RAG
+### `POST /api/v1/vector-search`
 
-### POST /api/v1/rag
+Explicit vector-only similarity search.
 
-Retrieval-Augmented Generation endpoint. Retrieves relevant context for LLM prompting.
-
-**Request:**
-
-```json
-{
-  "query": "How does HNSW indexing work?",
-  "topK": 5,
-  "tokenLimit": 4096,
-  "searchMode": "hybrid"
-}
+```bash
+curl -X POST http://localhost:7070/api/v1/vector-search \
+  -H "Content-Type: application/json" \
+  -d '{"vector": [0.1, 0.2, 0.3, 0.4, 0.5], "topK": 10}'
 ```
 
-**Response (200):**
+### `POST /api/v1/bm25`
 
+Explicit keyword-only BM25 search.
+
+```bash
+curl -X POST http://localhost:7070/api/v1/bm25 \
+  -H "Content-Type: application/json" \
+  -d '{"text": "SIMD acceleration", "topK": 10}'
+```
+
+### `POST /api/v1/hybrid`
+
+Explicit hybrid search combining vector + keyword via RRF.
+
+```bash
+curl -X POST http://localhost:7070/api/v1/hybrid \
+  -H "Content-Type: application/json" \
+  -d '{"text": "vector search", "vector": [0.1, 0.2, 0.3, 0.4, 0.5], "topK": 10}'
+```
+
+---
+
+## 🤖 RAG (Retrieval-Augmented Generation)
+
+### `POST /api/v1/rag`
+
+Retrieve relevant context for LLM prompting. Performs search, then assembles a context window from matching chunks.
+
+```bash
+curl -X POST http://localhost:7070/api/v1/rag \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How does HNSW indexing work?",
+    "topK": 5,
+    "tokenLimit": 4096,
+    "searchMode": "hybrid"
+  }'
+```
+
+**Request Schema:**
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `query` | string | ✅ | — | Query text (1–2000 chars) |
+| `topK` | int | ❌ | 5 | Results to retrieve (1–100) |
+| `tokenLimit` | int | ❌ | 4096 | Max context tokens (1–8192) |
+| `searchMode` | string | ❌ | "vector" | `"vector"` or `"hybrid"` |
+
+**Response `200`:**
 ```json
 {
-  "context": "Assembled context text from relevant chunks...",
+  "context": "Assembled context text from relevant document chunks...",
   "attributions": [
     {"documentId": "doc-1", "chunkOffset": 0},
     {"documentId": "doc-3", "chunkOffset": 2}
@@ -120,83 +288,54 @@ Retrieval-Augmented Generation endpoint. Retrieves relevant context for LLM prom
 }
 ```
 
-**Error Responses:**
+---
 
-- `400` — Missing or invalid query (must be 1–2000 chars)
-- `503` — Embedding provider unavailable
+## 🗑️ Document Management
+
+### `DELETE /api/v1/documents/{id}`
+
+Delete a document by its ID.
+
+```bash
+curl -X DELETE http://localhost:7070/api/v1/documents/doc-1
+```
+
+**Response `200`:**
+```json
+{"id": "doc-1", "deleted": true}
+```
 
 ---
 
-## Index Management
+## 📊 Index Management
 
-### POST /api/v1/index
+### `POST /api/v1/index`
 
 Create or manage indexes.
 
----
-
-## Document Management
-
-### DELETE /api/v1/documents/{id}
-
-Delete a document by ID.
-
-**Response (200):**
-
-```json
-{
-  "id": "doc-1",
-  "deleted": true
-}
-```
-
----
-
-## Monitoring
-
-### GET /health
-
-Returns `200 OK` when the server is running.
-
-### GET /api/v1/status
-
-Engine status including SIMD capabilities, GPU availability, and reranker configuration.
-
-### GET /api/v1/metrics
-
-Request metrics including query counts, latencies, and throughput.
-
----
-
-## Runnable REST API Example
-
-This complete example demonstrates ingesting a document and searching for it:
-
 ```bash
-# 1. Start the server (in another terminal)
-mvn exec:java -pl spector-server \
-  -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer" \
-  -Dexec.args="7070 5"
-
-# 2. Ingest a document
-curl -X POST http://localhost:7070/api/v1/ingest \
+curl -X POST http://localhost:7070/api/v1/index \
   -H "Content-Type: application/json" \
-  -d '{
-    "id": "readme-1",
-    "title": "Spector Search",
-    "content": "Ultra-fast SIMD-accelerated semantic search engine",
-    "vector": [0.9, 0.1, 0.3, 0.7, 0.5]
-  }'
-
-# 3. Search for it
-curl -X POST http://localhost:7070/api/v1/search \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "fast search engine",
-    "vector": [0.8, 0.2, 0.3, 0.6, 0.4],
-    "topK": 5
-  }'
-
-# 4. Delete the document
-curl -X DELETE http://localhost:7070/api/v1/documents/readme-1
+  -d '{"action": "create", "name": "my-index", "dimensions": 384}'
 ```
+
+---
+
+## ❌ Error Responses
+
+| Status | Meaning |
+|--------|---------|
+| `200` | ✅ Success |
+| `400` | Bad request (validation error, dimension mismatch) |
+| `401` | Unauthorized (invalid or missing API key) |
+| `404` | Resource not found |
+| `503` | Service unavailable (embedding provider down) |
+
+---
+
+## 🔗 See Also
+
+- [Getting Started](../getting-started/quickstart.md) — Quick start with curl examples
+- [Java SDK Guide](../sdk-usage/java-client.md) — Type-safe programmatic access
+- [CLI Reference](../cli-reference/spectorctl.md) — Command-line access to the API
+- [Configuration Guide](../configuration/parameters.md) — Server and auth configuration

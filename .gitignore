@@ -39,3 +39,6 @@ logs/
 *.mmap
 *.vec
 *.dat
+
+# ──────────── Documentation build ────────────
+docs/site/

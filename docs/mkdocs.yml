@@ -24,10 +24,15 @@ theme:
     - navigation.sections
     - navigation.expand
     - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - navigation.indexes
     - search.suggest
     - search.highlight
     - content.code.copy
+    - content.code.annotate
     - content.tabs.link
+    - toc.integrate
 
 plugins:
   - search
@@ -38,6 +43,8 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.emoji
+  - pymdownx.tasklist
   - admonition
   - pymdownx.details
   - attr_list
@@ -47,17 +54,26 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - About: about.md
   - Getting Started:
       - Quick Start: getting-started/quickstart.md
       - Installation: getting-started/installation.md
-  - API Reference:
-      - Overview: api-reference/overview.md
-      - REST Endpoints: api-reference/rest-endpoints.md
-  - Configuration:
-      - Parameters: configuration/parameters.md
   - Architecture:
       - System Overview: architecture/overview.md
-  - SDK Usage:
-      - Java Client SDK: sdk-usage/java-client.md
-  - CLI Reference:
-      - spectorctl: cli-reference/spectorctl.md
+      - Core Concepts: architecture/core-concepts.md
+      - Distributed Mode: architecture/distributed-mode.md
+      - GPU Acceleration: architecture/gpu-acceleration.md
+      - RAG Pipeline: architecture/rag-pipeline.md
+  - Deep Dives:
+      - Understanding Quantization: deep-dives/understanding-quantization.md
+      - Quantization Comparison: deep-dives/quantization-comparison.md
+  - Reference:
+      - REST API: api-reference/rest-endpoints.md
+      - Java SDK: sdk-usage/java-client.md
+      - Spring AI Integration: sdk-usage/spring-ai.md
+      - CLI (spectorctl): cli-reference/spectorctl.md
+      - Configuration: configuration/parameters.md
+  - Operations:
+      - Performance Tuning: operations/performance-tuning.md
+      - Contributing: operations/contributing.md
+  - FAQ: faq.md

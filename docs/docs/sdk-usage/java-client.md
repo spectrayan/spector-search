@@ -1,10 +1,12 @@
-# Java Client SDK
+# ☕ Java SDK Guide
 
-The `spector-client` module provides a type-safe Java client for interacting with a Spector Search server.
+> **Type-safe, thread-safe Java access to Spector Search — as a remote client or embedded engine.** Whether you're connecting to a server or embedding search directly in your application, this guide covers everything you need.
 
-## Installation
+---
 
-Add the dependency to your `pom.xml`:
+## 📦 Installation
+
+**Remote client** (connects to a running server):
 
 ```xml
 <dependency>
@@ -14,109 +16,268 @@ Add the dependency to your `pom.xml`:
 </dependency>
 ```
 
-## Creating a Client
+**Embedded engine** (in-process, zero network overhead):
 
-Use the builder pattern to configure the client:
-
-```java
-SpectorClient client = SpectorClient.builder()
-    .host("localhost")
-    .port(7070)
-    .apiKey("my-secret-key")  // optional
-    .build();
+```xml
+<dependency>
+    <groupId>com.spectrayan</groupId>
+    <artifactId>spector-engine</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
 ```
 
-## Runnable SDK Example
+> [!TIP]
+> Choose **embedded** for maximum performance (zero latency overhead). Choose **client** when you want a shared server across multiple services.
 
-This complete example demonstrates the full lifecycle — ingest, search, and delete:
+---
+
+## 🌐 Client SDK (Remote Server)
+
+### 🔧 Creating a Client
 
 ```java
 import com.spectrayan.spector.client.SpectorClient;
-import com.spectrayan.spector.client.model.*;
 
-public class SpectorClientExample {
-    public static void main(String[] args) throws Exception {
-        // 1. Create client
-        try (SpectorClient client = SpectorClient.builder()
-                .host("localhost")
-                .port(7070)
-                .build()) {
-
-            // 2. Ingest a document
-            IngestResponse ingestResp = client.ingest(IngestRequest.builder()
-                .id("sdk-doc-1")
-                .title("Vector Search")
-                .content("Spector uses HNSW for approximate nearest neighbor search")
-                .vector(new float[]{0.1f, 0.2f, 0.3f, 0.4f, 0.5f})
-                .build());
-            System.out.println("Ingested: " + ingestResp.id());
-
-            // 3. Search
-            SearchResponse searchResp = client.search(SearchRequest.builder()
-                .text("nearest neighbor")
-                .topK(5)
-                .build());
-            for (SearchResponse.Result result : searchResp.results()) {
-                System.out.printf("  %s → %.4f%n", result.id(), result.score());
-            }
-
-            // 4. Check status
-            StatusResponse status = client.status();
-            System.out.println("Engine status: " + status.status());
-
-            // 5. Get metrics
-            MetricsResponse metrics = client.metrics();
-            System.out.println("Total queries: " + metrics.totalQueries());
-
-            // 6. Delete
-            client.delete("sdk-doc-1");
-            System.out.println("Deleted sdk-doc-1");
-        }
-    }
-}
+SpectorClient client = SpectorClient.builder()
+    .host("localhost")
+    .port(7070)
+    .apiKey("my-secret-key")       // optional
+    .connectTimeout(Duration.ofSeconds(10))
+    .requestTimeout(Duration.ofSeconds(30))
+    .maxConnections(10)
+    .build();
 ```
 
-## Bulk Ingestion
-
-```java
-List<IngestRequest> docs = List.of(
-    IngestRequest.builder().id("d1").content("first").vector(vec1).build(),
-    IngestRequest.builder().id("d2").content("second").vector(vec2).build()
-);
-IngestResponse resp = client.bulkIngest(docs);
-```
-
-## Error Handling
-
-The SDK throws typed exceptions:
-
-| Exception | Cause |
-|-----------|-------|
-| `SpectorConnectionException` | Server unreachable |
-| `SpectorApiException` | HTTP 4xx/5xx response |
-| `SpectorTimeoutException` | Request timeout exceeded |
-
-```java
-try {
-    client.search(request);
-} catch (SpectorApiException e) {
-    System.err.println("HTTP " + e.statusCode() + ": " + e.message());
-} catch (SpectorConnectionException e) {
-    System.err.println("Cannot connect to " + e.endpoint());
-}
-```
-
-## Thread Safety
-
-`SpectorClient` is thread-safe. It uses Java's `HttpClient` with a connection pool (default 10 connections). You can safely share a single instance across multiple threads.
-
-## Configuration
+**Configuration Options:**
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `host` | localhost | Server hostname |
 | `port` | 7070 | Server port |
-| `apiKey` | — | Authentication key |
+| `apiKey` | — | API key for authentication |
 | `connectTimeout` | 10s | Connection timeout |
-| `requestTimeout` | 30s | Request timeout |
-| `maxConnections` | 10 | Connection pool size |
+| `requestTimeout` | 30s | Per-request timeout |
+| `maxConnections` | 10 | HTTP connection pool size |
+
+> [!NOTE]
+> `SpectorClient` is fully **thread-safe**. It uses Java's `HttpClient` with internal connection pooling. Share a single instance across all threads.
+
+---
+
+### 📥 Ingesting Documents
+
+```java
+// Single document
+IngestResponse response = client.ingest(IngestRequest.builder()
+    .id("doc-1")
+    .title("Java Vector API")
+    .content("SIMD-accelerated search engine built on modern JVM")
+    .vector(new float[]{0.1f, 0.2f, 0.3f, 0.4f, 0.5f})
+    .build());
+
+System.out.println("Indexed: " + response.id());
+```
+
+```java
+// Bulk ingest
+List<IngestRequest> documents = List.of(
+    IngestRequest.builder().id("d1").content("first doc").vector(vec1).build(),
+    IngestRequest.builder().id("d2").content("second doc").vector(vec2).build(),
+    IngestRequest.builder().id("d3").content("third doc").vector(vec3).build()
+);
+
+IngestResponse bulkResponse = client.bulkIngest(documents);
+```
+
+---
+
+### 🔍 Searching
+
+```java
+// Keyword search
+SearchResponse results = client.search(SearchRequest.builder()
+    .text("vector search engine")
+    .topK(10)
+    .build());
+
+// Vector search
+SearchResponse results = client.search(SearchRequest.builder()
+    .vector(queryEmbedding)
+    .topK(10)
+    .build());
+
+// Hybrid search (both text and vector)
+SearchResponse results = client.search(SearchRequest.builder()
+    .text("search engine")
+    .vector(queryEmbedding)
+    .topK(10)
+    .build());
+
+// Process results
+for (SearchResponse.Result result : results.results()) {
+    System.out.printf("%s (%.4f): %s%n",
+        result.id(), result.score(), result.content());
+}
+```
+
+---
+
+### 🗑️ Deleting Documents
+
+```java
+client.delete("doc-1");
+```
+
+### 📊 Status and Metrics
+
+```java
+StatusResponse status = client.status();
+System.out.println("Documents: " + status.documentCount());
+System.out.println("SIMD: " + status.simd());
+
+MetricsResponse metrics = client.metrics();
+System.out.println("QPS: " + metrics.queriesPerSecond());
+```
+
+---
+
+### ⚠️ Error Handling
+
+```java
+try {
+    client.search(request);
+} catch (SpectorApiException e) {
+    // HTTP 4xx/5xx from server
+    System.err.println("HTTP " + e.statusCode() + ": " + e.message());
+} catch (SpectorConnectionException e) {
+    // Server unreachable
+    System.err.println("Cannot connect to " + e.endpoint());
+} catch (SpectorTimeoutException e) {
+    // Request timed out
+    System.err.println("Timeout after " + e.timeout());
+}
+```
+
+### ♻️ Resource Management
+
+The client implements `AutoCloseable`:
+
+```java
+try (SpectorClient client = SpectorClient.builder().build()) {
+    // Use client...
+} // Connections released automatically
+```
+
+---
+
+## ⚡ SpectorEngine (Embedded Usage)
+
+For applications that want in-process search without network overhead:
+
+### 🔧 Creating an Engine
+
+```java
+import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.engine.SpectorConfig;
+
+var config = SpectorConfig.DEFAULT
+    .withDimensions(384)
+    .withCapacity(100_000)
+    .withSimilarityFunction(SimilarityFunction.COSINE)
+    .withGpu(true)                                           // optional GPU
+    .withReranker("http://localhost:11434", "llama3.2", 20); // optional LLM
+
+try (var engine = new SpectorEngine(config)) {
+    // Engine is ready — sub-millisecond search, zero network overhead
+}
+```
+
+### 📥 Ingesting
+
+```java
+// With pre-computed vector
+engine.ingest("doc-1", "Document content here", embedding);
+// The engine handles BM25 indexing, HNSW insertion, and storage automatically
+```
+
+### 🔍 Searching
+
+```java
+// Hybrid search (keyword + vector)
+SearchResponse response = engine.hybridSearch("search query", queryVector, 10);
+
+// Keyword-only
+SearchResponse response = engine.keywordSearch("exact phrase", 10);
+
+// Vector-only
+SearchResponse response = engine.vectorSearch(queryVector, 10);
+
+// Process results
+for (ScoredResult result : response.results()) {
+    System.out.printf("%s → %.4f%n", result.id(), result.score());
+}
+```
+
+### 🗑️ Deleting
+
+```java
+engine.delete("doc-1");
+```
+
+---
+
+## 🎯 Complete Example
+
+```java
+import com.spectrayan.spector.client.SpectorClient;
+import com.spectrayan.spector.client.model.*;
+
+public class SpectorExample {
+    public static void main(String[] args) throws Exception {
+        try (SpectorClient client = SpectorClient.builder()
+                .host("localhost")
+                .port(7070)
+                .build()) {
+
+            // Ingest documents
+            client.ingest(IngestRequest.builder()
+                .id("java-1")
+                .title("Virtual Threads")
+                .content("Java virtual threads enable millions of concurrent tasks")
+                .vector(new float[]{0.9f, 0.1f, 0.3f, 0.7f, 0.5f})
+                .build());
+
+            client.ingest(IngestRequest.builder()
+                .id("java-2")
+                .title("Vector API")
+                .content("The Vector API provides SIMD acceleration for math operations")
+                .vector(new float[]{0.2f, 0.8f, 0.4f, 0.1f, 0.6f})
+                .build());
+
+            // Search
+            SearchResponse results = client.search(SearchRequest.builder()
+                .text("SIMD acceleration")
+                .topK(5)
+                .build());
+
+            System.out.println("Results:");
+            for (var r : results.results()) {
+                System.out.printf("  %s (%.4f): %s%n", r.id(), r.score(), r.title());
+            }
+
+            // Cleanup
+            client.delete("java-1");
+            client.delete("java-2");
+        }
+    }
+}
+```
+
+---
+
+## 🔗 See Also
+
+- [REST API Reference](../api-reference/rest-endpoints.md) — Underlying API endpoints
+- [Spring AI Integration](spring-ai.md) — Spring AI VectorStore adapter
+- [Configuration Guide](../configuration/parameters.md) — All engine parameters
+- [Getting Started](../getting-started/quickstart.md) — Quick start guide

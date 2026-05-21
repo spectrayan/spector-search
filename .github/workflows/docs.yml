@@ -51,3 +51,73 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  sync-wiki:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          path: main
+
+      - name: Checkout wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync docs to wiki
+        run: |
+          cd wiki
+          # Remove existing content (except .git and _Sidebar.md)
+          find . -maxdepth 1 -name '*.md' ! -name '_Sidebar.md' -delete
+
+          # Copy and rename docs to wiki-friendly names
+          cp ../main/docs/docs/index.md Home.md
+          cp ../main/docs/docs/about.md What-is-Spector-Search.md
+          cp ../main/docs/docs/getting-started/quickstart.md Getting-Started.md
+          cp ../main/docs/docs/faq.md FAQ.md
+          cp ../main/docs/docs/architecture/overview.md Architecture-Overview.md
+          cp ../main/docs/docs/architecture/core-concepts.md Core-Concepts.md
+          cp ../main/docs/docs/architecture/distributed-mode.md Distributed-Mode.md
+          cp ../main/docs/docs/architecture/gpu-acceleration.md GPU-Acceleration.md
+          cp ../main/docs/docs/architecture/rag-pipeline.md RAG-Pipeline.md
+          cp ../main/docs/docs/deep-dives/understanding-quantization.md Understanding-Quantization.md
+          cp ../main/docs/docs/deep-dives/quantization-comparison.md Quantization-Comparison.md
+          cp ../main/docs/docs/api-reference/rest-endpoints.md REST-API-Reference.md
+          cp ../main/docs/docs/sdk-usage/java-client.md Java-SDK-Guide.md
+          cp ../main/docs/docs/sdk-usage/spring-ai.md Spring-AI-Integration.md
+          cp ../main/docs/docs/cli-reference/spectorctl.md CLI-Reference.md
+          cp ../main/docs/docs/configuration/parameters.md Configuration-Guide.md
+          cp ../main/docs/docs/operations/performance-tuning.md Performance-Tuning.md
+          cp ../main/docs/docs/operations/contributing.md Contributing.md
+
+          # Convert MkDocs relative links back to wiki-style [[links]]
+          sed -i 's|\[Core Concepts\]([^)]*)|[[Core Concepts]]|g' *.md
+          sed -i 's|\[Understanding Quantization\]([^)]*)|[[Understanding Quantization]]|g' *.md
+          sed -i 's|\[Quantization Comparison\]([^)]*)|[[Quantization Comparison]]|g' *.md
+          sed -i 's|\[Configuration Guide\]([^)]*)|[[Configuration Guide]]|g' *.md
+          sed -i 's|\[Architecture Overview\]([^)]*)|[[Architecture Overview]]|g' *.md
+          sed -i 's|\[Performance Tuning\]([^)]*)|[[Performance Tuning]]|g' *.md
+          sed -i 's|\[Getting Started\]([^)]*)|[[Getting Started]]|g' *.md
+          sed -i 's|\[REST API Reference\]([^)]*)|[[REST API Reference]]|g' *.md
+          sed -i 's|\[Java SDK Guide\]([^)]*)|[[Java SDK Guide]]|g' *.md
+          sed -i 's|\[Spring AI Integration\]([^)]*)|[[Spring AI Integration]]|g' *.md
+          sed -i 's|\[CLI Reference\]([^)]*)|[[CLI Reference]]|g' *.md
+          sed -i 's|\[Distributed Mode\]([^)]*)|[[Distributed Mode]]|g' *.md
+          sed -i 's|\[GPU Acceleration\]([^)]*)|[[GPU Acceleration]]|g' *.md
+          sed -i 's|\[RAG Pipeline\]([^)]*)|[[RAG Pipeline]]|g' *.md
+          sed -i 's|\[FAQ\]([^)]*)|[[FAQ]]|g' *.md
+          sed -i 's|\[Contributing\]([^)]*)|[[Contributing]]|g' *.md
+
+      - name: Push wiki changes
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "docs: sync from main repo docs [skip ci]"
+          git push
