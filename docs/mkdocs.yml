@@ -6,6 +6,8 @@ repo_name: spectrayan/spector-search
 
 theme:
   name: material
+  icon:
+    logo: material/lightning-bolt
   palette:
     - scheme: default
       primary: indigo
@@ -20,20 +22,29 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
   features:
-    - navigation.tabs
-    - navigation.tabs.sticky
-    - navigation.sections
-    - navigation.expand
-    - navigation.top
-    - navigation.instant
-    - navigation.tracking
-    - navigation.indexes
-    - search.suggest
-    - search.highlight
-    - content.code.copy
-    - content.code.annotate
-    - content.tabs.link
-    - toc.integrate
+    # Navigation
+    - navigation.tabs              # Top-level tabs
+    - navigation.tabs.sticky       # Tabs stay visible on scroll
+    - navigation.sections          # Bold section headers in sidebar
+    - navigation.expand            # Auto-expand sidebar sections
+    - navigation.top               # "Back to top" button on scroll
+    - navigation.instant           # Single-page app feel (no full reload)
+    - navigation.instant.progress  # Loading progress bar
+    - navigation.tracking          # URL updates as you scroll sections
+    - navigation.indexes           # Section index pages
+    - navigation.footer            # Previous/Next page links at bottom
+    - navigation.path              # Breadcrumbs above page title
+    # Search
+    - search.suggest               # Autocomplete suggestions
+    - search.highlight             # Highlight search terms on page
+    - search.share                 # Shareable search links
+    # Content
+    - content.code.copy            # Copy button on code blocks
+    - content.code.annotate        # Inline code annotations
+    - content.tabs.link            # Linked content tabs across page
+    - content.tooltips             # Rich tooltips on hover
+    # TOC
+    - toc.follow                   # TOC follows scroll position
 
 plugins:
   - search
@@ -41,6 +52,8 @@ plugins:
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
+      line_spans: __span
+  - pymdownx.inlinehilite
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -48,14 +61,28 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
-  - pymdownx.emoji
-  - pymdownx.tasklist
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.keys              # Render keyboard shortcuts like ++ctrl+c++
+  - pymdownx.mark              # ==highlighted text==
+  - pymdownx.critic            # Track changes markup
+  - pymdownx.caret             # ^^superscript^^
+  - pymdownx.tilde             # ~~strikethrough~~ and ~subscript~
+  - pymdownx.smartsymbols      # (c) → ©, (tm) → ™, etc.
   - admonition
   - pymdownx.details
   - attr_list
   - md_in_html
+  - def_list                   # Definition lists
+  - footnotes                  # Footnote references
+  - abbr                       # Abbreviation tooltips
+  - tables
   - toc:
       permalink: true
+      toc_depth: 3
 
 nav:
   - Home: index.md
