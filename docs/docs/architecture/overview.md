@@ -31,9 +31,14 @@ graph LR
         gpu["spector-gpu<br/><i>Panama FFM + CUDA</i>"]
     end
 
+    subgraph "📥 Pipelines"
+        ingestion["spector-ingestion<br/><i>Ingest orchestration</i>"]
+        rag["spector-rag<br/><i>RAG pipeline</i>"]
+    end
+
     subgraph "⚡ Engine & Interfaces"
         engine["spector-engine<br/><i>Unified facade + lifecycle</i>"]
-        server["spector-server<br/><i>REST API + virtual threads</i>"]
+        server["spector-server<br/><i>REST API + SSE streaming</i>"]
         cluster["spector-cluster<br/><i>Distributed gRPC search</i>"]
         cli["spector-cli<br/><i>spectorctl CLI</i>"]
         client["spector-client<br/><i>Java client SDK</i>"]
@@ -59,9 +64,21 @@ graph TD
 
     cluster --> engine
     engine --> query["🔍 query"]
+    engine --> ingestion["📥 ingestion"]
+    engine --> rag["🤖 rag"]
     engine --> commons["📄 commons"]
     engine --> embedapi["🧬 embed-api"]
     engine --> gpu["🎮 gpu"]
+
+    ingestion --> commons
+    ingestion --> embedapi
+    ingestion --> storage
+    ingestion --> index
+
+    rag --> query
+    rag --> embedapi
+    rag --> storage
+    rag --> commons
 
     query --> index["📊 index"]
     index --> storage["💾 storage"]
@@ -77,9 +94,13 @@ graph TD
 |------|-------------|
 | `cluster → engine → query → index → storage → core` | Main data path |
 | `server → engine` | REST API entry point |
+| `engine → ingestion` | Document ingestion pipeline |
+| `engine → rag` | RAG context assembly pipeline |
 | `engine → gpu` | Optional GPU acceleration |
 | `engine → commons` | Document processing |
 | `engine → embed-api` | Embedding generation |
+| `ingestion → commons, embed-api, storage, index` | Ingestion dependencies |
+| `rag → query, embed-api, storage, commons` | RAG dependencies |
 | `gpu → core, storage` | GPU operates on vectors and storage |
 
 > [!IMPORTANT]
@@ -93,26 +114,35 @@ graph TD
 sequenceDiagram
     participant Client as 👤 Client (REST/SDK/CLI)
     participant Engine as ⚡ SpectorEngine
+    participant Pipeline as 📥 IngestionPipeline
+    participant Embed as 🧠 EmbeddingProvider
     participant BM25 as 📝 BM25 Index
     participant HNSW as 🧠 HNSW Index
     participant SIMD as 🔬 SIMD Kernels
     participant Store as 💾 Storage (mmap)
 
-    Client->>Engine: Ingest (ID, content, vector)
+    Client->>Engine: Ingest (ID, content)
+    Engine->>Pipeline: Delegate ingestion
+    Pipeline->>Embed: Embed text (virtual thread)
+    Embed-->>Pipeline: Vector
     par Parallel indexing via virtual threads
-        Engine->>BM25: Tokenize + update inverted index
-        Engine->>HNSW: Insert vector into graph
+        Pipeline->>BM25: Tokenize + update inverted index
+        Pipeline->>HNSW: Insert vector into graph
         HNSW->>SIMD: Distance computation
-        Engine->>Store: Persist vector (zero-copy mmap)
+        Pipeline->>Store: Persist vector (zero-copy mmap)
     end
     Store-->>Client: ✅ Indexed
 ```
 
-1. **Engine** receives the document (ID, content, vector)
-2. **BM25 Index** tokenizes content and updates the inverted index
-3. **HNSW Index** inserts the vector into the graph using SIMD distance kernels
-4. **Storage** persists the raw vector to a memory-mapped file (zero-copy)
-5. If IVF-PQ is configured, the vector is also added to the IVF partition
+1. **Engine** receives the document and delegates to the **IngestionPipeline**
+2. **IngestionPipeline** handles chunking (if needed) and embedding via virtual threads
+3. **BM25 Index** tokenizes content and updates the inverted index
+4. **HNSW Index** inserts the vector into the graph using SIMD distance kernels
+5. **Storage** persists the raw vector to a memory-mapped file (zero-copy)
+6. If IVF-PQ is configured, the vector is also added to the IVF partition
+
+> [!TIP]
+> The `IngestionPipeline` can be used independently of the engine facade for bulk offline ingestion or custom pipelines.
 
 ---
 
@@ -227,7 +257,7 @@ graph TD
         CORS["CORS Filter"]
         Auth["Auth Filter"]
         JSON["JSON Codec"]
-        Routes["Route Handlers<br/>/health  /api/v1/ingest<br/>/api/v1/search  /api/v1/rag<br/>/api/v1/status  /api/v1/metrics"]
+        Routes["Route Handlers<br/>/health  /api/v1/ingest<br/>/api/v1/search  /api/v1/search/stream<br/>/api/v1/rag  /api/v1/status<br/>/api/v1/metrics"]
     end
     
     CORS --> Auth --> JSON --> Routes
@@ -235,6 +265,10 @@ graph TD
 ```
 
 Every request runs on its own virtual thread — no thread pool sizing, no blocking concerns. The server can handle thousands of concurrent connections with minimal resource consumption.
+
+### Streaming via SSE
+
+The `/api/v1/search/stream` endpoint uses Server-Sent Events to emit results progressively. This enables real-time UX without requiring WebFlux or Reactor — Javalin's built-in SSE support runs natively on virtual threads.
 
 ---
 

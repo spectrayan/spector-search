@@ -30,6 +30,8 @@
         <module>spector-embed-api</module>
         <module>spector-embed-ollama</module>
         <module>spector-gpu</module>
+        <module>spector-ingestion</module>
+        <module>spector-rag</module>
         <module>spector-engine</module>
         <module>spector-server</module>
         <module>spector-cluster</module>
@@ -100,6 +102,16 @@
             <dependency>
                 <groupId>com.spectrayan</groupId>
                 <artifactId>spector-engine</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-ingestion</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-rag</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

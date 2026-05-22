@@ -250,6 +250,71 @@ curl -X POST http://localhost:7070/api/v1/hybrid \
 
 ---
 
+### `GET /api/v1/search/stream` (SSE)
+
+Streaming search via Server-Sent Events. Results are emitted one-by-one as they become available, enabling progressive display in UIs.
+
+```bash
+curl -N "http://localhost:7070/api/v1/search/stream?text=vector+search&topK=5&mode=HYBRID"
+```
+
+**Query Parameters:**
+
+| Param | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `text` | string | ❌* | — | Query text for keyword/hybrid search |
+| `vector` | string | ❌* | — | Comma-separated floats (e.g., `0.1,0.2,0.3`) |
+| `topK` | int | ❌ | 10 | Number of results |
+| `mode` | string | ❌ | auto-detect | `KEYWORD`, `VECTOR`, or `HYBRID` |
+
+> [!IMPORTANT]
+> *At least one of `text` or `vector` must be provided.
+
+**Event Stream:**
+
+```
+event: result
+data: {"id":"doc-1","score":0.9523,"rank":1}
+
+event: result
+data: {"id":"doc-3","score":0.8741,"rank":2}
+
+event: result
+data: {"id":"doc-7","score":0.8102,"rank":3}
+
+event: done
+data: {"totalHits":3,"queryTimeMs":12,"mode":"HYBRID"}
+```
+
+**Event Types:**
+
+| Event | Description |
+|-------|-------------|
+| `result` | A single search result with id, score, and rank |
+| `done` | Search complete — includes timing and metadata |
+| `error` | An error occurred during search |
+
+> [!TIP]
+> Use the `EventSource` API in browsers or any SSE client library. Results stream immediately as they are scored, giving users instant feedback.
+
+**JavaScript Example:**
+```javascript
+const source = new EventSource('/api/v1/search/stream?text=HNSW+algorithm&topK=5');
+
+source.addEventListener('result', (event) => {
+  const result = JSON.parse(event.data);
+  console.log(`#${result.rank}: ${result.id} (score: ${result.score})`);
+});
+
+source.addEventListener('done', (event) => {
+  const meta = JSON.parse(event.data);
+  console.log(`Search complete in ${meta.queryTimeMs}ms`);
+  source.close();
+});
+```
+
+---
+
 ## 🤖 RAG (Retrieval-Augmented Generation)
 
 ### `POST /api/v1/rag`

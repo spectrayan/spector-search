@@ -10,27 +10,11 @@
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>spector-engine</artifactId>
-    <name>Spector Engine</name>
-    <description>Search engine facade, lifecycle management, and ingestion pipeline.</description>
+    <artifactId>spector-rag</artifactId>
+    <name>Spector RAG</name>
+    <description>Retrieval-Augmented Generation pipeline: context assembly, attribution, and retrieval orchestration.</description>
 
     <dependencies>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-storage</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-index</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-query</artifactId>
-        </dependency>
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-commons</artifactId>
@@ -41,16 +25,15 @@
         </dependency>
         <dependency>
             <groupId>com.spectrayan</groupId>
-            <artifactId>spector-ingestion</artifactId>
+            <artifactId>spector-query</artifactId>
         </dependency>
         <dependency>
             <groupId>com.spectrayan</groupId>
-            <artifactId>spector-rag</artifactId>
+            <artifactId>spector-storage</artifactId>
         </dependency>
         <dependency>
             <groupId>com.spectrayan</groupId>
-            <artifactId>spector-gpu</artifactId>
-            <optional>true</optional>
+            <artifactId>spector-index</artifactId>
         </dependency>
     </dependencies>
 
