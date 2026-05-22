@@ -16,7 +16,7 @@
 
     <properties>
         <grpc.version>1.68.0</grpc.version>
-        <protobuf.version>4.28.2</protobuf.version>
+        <protobuf.version>4.35.0</protobuf.version>
         <protoc-gen-grpc.version>1.68.0</protoc-gen-grpc.version>
     </properties>
 
