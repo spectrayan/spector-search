@@ -36,6 +36,7 @@ import io.javalin.http.Context;
  *   <li>{@code POST /api/v1/ingest/auto}  — Ingest with auto-embedding (text only)</li>
  *   <li>{@code POST /api/v1/ingest/bulk}  — Bulk ingest multiple documents</li>
  *   <li>{@code POST /api/v1/search}       — Search (keyword/vector/hybrid)</li>
+ *   <li>{@code GET  /api/v1/search/stream} — Streaming search via SSE</li>
  *   <li>{@code POST /api/v1/rag}          — RAG context retrieval</li>
  *   <li>{@code DELETE /api/v1/documents/{id}} — Delete a document</li>
  *   <li>{@code GET  /api/v1/metrics}      — Request metrics</li>
@@ -53,6 +54,7 @@ public class SpectorServer {
     private final int port;
     private final String apiKey; // nullable — when set, requires X-API-Key header
     private final RagHandler ragHandler;
+    private final StreamingSearchHandler streamingSearchHandler;
 
     // ── Metrics ──
     private final LongAdder totalRequests = new LongAdder();
@@ -69,6 +71,7 @@ public class SpectorServer {
         this.port = port;
         this.apiKey = apiKey;
         this.ragHandler = new RagHandler(engine);
+        this.streamingSearchHandler = new StreamingSearchHandler(engine);
 
         this.app = Javalin.create(config -> {
             config.useVirtualThreads = true;
@@ -173,6 +176,9 @@ public class SpectorServer {
 
         // Search
         app.post("/api/v1/search", this::handleSearch);
+
+        // Streaming search (SSE)
+        app.sse("/api/v1/search/stream", streamingSearchHandler::handle);
 
         // RAG endpoint
         app.post("/api/v1/rag", this::handleRag);

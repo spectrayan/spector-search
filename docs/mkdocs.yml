@@ -94,9 +94,10 @@ nav:
   - Architecture:
       - System Overview: architecture/overview.md
       - Core Concepts: architecture/core-concepts.md
+      - Ingestion Pipeline: architecture/ingestion-pipeline.md
+      - RAG Pipeline: architecture/rag-pipeline.md
       - Distributed Mode: architecture/distributed-mode.md
       - GPU Acceleration: architecture/gpu-acceleration.md
-      - RAG Pipeline: architecture/rag-pipeline.md
   - Deep Dives:
       - Understanding Quantization: deep-dives/understanding-quantization.md
       - Quantization Comparison: deep-dives/quantization-comparison.md

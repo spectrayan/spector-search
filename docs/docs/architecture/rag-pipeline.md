@@ -4,6 +4,33 @@
 
 ---
 
+## Module: `spector-rag`
+
+The RAG pipeline is a standalone module (`spector-rag`) that can be used independently or through the engine facade. It orchestrates the full flow: query embedding → retrieval → context assembly → attribution.
+
+**Key classes:**
+
+| Class | Purpose |
+|-------|---------|
+| `RagPipeline` | End-to-end orchestrator |
+| `ContextBuilder` | Token-budget-aware context assembly |
+| `RagRequest` / `RagResponse` | Clean input/output types |
+| `ScoredChunk` | Chunk + relevance score |
+| `ChunkAttribution` | Source provenance tracking |
+
+```java
+// Standalone usage (no engine facade required)
+var pipeline = new RagPipeline(searchOrchestrator, documentStore, embeddingProvider);
+RagResponse response = pipeline.execute(new RagRequest("What is HNSW?"));
+// response.contextText() → assembled context for LLM
+// response.attributions() → source document references
+```
+
+> [!NOTE]
+> The `spector-rag` module uses virtual threads for the embedding call and synchronous search for retrieval. No reactive framework needed — the JDK handles async I/O natively.
+
+---
+
 ## 🔄 Pipeline Overview
 
 ```mermaid
@@ -191,39 +218,43 @@ curl -X POST http://localhost:7070/api/v1/rag \
 
 ## 🎯 End-to-End Example
 
-### 1️⃣ Ingest Documents via RAG Pipeline
+### 1️⃣ Ingest Documents via Ingestion Pipeline
 
 ```java
-// Read documents
-DocumentReader pdfReader = new PdfDocumentReader();
-DocumentResult doc = pdfReader.read(Path.of("architecture.pdf"));
+// Create pipeline with embedding provider
+var pipeline = new IngestionPipeline(target, embeddingProvider);
 
-// Chunk
-ChunkConfig chunkConfig = new ChunkConfig(512, 50);
-List<TextChunk> chunks = chunker.chunk(doc.text(), chunkConfig);
+// Single document (auto-embed)
+pipeline.ingest("doc-1", "HNSW builds a multi-layer graph structure...");
 
-// Embed in parallel
-EmbedConfig embedConfig = new EmbedConfig(32, 3);
-List<EmbeddingResult> embeddings = pipeline.embed(chunks, embedConfig);
-
-// Index each chunk
-for (int i = 0; i < chunks.size(); i++) {
-    engine.ingest(
-        doc.metadata().sourceFile() + "#" + i,
-        chunks.get(i).text(),
-        embeddings.get(i).embedding()
-    );
-}
+// Large document (chunked, parallel embedding)
+String whitepaper = Files.readString(Path.of("architecture.pdf.txt"));
+IngestionResult result = pipeline.ingestChunked("whitepaper-1", whitepaper);
+// result: 47 chunks stored, 0 failures, 2340ms
 ```
 
-### 2️⃣ Query via RAG
+### 2️⃣ Query via RAG Pipeline
+
+```java
+// Direct usage of RagPipeline (standalone module)
+var ragPipeline = new RagPipeline(searchOrchestrator, documentStore, embeddingProvider);
+
+RagResponse response = ragPipeline.execute(
+    new RagRequest("What is product quantization?", 5, 4096, "hybrid"));
+
+System.out.println(response.contextText());     // assembled context
+System.out.println(response.attributions());    // source references
+System.out.println(response.queryTimeMs());     // 12ms
+```
+
+### 3️⃣ Query via REST API
 
 ```bash
 curl -X POST http://localhost:7070/api/v1/rag \
   -d '{"query": "What is product quantization?", "topK": 3}'
 ```
 
-### 3️⃣ Use Context with an LLM
+### 4️⃣ Use Context with an LLM
 
 ```python
 import requests
@@ -253,6 +284,7 @@ Answer:"""
 
 ## 🔗 See Also
 
+- [Ingestion Pipeline](ingestion-pipeline.md) — Document ingestion module
 - [Spring AI Integration](../sdk-usage/spring-ai.md) — Spring AI RAG service
 - [REST API Reference](../api-reference/rest-endpoints.md) — RAG endpoint details
 - [Core Concepts](core-concepts.md) — Algorithms used in retrieval

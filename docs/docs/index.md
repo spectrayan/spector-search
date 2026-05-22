@@ -37,9 +37,10 @@ Welcome to the Spector Search wiki — your central hub for everything about the
 |------|-------------|
 | [Architecture Overview](architecture/overview.md) | Module diagram, data flow, threading model |
 | [Core Concepts](architecture/core-concepts.md) | HNSW, IVF-PQ, BM25, RRF, SIMD deep-dives |
+| [Ingestion Pipeline](architecture/ingestion-pipeline.md) | Document → chunk → embed → index pipeline |
+| [RAG Pipeline](architecture/rag-pipeline.md) | End-to-end retrieval-augmented generation |
 | [Distributed Mode](architecture/distributed-mode.md) | Clustering, sharding, and replication |
 | [GPU Acceleration](architecture/gpu-acceleration.md) | CUDA setup and kernel details |
-| [RAG Pipeline](architecture/rag-pipeline.md) | End-to-end retrieval-augmented generation |
 
 ### 📖 Reference
 
@@ -84,7 +85,7 @@ graph LR
 |---|---|
 | **Language** | Java 25 |
 | **License** | Apache 2.0 |
-| **Modules** | 14 Maven modules |
+| **Modules** | 16 Maven modules |
 | **Dependencies** | Zero (JDK only) |
 | **SIMD** | AVX2 / AVX-512 / NEON |
 | **GPU** | CUDA via Panama FFM |
