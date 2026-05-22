@@ -15,7 +15,7 @@
     <description>Distributed search coordination via gRPC with shard-based partitioning.</description>
 
     <properties>
-        <grpc.version>1.68.0</grpc.version>
+        <grpc.version>1.81.0</grpc.version>
         <protobuf.version>4.28.2</protobuf.version>
         <protoc-gen-grpc.version>1.68.0</protoc-gen-grpc.version>
     </properties>
