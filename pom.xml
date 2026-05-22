@@ -56,8 +56,8 @@
         <!-- Dependency versions -->
         <javalin.version>6.6.0</javalin.version>
         <jackson.version>2.18.3</jackson.version>
-        <slf4j.version>2.0.17</slf4j.version>
-        <logback.version>1.5.18</logback.version>
+        <slf4j.version>2.0.18</slf4j.version>
+        <logback.version>1.5.32</logback.version>
         <jmh.version>1.37</jmh.version>
 
         <!-- Test dependency versions -->
