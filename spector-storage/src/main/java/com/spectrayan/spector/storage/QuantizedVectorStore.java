@@ -16,6 +16,7 @@ import com.spectrayan.spector.core.NibblePacker;
 import com.spectrayan.spector.core.NonUniformQuantizer;
 import com.spectrayan.spector.core.QuantizationType;
 import com.spectrayan.spector.core.ScalarQuantizer;
+import com.spectrayan.spector.core.TurboQuantizer;
 
 /**
  * Off-heap vector store that stores quantized vectors via Panama {@link MemorySegment}.
@@ -50,6 +51,7 @@ public class QuantizedVectorStore implements AutoCloseable {
     private final int bytesPerVector;
     private final ScalarQuantizer quantizer;            // used for INT8
     private final NonUniformQuantizer nonUniformQuantizer; // used for INT4/INT2
+    private final TurboQuantizer turboQuantizer;        // used for TURBO_QUANT
     private final Arena arena;
     private final MemorySegment segment;
     private final Map<String, Integer> idToIndex;
@@ -65,24 +67,52 @@ public class QuantizedVectorStore implements AutoCloseable {
      * @param quantizer  the scalar quantizer (must be calibrated)
      */
     public QuantizedVectorStore(int dimensions, int capacity, ScalarQuantizer quantizer) {
-        this(dimensions, capacity, QuantizationType.SCALAR_INT8, quantizer, null);
+        this(dimensions, capacity, QuantizationType.SCALAR_INT8, quantizer, null, null);
+    }
+
+    /**
+     * Creates a quantized vector store for TurboQuant.
+     *
+     * @param dimensions      vector dimensionality
+     * @param capacity        max number of vectors
+     * @param turboQuantizer  the calibrated TurboQuantizer
+     */
+    public QuantizedVectorStore(int dimensions, int capacity, TurboQuantizer turboQuantizer) {
+        this(dimensions, capacity, QuantizationType.TURBO_QUANT, null, null, turboQuantizer);
+    }
+
+    /**
+     * Creates a quantized vector store with a specified quantization type (backward-compatible).
+     *
+     * @param dimensions          vector dimensionality
+     * @param capacity            max number of vectors
+     * @param quantizationType    the quantization type
+     * @param quantizer           the scalar quantizer for INT8
+     * @param nonUniformQuantizer the non-uniform quantizer for INT4/INT2
+     */
+    public QuantizedVectorStore(int dimensions, int capacity, QuantizationType quantizationType,
+                                 ScalarQuantizer quantizer, NonUniformQuantizer nonUniformQuantizer) {
+        this(dimensions, capacity, quantizationType, quantizer, nonUniformQuantizer, null);
     }
 
     /**
      * Creates a quantized vector store with a specified quantization type.
      *
      * <p>For INT8, a {@link ScalarQuantizer} is required. For INT4 and INT2, a
-     * {@link NonUniformQuantizer} is required.</p>
+     * {@link NonUniformQuantizer} is required. For TURBO_QUANT, a {@link TurboQuantizer}
+     * is required.</p>
      *
      * @param dimensions          vector dimensionality
      * @param capacity            max number of vectors
-     * @param quantizationType    the quantization type (SCALAR_INT8, SCALAR_INT4, or SCALAR_INT2)
+     * @param quantizationType    the quantization type
      * @param quantizer           the scalar quantizer for INT8 (may be null if not INT8)
-     * @param nonUniformQuantizer the non-uniform quantizer for INT4/INT2 (may be null if INT8)
+     * @param nonUniformQuantizer the non-uniform quantizer for INT4/INT2 (may be null if not INT4/INT2)
+     * @param turboQuantizer      the TurboQuantizer (may be null if not TURBO_QUANT)
      * @throws IllegalArgumentException if capacity is not positive, or if required quantizer is missing
      */
     public QuantizedVectorStore(int dimensions, int capacity, QuantizationType quantizationType,
-                                 ScalarQuantizer quantizer, NonUniformQuantizer nonUniformQuantizer) {
+                                 ScalarQuantizer quantizer, NonUniformQuantizer nonUniformQuantizer,
+                                 TurboQuantizer turboQuantizer) {
         if (capacity <= 0) throw new IllegalArgumentException("capacity must be positive");
         if (quantizationType == null) throw new IllegalArgumentException("quantizationType must not be null");
 
@@ -110,6 +140,15 @@ public class QuantizedVectorStore implements AutoCloseable {
                             + " != expected levels " + expectedLevels + " for " + quantizationType);
                 }
             }
+            case TURBO_QUANT -> {
+                if (turboQuantizer == null) {
+                    throw new IllegalArgumentException("TurboQuantizer is required for TURBO_QUANT");
+                }
+                if (turboQuantizer.dimensions() != dimensions) {
+                    throw new IllegalArgumentException("TurboQuantizer dims " + turboQuantizer.dimensions()
+                            + " != store dims " + dimensions);
+                }
+            }
             default -> throw new IllegalArgumentException("Unsupported quantization type: " + quantizationType);
         }
 
@@ -118,6 +157,7 @@ public class QuantizedVectorStore implements AutoCloseable {
         this.quantizationType = quantizationType;
         this.quantizer = quantizer;
         this.nonUniformQuantizer = nonUniformQuantizer;
+        this.turboQuantizer = turboQuantizer;
         this.bytesPerVector = quantizationType.bytesPerVector(dimensions);
         this.arena = Arena.ofShared();
 
@@ -129,7 +169,7 @@ public class QuantizedVectorStore implements AutoCloseable {
 
         int compressionFactor = switch (quantizationType) {
             case SCALAR_INT8 -> 4;
-            case SCALAR_INT4 -> 8;
+            case SCALAR_INT4, TURBO_QUANT -> 8;
             case SCALAR_INT2 -> 16;
             default -> 1;
         };
@@ -207,6 +247,7 @@ public class QuantizedVectorStore implements AutoCloseable {
                 int[] levels = CrumbPacker.unpack(packed, dimensions);
                 yield nonUniformQuantizer.decode(levels);
             }
+            case TURBO_QUANT -> turboQuantizer.decodeFromBytes(packed);
             default -> throw new IllegalStateException("Unsupported type: " + quantizationType);
         };
     }
@@ -252,6 +293,9 @@ public class QuantizedVectorStore implements AutoCloseable {
     /** Returns the non-uniform quantizer (INT4/INT2 path), or null if INT8. */
     public NonUniformQuantizer nonUniformQuantizer() { return nonUniformQuantizer; }
 
+    /** Returns the TurboQuantizer (TURBO_QUANT path), or null if not TurboQuant. */
+    public TurboQuantizer turboQuantizer() { return turboQuantizer; }
+
     /** Returns true if closed. */
     public boolean isClosed() { return closed; }
 
@@ -282,6 +326,7 @@ public class QuantizedVectorStore implements AutoCloseable {
                 int[] levels = nonUniformQuantizer.encode(vector);
                 yield CrumbPacker.pack(levels, dimensions);
             }
+            case TURBO_QUANT -> turboQuantizer.encodeToBytes(vector);
             default -> throw new IllegalStateException("Unsupported type: " + quantizationType);
         };
         long offset = (long) index * bytesPerVector;

@@ -12,11 +12,12 @@ class QuantizationTypeTest {
 
     @Test
     void testEnumVariantsExist() {
-        assertEquals(4, QuantizationType.values().length);
+        assertEquals(5, QuantizationType.values().length);
         QuantizationType.valueOf("NONE");
         QuantizationType.valueOf("SCALAR_INT8");
         QuantizationType.valueOf("SCALAR_INT4");
         QuantizationType.valueOf("SCALAR_INT2");
+        QuantizationType.valueOf("TURBO_QUANT");
     }
 
     @Test

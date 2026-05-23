@@ -36,7 +36,20 @@ public enum QuantizationType {
      * non-uniform (quantile-based) calibration. Four values are packed per byte
      * (crumb packing), achieving 16× compression vs float32.</p>
      */
-    SCALAR_INT2;
+    SCALAR_INT2,
+
+    /**
+     * TurboQuant — random rotation + optimal scalar quantization (4-bit).
+     *
+     * <p>Applies a fixed random orthogonal rotation to isotropize the vector
+     * distribution, then quantizes each rotated coordinate with an optimal
+     * scalar quantizer at 4 bits. Achieves 8× compression with ~97%+ recall,
+     * outperforming standard SQ4 due to the rotation making coordinates
+     * near-independent and uniformly distributed.</p>
+     *
+     * <p>Based on TurboQuant (Google Research, 2025).</p>
+     */
+    TURBO_QUANT;
 
     /**
      * Returns the number of bits used to represent each vector dimension.
@@ -47,7 +60,7 @@ public enum QuantizationType {
         return switch (this) {
             case NONE -> 32;
             case SCALAR_INT8 -> 8;
-            case SCALAR_INT4 -> 4;
+            case SCALAR_INT4, TURBO_QUANT -> 4;
             case SCALAR_INT2 -> 2;
         };
     }
@@ -82,7 +95,7 @@ public enum QuantizationType {
         return switch (this) {
             case NONE -> dimensions * 4;
             case SCALAR_INT8 -> dimensions;
-            case SCALAR_INT4 -> (dimensions + 1) / 2;
+            case SCALAR_INT4, TURBO_QUANT -> (dimensions + 1) / 2;
             case SCALAR_INT2 -> (dimensions + 3) / 4;
         };
     }

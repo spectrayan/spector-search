@@ -242,7 +242,7 @@ public record SpectorConfig(
     public int effectiveOversamplingFactor() {
         if (oversamplingFactor > 0) return oversamplingFactor;
         return switch (quantization) {
-            case SCALAR_INT4 -> 3;
+            case SCALAR_INT4, TURBO_QUANT -> 3;
             case SCALAR_INT2 -> 5;
             default -> 1;
         };
