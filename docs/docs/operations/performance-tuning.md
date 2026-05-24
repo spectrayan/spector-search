@@ -147,9 +147,13 @@ var config = SpectorConfig.DEFAULT
 ```
 
 Key factors:
+
 - Virtual threads handle concurrency automatically
+
 - Keep `efSearch` moderate to reduce per-query work
+
 - Enable GPU for batch workloads
+
 - Use IVF-PQ for large datasets (reduced memory = better cache behavior)
 
 ---
@@ -208,13 +212,17 @@ var config = SpectorConfig.DEFAULT
 ### ⬆️ Vertical Scaling
 
 - **Add CPU cores** → Concurrent throughput scaling (up to ~3.7× at 16 threads measured)
+
 - **Add RAM** → Support larger capacity without IVF-PQ compression
+
 - **Add GPU** → 4× brute-force search speedup at 100K+ vectors (data resident in VRAM)
 
 ### ➡️ Horizontal Scaling (Distributed Mode)
 
 - **Add nodes** → Linear throughput scaling per shard
+
 - Rule of thumb: 100K–500K docs per shard
+
 - See [Distributed Mode](../architecture/distributed-mode.md) for cluster setup
 
 ---
@@ -250,6 +258,9 @@ java \
 ## 🔗 See Also
 
 - [Configuration Guide](../configuration/parameters.md) — All parameters with ranges
+
 - [Core Concepts](../architecture/core-concepts.md) — How algorithms affect performance
+
 - [GPU Acceleration](../architecture/gpu-acceleration.md) — GPU-specific performance
+
 - [Distributed Mode](../architecture/distributed-mode.md) — Scaling across nodes

@@ -22,8 +22,11 @@
 > | nomic-embed-text | 768 |
 
 **Choosing a similarity function:**
+
 - **COSINE** — Normalized embeddings (most models)
+
 - **DOT_PRODUCT** — Unnormalized embeddings where magnitude matters
+
 - **EUCLIDEAN** — Spatial/geometric data
 
 ---
@@ -52,8 +55,11 @@
 The `oversamplingFactor` controls how many extra candidates are retrieved before rescoring with exact distances:
 
 - **1** — No rescore (fastest, quantized scores returned directly)
+
 - **3** — Good balance for INT4 (retrieves 3×K candidates, rescores to top-K)
+
 - **5** — Recommended for INT2 (compensates for aggressive quantization)
+
 - **10+** — Diminishing returns; use only if recall is still insufficient
 
 ```java
@@ -112,7 +118,9 @@ var config = SpectorConfig.DEFAULT
 | `RRF k` | 60 | 1–1000 | Reciprocal Rank Fusion constant |
 
 - `k = 60` — Original paper recommendation, works well generally
+
 - Lower `k` (10–30) — Emphasizes top-ranked results more strongly
+
 - Higher `k` (100+) — Flattens rank importance
 
 ---
@@ -260,6 +268,9 @@ var config = SpectorConfig.DEFAULT
 ## 🔗 See Also
 
 - [Performance Tuning](../operations/performance-tuning.md) — Benchmarks and optimization strategies
+
 - [Architecture Overview](../architecture/overview.md) — How configuration affects system behavior
+
 - [Distributed Mode](../architecture/distributed-mode.md) — Cluster-specific configuration
+
 - [GPU Acceleration](../architecture/gpu-acceleration.md) — GPU setup requirements

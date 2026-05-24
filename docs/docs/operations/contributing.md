@@ -111,13 +111,17 @@ mvn -pl spector-bench exec:java
 ### ⚡ Performance Rules
 
 - **No allocations in hot paths** — Reuse buffers, use slice-based APIs
+
 - **Branchless SIMD** — Use `VectorMask` for tail handling, no scalar fallback
+
 - **Benchmark before/after** — Performance PRs must include JMH results
 
 ### 🏗️ Architecture Rules
 
 - **Respect module boundaries** — Follow the dependency graph, no circular dependencies
+
 - **Interface-first** — Add interfaces before implementations
+
 - **Zero-copy** — Prefer `MemorySegment` slices over array copies
 
 ---
@@ -203,11 +207,17 @@ void hnswPersistenceRoundTrip(@ForAll @Size(min=10, max=1000) List<float[]> vect
 ### ✅ PR Checklist
 
 - [ ] Code follows the project's coding standards
+
 - [ ] Tests added/updated for the change
+
 - [ ] Javadoc updated for public API changes
+
 - [ ] No hardcoded secrets or credentials
+
 - [ ] Commit messages follow Conventional Commits
+
 - [ ] JMH benchmarks included (if performance-related)
+
 - [ ] No circular module dependencies introduced
 
 ---
@@ -217,16 +227,23 @@ void hnswPersistenceRoundTrip(@ForAll @Size(min=10, max=1000) List<float[]> vect
 ### Bug Reports
 
 Use the [Bug Report template](https://github.com/spectrayan/spector-search/issues/new?template=bug_report.md):
+
 - Steps to reproduce
+
 - Expected vs actual behavior
+
 - JDK version and SIMD capability output
+
 - Relevant logs or stack traces
 
 ### 💡 Feature Requests
 
 Use the [Feature Request template](https://github.com/spectrayan/spector-search/issues/new?template=feature_request.md):
+
 - Problem you're solving
+
 - Proposed solution
+
 - Alternatives considered
 
 ---
@@ -245,5 +262,7 @@ Use the [Feature Request template](https://github.com/spectrayan/spector-search/
 ## 🔗 See Also
 
 - [Architecture Overview](../architecture/overview.md) — System design
+
 - [Core Concepts](../architecture/core-concepts.md) — Algorithms and data structures
+
 - [Performance Tuning](performance-tuning.md) — Benchmark methodology

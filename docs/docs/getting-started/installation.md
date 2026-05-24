@@ -44,7 +44,9 @@ Arguments: `<port> <dimensions> [api-key]`
 GPU acceleration requires:
 
 - NVIDIA GPU with CUDA support
+
 - CUDA toolkit installed
+
 - Set `gpuEnabled=true` in configuration
 
 The system falls back to CPU SIMD automatically when GPU is unavailable.

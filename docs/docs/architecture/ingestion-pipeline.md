@@ -47,9 +47,13 @@ public interface IngestionTarget {
 
 This means the pipeline doesn't depend on `SpectorEngine` — it can write to any target that implements this interface. Useful for:
 
+
 - **Testing** — Mock the target for unit tests
+
 - **Rebuilding indexes** — Point at a fresh index during reindexing
+
 - **Multi-tenant setups** — Route documents to different targets
+
 - **Custom stores** — Write to external systems alongside Spector
 
 ### Virtual Thread Parallelism
@@ -160,9 +164,13 @@ public record IngestionResult(
 ```
 
 **Properties:**
+
 - Failed chunks don't halt the pipeline — other chunks continue
+
 - Failure reasons are logged at WARN level
+
 - `isFullSuccess()` returns true only if all chunks succeeded
+
 - Timing includes chunking + embedding + storage
 
 ---
@@ -194,7 +202,11 @@ Extracting ingestion from `SpectorEngine`:
 
 ## 🔗 See Also
 
+
 - [RAG Pipeline](rag-pipeline.md) — Retrieval and context assembly
+
 - [Architecture Overview](overview.md) — Module dependency graph
+
 - [REST API Reference](../api-reference/rest-endpoints.md) — Ingest endpoints
+
 - [Configuration Guide](../configuration/parameters.md) — Chunking and embedding parameters

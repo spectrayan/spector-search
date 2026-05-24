@@ -172,6 +172,9 @@ Drop Spector Search into existing Java applications without infrastructure chang
 ## 🚀 Next Steps
 
 - [Getting Started](getting-started/quickstart.md) — Build and run your first search in 5 minutes
+
 - [Architecture Overview](architecture/overview.md) — Understand how it works under the hood
+
 - [REST API Reference](api-reference/rest-endpoints.md) — Full API documentation
+
 - [Core Concepts](architecture/core-concepts.md) — Deep dive into the algorithms

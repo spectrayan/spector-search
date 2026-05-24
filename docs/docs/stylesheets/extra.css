@@ -7,3 +7,73 @@
   margin: 0 auto;
   display: block;
 }
+
+/* Fix mermaid diagrams on dark theme */
+[data-md-color-scheme="slate"] .mermaid {
+  --md-mermaid-font-family: var(--md-text-font-family, _);
+}
+
+/* Ensure mermaid nodes are readable on dark backgrounds */
+[data-md-color-scheme="slate"] .mermaid .node rect,
+[data-md-color-scheme="slate"] .mermaid .node polygon,
+[data-md-color-scheme="slate"] .mermaid .node circle {
+  fill: #1e1e2e !important;
+  stroke: #6c6c8a !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .node .label,
+[data-md-color-scheme="slate"] .mermaid span {
+  color: #cdd6f4 !important;
+  fill: #cdd6f4 !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .edgePath .path {
+  stroke: #6c6c8a !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .edgeLabel {
+  background-color: #1e1e2e !important;
+  color: #cdd6f4 !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .cluster rect {
+  fill: #181825 !important;
+  stroke: #45475a !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .cluster span {
+  color: #a6adc8 !important;
+}
+
+/* Sequence diagram dark theme fixes */
+[data-md-color-scheme="slate"] .mermaid .actor {
+  fill: #1e1e2e !important;
+  stroke: #6c6c8a !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid text.actor {
+  fill: #cdd6f4 !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .messageLine0,
+[data-md-color-scheme="slate"] .mermaid .messageLine1 {
+  stroke: #6c6c8a !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .messageText {
+  fill: #cdd6f4 !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .note {
+  fill: #313244 !important;
+  stroke: #45475a !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .noteText {
+  fill: #cdd6f4 !important;
+}
+
+/* Flowchart dark theme fixes */
+[data-md-color-scheme="slate"] .mermaid .flowchart-link {
+  stroke: #6c6c8a !important;
+}

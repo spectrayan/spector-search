@@ -225,10 +225,15 @@ try (var engine = new SpectorEngine(config)) {
 ## 🎉 What You've Accomplished
 
 In just a few minutes, you've:
+
 - ✅ Built Spector Search from source
+
 - ✅ Verified SIMD hardware acceleration
+
 - ✅ Started a search server
+
 - ✅ Ingested documents
+
 - ✅ Run hybrid search queries
 
 ---

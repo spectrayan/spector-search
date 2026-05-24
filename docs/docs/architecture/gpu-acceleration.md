@@ -35,6 +35,7 @@ graph TD
 ### Hardware
 
 - NVIDIA GPU with Compute Capability ≥ 7.0 (Volta or newer)
+
 - Recommended: RTX 3060+ or A100/H100 for production workloads
 
 ### Software
@@ -140,9 +141,13 @@ sequenceDiagram
 ```
 
 **Properties:**
+
 - Each query receives its own independent top-K results
+
 - Individual query errors don't fail the batch
+
 - Achieves ≥2× throughput vs sequential for batch sizes >4
+
 - Large batches are automatically partitioned to fit GPU memory
 
 ---
@@ -160,10 +165,15 @@ try (Arena arena = Arena.ofConfined()) {
 ```
 
 **Key behaviors:**
+
 - ✅ Allocations are Arena-scoped with explicit lifecycle
+
 - ✅ Pinned host memory for efficient host↔device transfers
+
 - ✅ Budget enforcement prevents over-allocation
+
 - ✅ Device memory released within 100ms of Arena close
+
 - ✅ Metrics available via monitoring API
 
 ---
@@ -184,10 +194,15 @@ graph TD
 > **No code changes required.** The same method signature returns results regardless of whether GPU or CPU executed the computation. Fallback is automatic and transparent.
 
 **Fallback triggers:**
+
 - GPU not detected at startup
+
 - CUDA driver not installed
+
 - Insufficient GPU memory
+
 - CUDA kernel execution error
+
 - GPU memory budget exceeded
 
 ---
@@ -237,6 +252,9 @@ java --add-modules jdk.incubator.vector \
 ## 🔗 See Also
 
 - [Core Concepts](core-concepts.md) — SIMD kernels that GPU extends
+
 - [Performance Tuning](../operations/performance-tuning.md) — When to use GPU vs CPU
+
 - [Configuration Guide](../configuration/parameters.md) — GPU parameters
+
 - [Architecture Overview](overview.md) — Where GPU fits in the system
