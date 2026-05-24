@@ -354,7 +354,7 @@ final class SpectorShard {
 
         // Step 1: Per-shard VASQ calibration directly on the flat buffer
         VasqParams vasqParams = VasqCalibrator.calibrate(flatData, currentSize, dimensions);
-        VasqStrategy vasqStrategy = new VasqStrategy(vasqParams, config.similarityFunction());
+        VasqStrategy vasqStrategy = new VasqStrategy(vasqParams, SimilarityFunction.EUCLIDEAN);
 
         log.debug("SpectorShard promoting: size={}, paddedDim={}, bpv={}",
                 currentSize, vasqParams.paddedDim(), vasqStrategy.bytesPerVector());
