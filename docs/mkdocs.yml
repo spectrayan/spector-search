@@ -99,9 +99,14 @@ nav:
       - Distributed Mode: architecture/distributed-mode.md
       - GPU Acceleration: architecture/gpu-acceleration.md
   - Deep Dives:
+      - ANN Search Primer: deep-dives/ann-search-primer.md
+      - HNSW Explained: deep-dives/hnsw-explained.md
+      - SpectorIndex Architecture: deep-dives/spector-index-architecture.md
+      - VASQ Quantization: deep-dives/vasq-deep-dive.md
       - Understanding Quantization: deep-dives/understanding-quantization.md
       - Quantization Comparison: deep-dives/quantization-comparison.md
       - TurboQuant: deep-dives/turbo-quant.md
+      - "Whitepaper: VASQ + SpectorIndex": deep-dives/vasq-spectorindex-whitepaper.md
   - Reference:
       - REST API: api-reference/rest-endpoints.md
       - Java SDK: sdk-usage/java-client.md
