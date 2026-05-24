@@ -235,10 +235,15 @@ graph TB
 ```
 
 **Benefits:**
+
 - ✅ **Zero GC pressure** — Vectors never touch the garbage collector
+
 - ✅ **Instant startup** — Memory-mapped files load via `mmap` syscall, no deserialization
+
 - ✅ **SIMD-friendly layout** — Contiguous float32 arrays ready for Vector API operations
+
 - ✅ **Explicit lifecycle** — `Arena`-scoped memory with deterministic cleanup
+
 - ✅ **Memory efficiency** — Store billions of vectors limited only by disk/address space
 
 ### 📊 Storage Types
@@ -278,6 +283,9 @@ The `/api/v1/search/stream` endpoint uses Server-Sent Events to emit results pro
 ## 🔗 See Also
 
 - [Core Concepts](core-concepts.md) — Algorithms and data structures in detail
+
 - [Distributed Mode](distributed-mode.md) — Multi-node clustering architecture
+
 - [GPU Acceleration](gpu-acceleration.md) — CUDA kernel integration via Panama
+
 - [Performance Tuning](../operations/performance-tuning.md) — Optimizing for your workload

@@ -278,6 +278,9 @@ public class SpectorExample {
 ## 🔗 See Also
 
 - [REST API Reference](../api-reference/rest-endpoints.md) — Underlying API endpoints
+
 - [Spring AI Integration](spring-ai.md) — Spring AI VectorStore adapter
+
 - [Configuration Guide](../configuration/parameters.md) — All engine parameters
+
 - [Getting Started](../getting-started/quickstart.md) — Quick start guide

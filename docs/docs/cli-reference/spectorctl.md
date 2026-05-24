@@ -230,5 +230,7 @@ Error: Cannot connect to badhost:9999 — Connection refused
 ## 🔗 See Also
 
 - [REST API Reference](../api-reference/rest-endpoints.md) — The API that spectorctl uses
+
 - [Getting Started](../getting-started/quickstart.md) — Server setup before using CLI
+
 - [Configuration Guide](../configuration/parameters.md) — Server configuration

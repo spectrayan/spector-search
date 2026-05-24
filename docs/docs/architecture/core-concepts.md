@@ -49,8 +49,11 @@ graph TD
 ### 🚀 Why HNSW is Fast
 
 - **Logarithmic complexity** — O(log N) layers mean search scales well
+
 - **Greedy navigation** — Each step moves closer to the target
+
 - **SIMD distance computation** — Every neighbor comparison uses hardware-accelerated vector math
+
 - **Cache-friendly** — Graph traversal exhibits good spatial locality
 
 ### 💾 Persistence Format
@@ -195,8 +198,11 @@ graph LR
 ### ✅ Why RRF Works
 
 - **Rank-based, not score-based** — Avoids normalization issues between different scoring methods
+
 - **Resistant to outliers** — A high score in one system can't dominate
+
 - **Parameter-light** — Only one tunable constant (k)
+
 - **Empirically strong** — Competitive with learned fusion methods
 
 ---
@@ -258,8 +264,11 @@ SIMD kernels achieve sub-microsecond latency:
 ### 🎨 Design Principles
 
 - **Never hardcode lane widths** — Always use `FloatVector.SPECIES_PREFERRED`
+
 - **Branchless tail handling** — Use `VectorMask` for dimensions not divisible by lane count
+
 - **Zero allocations in hot path** — Reuse buffers, slice-based APIs
+
 - **Fused multiply-add** — Use FMA where available for accuracy and speed
 
 ---
@@ -267,6 +276,9 @@ SIMD kernels achieve sub-microsecond latency:
 ## 🔗 See Also
 
 - [Architecture Overview](overview.md) — How these components fit together
+
 - [GPU Acceleration](gpu-acceleration.md) — CUDA kernels for batch operations
+
 - [Performance Tuning](../operations/performance-tuning.md) — How to tune these parameters
+
 - [Configuration Guide](../configuration/parameters.md) — All parameter defaults and ranges

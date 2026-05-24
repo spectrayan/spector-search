@@ -135,8 +135,11 @@ flowchart LR
 Virtual threads (Project Loom) are lightweight threads that don't map 1:1 to OS threads:
 
 - ✅ Handle millions of concurrent requests without pool tuning
+
 - ✅ No `synchronized` blocks that pin platform threads
+
 - ✅ Near-zero scheduling overhead
+
 - ✅ Linear scaling (4.5× at 16 threads measured)
 
 ---
@@ -144,10 +147,15 @@ Virtual threads (Project Loom) are lightweight threads that don't map 1:1 to OS 
 ### How does zero-copy storage work?
 
 Vectors are stored in memory-mapped files using Panama's `MemorySegment`:
+
 - OS maps file directly into process address space
+
 - SIMD kernels read vectors without copying to Java heap
+
 - Zero garbage collection pressure
+
 - Instant startup (no deserialization)
+
 - Supports datasets larger than available RAM
 
 ---
@@ -236,6 +244,9 @@ Clients include `X-API-Key: my-secret-key` in requests. Without a key configured
 ## 🔗 See Also
 
 - [Getting Started](getting-started/quickstart.md) — Quick start guide
+
 - [What is Spector Search](about.md) — Product overview
+
 - [Configuration Guide](configuration/parameters.md) — All parameters
+
 - [Performance Tuning](operations/performance-tuning.md) — Optimization strategies

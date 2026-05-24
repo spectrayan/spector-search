@@ -19,8 +19,11 @@ flowchart LR
 
 A fixed random orthogonal matrix R is applied to every vector before quantization. This:
 
+
 - **Isotropizes** the distribution — coordinates become near-independent
+
 - **Spreads information** uniformly across all dimensions
+
 - **Preserves distances** — orthogonal transforms don't change L2/cosine/IP
 
 The rotation matrix is generated once at calibration time from a deterministic seed.
@@ -46,15 +49,22 @@ After rotation, each coordinate is quantized independently using linear min/max 
 
 Standard INT4 quantization has uneven distortion because embedding dimensions are correlated and non-uniform. TurboQuant's rotation decorrelates them first, resulting in:
 
+
 - **4-5% higher recall** at the same bit budget
+
 - **No quantile training** needed (just min/max in rotated space)
+
 - **Better theoretical guarantees** (matches rate-distortion bounds)
 
 ### Key Advantages over Product Quantization
 
+
 - **No K-Means training** — PQ requires expensive clustering; TurboQuant is data-oblivious
+
 - **Simpler implementation** — No codebooks, no ADC lookup tables
+
 - **SIMD-friendly** — Packed 4-bit values use the same NibblePacker as standard SQ4
+
 - **Lower latency** — Direct scalar operations vs. table lookups
 
 ---
@@ -175,8 +185,11 @@ TurboQuant is based on the observation that for a random orthogonal rotation R:
 3. The rotation preserves all geometric relationships (L2, cosine, IP)
 
 This means:
+
 - **MSE** between original and reconstructed vectors is minimized
+
 - **Inner product estimation** is near-unbiased
+
 - **Nearest-neighbor search** quality matches the information-theoretic optimum for the given bit budget
 
 > [!TIP]
@@ -186,7 +199,11 @@ This means:
 
 ## 🔗 See Also
 
+
 - [Understanding Quantization](understanding-quantization.md) — Quantization theory and tradeoffs
+
 - [Quantization Comparison](quantization-comparison.md) — Benchmarks across all modes
+
 - [Architecture Overview](../architecture/overview.md) — How quantization fits in the stack
+
 - [Configuration Guide](../configuration/parameters.md) — Setting quantization parameters

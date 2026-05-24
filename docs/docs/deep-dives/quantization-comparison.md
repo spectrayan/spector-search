@@ -45,12 +45,17 @@ graph TD
 Elasticsearch is built on **Apache Lucene**, which uses an **immutable segment** architecture:
 
 - Segments are write-once, read-many
+
 - Merging combines segments but doesn't update in place
+
 - New data goes to new segments
 
 This makes IVF-PQ challenging because:
+
 - **IVF centroids** need to be computed across all data — hard when data arrives in segments
+
 - **PQ codebooks** need training on representative data — segment-local training produces poor codebooks
+
 - **Partition rebalancing** on merge is expensive
 
 Binary quantization, by contrast, is **per-vector** — no global training needed, works perfectly with immutable segments.
@@ -61,8 +66,11 @@ Binary quantization, by contrast, is **per-vector** — no global training neede
 ### What is DiskBBQ?
 
 DiskBBQ (introduced experimentally) adds IVF-like partitioning on top of BBQ:
+
 - Vectors are grouped into clusters (similar to IVF)
+
 - Only relevant clusters are loaded from disk during search
+
 - Designed to work within Lucene's segment model by treating clusters as segment-local structures
 
 **Trade-off:** More complex than plain BBQ, but enables disk-resident indexes for datasets that exceed RAM.
@@ -87,9 +95,13 @@ The two-method strategy covers the full spectrum:
 ### Advantages of Purpose-Built Indexes
 
 Without Lucene's segment model:
+
 - **Global IVF training** — K-Means runs over the entire dataset, producing optimal partitions
+
 - **Codebook updates** — Retrain when data distribution shifts significantly
+
 - **Partition rebalancing** — Redistribute vectors across partitions as the index grows
+
 - **Memory-mapped storage** — Custom binary format designed for quantized data layout
 
 ```mermaid
@@ -244,6 +256,9 @@ Which quantization methods are available in each engine:
 ## 🔗 See Also
 
 - [Understanding Quantization](understanding-quantization.md) — Quantization from first principles
+
 - [Core Concepts](../architecture/core-concepts.md) — HNSW, IVF-PQ, BM25, and SIMD fundamentals
+
 - [Performance Tuning](../operations/performance-tuning.md) — How to tune nprobe, subspaces, and other parameters
+
 - [Architecture Overview](../architecture/overview.md) — How Spector's storage layer is designed

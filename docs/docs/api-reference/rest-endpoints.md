@@ -401,6 +401,9 @@ curl -X POST http://localhost:7070/api/v1/index \
 ## 🔗 See Also
 
 - [Getting Started](../getting-started/quickstart.md) — Quick start with curl examples
+
 - [Java SDK Guide](../sdk-usage/java-client.md) — Type-safe programmatic access
+
 - [CLI Reference](../cli-reference/spectorctl.md) — Command-line access to the API
+
 - [Configuration Guide](../configuration/parameters.md) — Server and auth configuration

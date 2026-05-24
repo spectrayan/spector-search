@@ -105,8 +105,11 @@ List<TextChunk> chunks = chunker.chunk(extractedText, config);
 ### Properties
 
 - ✅ **Round-trip reconstruction** — Concatenating chunks reconstructs the original text
+
 - ✅ **Token limit guarantee** — Every chunk has ≤ maxTokens
+
 - ✅ **Single chunk for short text** — Returns exactly one chunk if input fits
+
 - ✅ Empty/whitespace input returns an empty list
 
 > [!TIP]
@@ -145,8 +148,11 @@ flowchart LR
 | `maxRetries` | 3 | 0–10 | Retries for failed batches |
 
 **Failure handling:**
+
 - Failed batches are retried up to `maxRetries` times
+
 - Processing continues for remaining batches even if one fails
+
 - Input-output ordering is always preserved
 
 ---
@@ -171,9 +177,13 @@ flowchart TD
 | `tokenLimit` | 4096 | 256–131,072 |
 
 **Properties:**
+
 - Context never exceeds the configured token limit
+
 - Chunks appear in descending relevance order
+
 - Every included chunk has a source attribution
+
 - Empty context (not an exception) when no chunks fit
 
 ---
@@ -285,7 +295,11 @@ Answer:"""
 ## 🔗 See Also
 
 - [Ingestion Pipeline](ingestion-pipeline.md) — Document ingestion module
+
 - [Spring AI Integration](../sdk-usage/spring-ai.md) — Spring AI RAG service
+
 - [REST API Reference](../api-reference/rest-endpoints.md) — RAG endpoint details
+
 - [Core Concepts](core-concepts.md) — Algorithms used in retrieval
+
 - [Configuration Guide](../configuration/parameters.md) — RAG pipeline parameters

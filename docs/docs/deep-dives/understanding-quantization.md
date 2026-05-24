@@ -304,8 +304,11 @@ graph TD
 ```
 
 **How it reduces work:**
+
 - With 1000 partitions and `nprobe=10`, you only examine **1% of the dataset**
+
 - Within those partitions, PQ codes are tiny, so scanning is cache-friendly
+
 - Combined effect: search billions of vectors in milliseconds
 
 #### Properties
@@ -343,35 +346,53 @@ Spector Search provides a full spectrum of scalar quantization plus IVF-PQ, cove
 ### Scalar INT8 — For High-Recall Scenarios
 
 When recall is critical (search quality matters more than memory), Scalar INT8 delivers:
+
 - **4× compression** with nearly lossless quality (≥ 95% recall)
+
 - Simple min/max calibration — no training phase needed
+
 - SIMD-friendly — int8 operations parallelize beautifully on modern CPUs
+
 - Ideal for datasets up to ~50M vectors on a 64 GB machine
 
 ### Scalar INT4 — The Balanced Sweet Spot
 
 When you need more compression than INT8 but don't want the complexity of PQ:
+
 - **8× compression** with **85–95% recall** when paired with rescore
+
 - Non-uniform (quantile-based) calibration adapts to your data distribution
+
 - Nibble-packed storage (2 values/byte) with SIMD-accelerated distance
+
 - Default 3× oversampling rescore recovers recall lost to quantization
+
 - Ideal for 10M–100M vector workloads on moderate hardware
 
 ### Scalar INT2 — Maximum Scalar Compression
 
 When memory is the primary constraint and you can tolerate some recall loss:
+
 - **16× compression** — just 4 levels per dimension
+
 - Same quantile-based calibration as INT4 for optimal bucket placement
+
 - Crumb-packed storage (4 values/byte) for minimal memory footprint
+
 - Default 5× oversampling rescore compensates for aggressive quantization
+
 - Ideal for memory-constrained environments or as a fast pre-filter
 
 ### IVF-PQ — For Billion-Scale Scenarios
 
 When you need to search billions of vectors on commodity hardware:
+
 - **32× compression** brings 1B vectors down to ~46 GB
+
 - Two-level search (coarse IVF + fine PQ) keeps latency low
+
 - Trained codebooks preserve more information than binary quantization
+
 - `nprobe` parameter lets you dial recall vs. speed at query time
 
 ### Configurable Rescore Strategy
@@ -532,7 +553,11 @@ curl -X PUT http://localhost:7070/api/v1/config \
 ## 🔗 See Also
 
 - [Core Concepts](../architecture/core-concepts.md) — HNSW, BM25, RRF, and SIMD fundamentals
+
 - [Quantization Comparison](quantization-comparison.md) — How different engines approach quantization
+
 - [Performance Tuning](../operations/performance-tuning.md) — Tuning quantization parameters for your workload
+
 - [Architecture Overview](../architecture/overview.md) — How quantization fits into the storage layer
+
 - [Configuration Guide](../configuration/parameters.md) — All quantization parameters and defaults

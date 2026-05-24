@@ -328,6 +328,9 @@ public class SearchApp {
 ## 🔗 See Also
 
 - [Java SDK Guide](java-client.md) — Direct SDK usage
+
 - [RAG Pipeline](../architecture/rag-pipeline.md) — How the RAG pipeline works internally
+
 - [REST API Reference](../api-reference/rest-endpoints.md) — Underlying REST endpoints
+
 - [Configuration Guide](../configuration/parameters.md) — All configurable parameters

@@ -41,9 +41,13 @@ graph LR
 ```
 
 **Properties:**
+
 - Each shard owns a range on a hash ring (using virtual nodes for even distribution)
+
 - Document ID → hash → ring position → assigned shard (deterministic)
+
 - Adding a shard migrates only affected documents (minimal data movement)
+
 - Shard count changes apply without full cluster restart
 
 ---
@@ -71,9 +75,13 @@ Heartbeat-based cluster membership tracking.
 | `heartbeatTimeout` | 10s | 3s–120s |
 
 **Behavior:**
+
 - Nodes send periodic heartbeats to announce liveness
+
 - Missing heartbeats beyond timeout → node marked unavailable
+
 - New nodes trigger shard rebalancing within 5 seconds
+
 - All active nodes converge to the same membership view within 5 seconds
 
 ---
@@ -111,7 +119,9 @@ sequenceDiagram
 ### Prerequisites
 
 - All nodes must run the same Spector Search version
+
 - Nodes must be reachable via gRPC (default port: 9090)
+
 - Network latency between nodes should be <10ms for optimal performance
 
 ### Starting a Cluster
@@ -213,7 +223,9 @@ graph TD
 ### 🌐 Network Partition
 
 - Nodes on each side continue serving their local shards
+
 - Queries to unreachable shards return partial results with timeout metadata
+
 - When partition heals, membership reconverges and replicas sync
 
 ---
@@ -235,5 +247,7 @@ graph TD
 ## 🔗 See Also
 
 - [Architecture Overview](overview.md) — Overall system architecture
+
 - [Configuration Guide](../configuration/parameters.md) — Cluster parameters
+
 - [Performance Tuning](../operations/performance-tuning.md) — Optimizing distributed performance
