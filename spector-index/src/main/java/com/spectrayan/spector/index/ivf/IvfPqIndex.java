@@ -1,5 +1,6 @@
 package com.spectrayan.spector.index.ivf;
 
+import com.spectrayan.spector.core.cluster.KMeans;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.index.NeighborQueue;
 import com.spectrayan.spector.index.ScoredResult;
@@ -10,9 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.StampedLock;
 
 /**
  * IVF-PQ (Inverted File with Product Quantization) vector index.
@@ -61,7 +61,10 @@ public class IvfPqIndex implements VectorIndex {
     private final List<PostingList> postingLists;  // per-cluster posting lists
     private volatile int totalVectors;
 
-    private final ReentrantLock writeLock = new ReentrantLock();
+    // ── Concurrency: StampedLock ──
+    // Optimistic read (lock-free) for searches; exclusive writeLock for adds.
+    // VT-safe: readLock fallback uses LockSupport.park(), never pins virtual threads.
+    private final StampedLock stampedLock = new StampedLock();
 
     /**
      * Creates an IVF-PQ index.
@@ -134,13 +137,13 @@ public class IvfPqIndex implements VectorIndex {
         long start = System.nanoTime();
 
         // Step 1: Train IVF centroids via K-Means
-        this.centroids = trainCentroids(samples);
+        this.centroids = KMeans.train(samples, nlist, 25, 42L);
 
         // Step 2: Compute residuals (vector - nearest centroid)
         // PQ is trained on residuals for better accuracy
         float[][] residuals = new float[samples.length][dimensions];
         for (int i = 0; i < samples.length; i++) {
-            int cluster = nearestCentroid(samples[i]);
+            int cluster = KMeans.nearestCentroid(samples[i], centroids);
             for (int d = 0; d < dimensions; d++) {
                 residuals[i][d] = samples[i][d] - centroids[cluster][d];
             }
@@ -163,10 +166,10 @@ public class IvfPqIndex implements VectorIndex {
             throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + vector.length);
         }
 
-        writeLock.lock();
+        long stamp = stampedLock.writeLock();
         try {
             // Assign to nearest cluster
-            int cluster = nearestCentroid(vector);
+            int cluster = KMeans.nearestCentroid(vector, centroids);
 
             // Compute residual and PQ-encode
             float[] residual = new float[dimensions];
@@ -179,7 +182,7 @@ public class IvfPqIndex implements VectorIndex {
             postingLists.get(cluster).add(id, storeIndex, code);
             totalVectors++;
         } finally {
-            writeLock.unlock();
+            stampedLock.unlockWrite(stamp);
         }
     }
 
@@ -195,8 +198,39 @@ public class IvfPqIndex implements VectorIndex {
             return new ScoredResult[0];
         }
 
+        // ── Optimistic read — lock-free fast path ──
+        long stamp = stampedLock.tryOptimisticRead();
+        ScoredResult[] result = trySearchOptimistic(query, k, stamp);
+        if (result != null) return result;
+
+        // ── Fallback to shared readLock (concurrent add detected) ──
+        stamp = stampedLock.readLock();
+        try {
+            return doSearch(query, k);
+        } finally {
+            stampedLock.unlockRead(stamp);
+        }
+    }
+
+    /**
+     * Lock-free optimistic search attempt.
+     * Returns null if a concurrent write was detected; caller retries under readLock.
+     */
+    private ScoredResult[] trySearchOptimistic(float[] query, int k, long stamp) {
+        int tv = totalVectors;
+        if (!stampedLock.validate(stamp)) return null;
+        if (tv == 0) return new ScoredResult[0];
+
+        ScoredResult[] result = doSearch(query, k);
+        return stampedLock.validate(stamp) ? result : null;
+    }
+
+    /** Core search logic — safe to call under optimistic stamp or readLock. */
+    private ScoredResult[] doSearch(float[] query, int k) {
+        if (totalVectors == 0) return new ScoredResult[0];
+
         // Step 1: Find the nprobe nearest cluster centroids
-        int[] probeClusters = findNearestClusters(query, nprobe);
+        int[] probeClusters = KMeans.nearestCentroids(query, centroids, nprobe);
 
         // Step 2: Collect all candidates from probed clusters with ADC distances
         List<ScoredResult> candidates = new ArrayList<>();
@@ -205,33 +239,28 @@ public class IvfPqIndex implements VectorIndex {
             PostingList plist = postingLists.get(clusterIdx);
             if (plist.size() == 0) continue;
 
-            // Compute residual query for this cluster
+            // Snapshot array references — stable even if a concurrent grow() swaps arrays
             float[] residualQuery = new float[dimensions];
             for (int d = 0; d < dimensions; d++) {
                 residualQuery[d] = query[d] - centroids[clusterIdx][d];
             }
 
-            // Precompute ADC distance table for this cluster's residual query
             float[][] distTable = pq.computeDistanceTable(residualQuery);
 
-            // Scan all codes in this posting list
-            int size = plist.size();
-            byte[][] codes = plist.codes();
-            String[] ids = plist.ids();
-            int[] indices = plist.storeIndices();
+            int       size    = plist.size();
+            byte[][]  codes   = plist.codes();
+            String[]  ids     = plist.ids();
+            int[]     indices = plist.storeIndices();
 
             for (int i = 0; i < size; i++) {
-                float dist = ProductQuantizer.adcDistance(distTable, codes[i]);
-                // Convert L2 distance to similarity score (lower dist = higher similarity)
+                float dist  = ProductQuantizer.adcDistance(distTable, codes[i]);
                 float score = 1.0f / (1.0f + dist);
                 candidates.add(new ScoredResult(ids[i], indices[i], score));
             }
         }
 
-        // Step 3: Sort by score descending (highest similarity first)
-        candidates.sort(java.util.Comparator.naturalOrder()); // ScoredResult.compareTo is descending
-
-        // Return top-k
+        // Step 3: Sort by score descending and return top-k
+        candidates.sort(java.util.Comparator.naturalOrder());
         int resultCount = Math.min(k, candidates.size());
         return candidates.subList(0, resultCount).toArray(ScoredResult[]::new);
     }
@@ -259,122 +288,7 @@ public class IvfPqIndex implements VectorIndex {
     /** Returns the product quantizer (null if not trained). */
     public ProductQuantizer quantizer() { return pq; }
 
-    // ─────────────── IVF K-Means training ───────────────
-
-    private float[][] trainCentroids(float[][] samples) {
-        int n = samples.length;
-        float[][] centers = new float[nlist][dimensions];
-        java.util.Random rng = new java.util.Random(42);
-
-        // K-Means++ initialization
-        System.arraycopy(samples[rng.nextInt(n)], 0, centers[0], 0, dimensions);
-        float[] minDists = new float[n];
-        Arrays.fill(minDists, Float.MAX_VALUE);
-
-        for (int c = 1; c < nlist; c++) {
-            double totalDist = 0;
-            for (int i = 0; i < n; i++) {
-                float d = squaredL2(samples[i], centers[c - 1]);
-                if (d < minDists[i]) minDists[i] = d;
-                totalDist += minDists[i];
-            }
-            double target = rng.nextDouble() * totalDist;
-            double cumulative = 0;
-            int selected = 0;
-            for (int i = 0; i < n; i++) {
-                cumulative += minDists[i];
-                if (cumulative >= target) { selected = i; break; }
-            }
-            System.arraycopy(samples[selected], 0, centers[c], 0, dimensions);
-        }
-
-        // K-Means iterations
-        int[] assignments = new int[n];
-        for (int iter = 0; iter < 25; iter++) {
-            boolean changed = false;
-            for (int i = 0; i < n; i++) {
-                int nearest = nearestCentroidIdx(samples[i], centers);
-                if (nearest != assignments[i]) {
-                    assignments[i] = nearest;
-                    changed = true;
-                }
-            }
-            if (!changed) break;
-
-            float[][] newCenters = new float[nlist][dimensions];
-            int[] counts = new int[nlist];
-            for (int i = 0; i < n; i++) {
-                counts[assignments[i]]++;
-                for (int d = 0; d < dimensions; d++) {
-                    newCenters[assignments[i]][d] += samples[i][d];
-                }
-            }
-            for (int c = 0; c < nlist; c++) {
-                if (counts[c] > 0) {
-                    for (int d = 0; d < dimensions; d++) {
-                        newCenters[c][d] /= counts[c];
-                    }
-                    centers[c] = newCenters[c];
-                }
-            }
-        }
-
-        return centers;
-    }
-
-    // ─────────────── Helpers ───────────────
-
-    private int nearestCentroid(float[] vector) {
-        return nearestCentroidIdx(vector, centroids);
-    }
-
-    private static int nearestCentroidIdx(float[] vector, float[][] centroids) {
-        int best = 0;
-        float bestDist = Float.MAX_VALUE;
-        for (int k = 0; k < centroids.length; k++) {
-            float dist = squaredL2(vector, centroids[k]);
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = k;
-            }
-        }
-        return best;
-    }
-
-    private int[] findNearestClusters(float[] query, int probe) {
-        int actualProbe = Math.min(probe, nlist);
-        // Simple: compute distances to all centroids, pick top-nprobe
-        float[] dists = new float[nlist];
-        for (int c = 0; c < nlist; c++) {
-            dists[c] = squaredL2(query, centroids[c]);
-        }
-
-        // Partial sort to find top-nprobe nearest
-        Integer[] indices = new Integer[nlist];
-        for (int i = 0; i < nlist; i++) indices[i] = i;
-        Arrays.sort(indices, (a, b) -> Float.compare(dists[a], dists[b]));
-
-        int[] result = new int[actualProbe];
-        for (int i = 0; i < actualProbe; i++) {
-            result[i] = indices[i];
-        }
-        return result;
-    }
-
-    private String findIdByStoreIndex(int storeIndex) {
-        for (PostingList plist : postingLists) {
-            String id = plist.findId(storeIndex);
-            if (id != null) return id;
-        }
-        return null;
-    }
-
     private static float squaredL2(float[] a, float[] b) {
-        float sum = 0;
-        for (int i = 0; i < a.length; i++) {
-            float diff = a[i] - b[i];
-            sum += diff * diff;
-        }
-        return sum;
+        return KMeans.squaredL2(a, b);
     }
 }

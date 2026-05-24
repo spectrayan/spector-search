@@ -1,5 +1,6 @@
 package com.spectrayan.spector.index.ivf;
 
+import com.spectrayan.spector.core.cluster.KMeans;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.index.ScoredResult;
 import com.spectrayan.spector.index.VectorIndex;
@@ -8,9 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.StampedLock;
 
 /**
  * IVF-Flat (Inverted File with exact distance) vector index.
@@ -44,6 +44,7 @@ public class IvfFlatIndex implements VectorIndex {
     public static final int MAX_CELLS = 65_536;
 
     private static final int KMEANS_MAX_ITERATIONS = 25;
+    private static final long KMEANS_SEED = 42L;
 
     private final int dimensions;
     private final SimilarityFunction similarityFunction;
@@ -57,7 +58,20 @@ public class IvfFlatIndex implements VectorIndex {
     private List<FlatPostingList> postingLists;
     private volatile int totalVectors;
 
-    private final ReentrantLock writeLock = new ReentrantLock();
+    // ── Concurrency ──
+    //
+    // StampedLock provides three modes:
+    //   writeLock()         — exclusive, used by add()
+    //   readLock()          — shared, used as search() fallback
+    //   tryOptimisticRead() — lock-free! used as search() fast path
+    //
+    // In a read-dominant search workload (searches >> adds), the optimistic read
+    // succeeds on nearly every call because there is no concurrent writer.
+    // Cost: 2 CPU instructions (read stamp + validate stamp). Zero atomic ops.
+    // If a write races, validate() returns false and we fall back to readLock().
+    //
+    // VT note: StampedLock.readLock() uses LockSupport.park() — VTs unmount, not pin.
+    private final StampedLock stampedLock = new StampedLock();
 
     /**
      * Creates an IVF-Flat index.
@@ -103,7 +117,7 @@ public class IvfFlatIndex implements VectorIndex {
         long start = System.nanoTime();
 
         this.numCells = numCells;
-        this.centroids = trainCentroids(trainingVectors, numCells);
+        this.centroids = KMeans.train(trainingVectors, numCells, KMEANS_MAX_ITERATIONS, KMEANS_SEED);
 
         // Initialize posting lists
         this.postingLists = new ArrayList<>(numCells);
@@ -125,13 +139,13 @@ public class IvfFlatIndex implements VectorIndex {
             throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + vector.length);
         }
 
-        writeLock.lock();
+        long stamp = stampedLock.writeLock();
         try {
-            int cell = nearestCentroid(vector);
+            int cell = KMeans.nearestCentroid(vector, centroids);
             postingLists.get(cell).add(id, storeIndex, vector);
             totalVectors++;
         } finally {
-            writeLock.unlock();
+            stampedLock.unlockWrite(stamp);
         }
     }
 
@@ -160,8 +174,55 @@ public class IvfFlatIndex implements VectorIndex {
             return new ScoredResult[0];
         }
 
+        // ── Optimistic read (lock-free fast path for read-dominant workloads) ──
+        //
+        // tryOptimisticRead() returns a stamp without acquiring any lock.
+        // We read all shared data under this stamp, then validate it.
+        // If no write occurred during our read, validate() returns true and we're done.
+        // If a write raced us, validate() returns false and we fall back to readLock().
+        //
+        // Key: local variables snapshot the array references and size before reading
+        // elements. Even if a grow() replaces the backing arrays during our read,
+        // our local references still point to the old (valid) arrays which contain
+        // consistent data for all indices [0, localSize).
+        long stamp = stampedLock.tryOptimisticRead();
+        ScoredResult[] result = trySearchOptimistic(query, nprobe, topK, stamp);
+        if (result != null) return result;
+
+        // ── Fallback: shared readLock (rare — only when a concurrent add() races) ──
+        stamp = stampedLock.readLock();
+        try {
+            return doSearch(query, nprobe, topK);
+        } finally {
+            stampedLock.unlockRead(stamp);
+        }
+    }
+
+    /**
+     * Attempts an optimistic (lock-free) search.
+     * Returns null if a concurrent write was detected, signalling the caller to retry
+     * under a readLock.
+     */
+    private ScoredResult[] trySearchOptimistic(float[] query, int nprobe, int topK, long stamp) {
+        // Snapshot mutable state under the optimistic stamp
+        int tv = totalVectors;
+        if (!stampedLock.validate(stamp)) return null;
+        if (tv == 0) return new ScoredResult[0];
+
+        ScoredResult[] result = doSearch(query, nprobe, topK);
+
+        // Validate: if any write happened during doSearch(), result may be stale
+        // (but not corrupted — local references are stable). We return it if valid;
+        // if invalid, caller retries under readLock for a strictly consistent view.
+        return stampedLock.validate(stamp) ? result : null;
+    }
+
+    /** Core search logic — called under either optimistic stamp or readLock. */
+    private ScoredResult[] doSearch(float[] query, int nprobe, int topK) {
+        if (totalVectors == 0) return new ScoredResult[0];
+
         // Find the nprobe nearest centroids
-        int[] probeCells = findNearestCentroids(query, nprobe);
+        int[] probeCells = KMeans.nearestCentroids(query, centroids, nprobe);
 
         // Exhaustive scan within probed cells using exact distance
         List<ScoredResult> candidates = new ArrayList<>();
@@ -170,13 +231,13 @@ public class IvfFlatIndex implements VectorIndex {
             int size = plist.size();
             if (size == 0) continue;
 
-            String[] ids = plist.ids();
-            int[] indices = plist.storeIndices();
-            float[][] vectors = plist.vectors();
+            // Snapshot array references locally — stable even if grow() swaps arrays
+            String[]   ids     = plist.ids();
+            int[]      indices = plist.storeIndices();
+            float[][]  vectors = plist.vectors();
 
             for (int i = 0; i < size; i++) {
                 float score = similarityFunction.compute(query, vectors[i]);
-                // For distance metrics (lower is better), convert to a similarity score
                 if (!similarityFunction.higherIsBetter()) {
                     score = 1.0f / (1.0f + score);
                 }
@@ -184,9 +245,7 @@ public class IvfFlatIndex implements VectorIndex {
             }
         }
 
-        // Sort descending by score
         candidates.sort(null); // ScoredResult.compareTo is descending
-
         int resultCount = Math.min(topK, candidates.size());
         return candidates.subList(0, resultCount).toArray(ScoredResult[]::new);
     }
@@ -230,122 +289,4 @@ public class IvfFlatIndex implements VectorIndex {
         return dimensions;
     }
 
-    // ─────────────── K-Means Training ───────────────
-
-    private float[][] trainCentroids(float[][] samples, int k) {
-        int n = samples.length;
-        float[][] centers = new float[k][dimensions];
-        java.util.Random rng = new java.util.Random(42);
-
-        // K-Means++ initialization
-        System.arraycopy(samples[rng.nextInt(n)], 0, centers[0], 0, dimensions);
-        float[] minDists = new float[n];
-        Arrays.fill(minDists, Float.MAX_VALUE);
-
-        for (int c = 1; c < k; c++) {
-            double totalDist = 0;
-            for (int i = 0; i < n; i++) {
-                float d = squaredL2(samples[i], centers[c - 1]);
-                if (d < minDists[i]) {
-                    minDists[i] = d;
-                }
-                totalDist += minDists[i];
-            }
-            double target = rng.nextDouble() * totalDist;
-            double cumulative = 0;
-            int selected = 0;
-            for (int i = 0; i < n; i++) {
-                cumulative += minDists[i];
-                if (cumulative >= target) {
-                    selected = i;
-                    break;
-                }
-            }
-            System.arraycopy(samples[selected], 0, centers[c], 0, dimensions);
-        }
-
-        // K-Means iterations
-        int[] assignments = new int[n];
-        for (int iter = 0; iter < KMEANS_MAX_ITERATIONS; iter++) {
-            boolean changed = false;
-            for (int i = 0; i < n; i++) {
-                int nearest = nearestCentroidIdx(samples[i], centers, k);
-                if (nearest != assignments[i]) {
-                    assignments[i] = nearest;
-                    changed = true;
-                }
-            }
-            if (!changed) break;
-
-            // Recompute centroids
-            float[][] newCenters = new float[k][dimensions];
-            int[] counts = new int[k];
-            for (int i = 0; i < n; i++) {
-                counts[assignments[i]]++;
-                for (int d = 0; d < dimensions; d++) {
-                    newCenters[assignments[i]][d] += samples[i][d];
-                }
-            }
-            for (int c = 0; c < k; c++) {
-                if (counts[c] > 0) {
-                    for (int d = 0; d < dimensions; d++) {
-                        newCenters[c][d] /= counts[c];
-                    }
-                    centers[c] = newCenters[c];
-                }
-                // If a cluster is empty, keep its previous centroid
-            }
-        }
-
-        return centers;
-    }
-
-    // ─────────────── Helpers ───────────────
-
-    private int nearestCentroid(float[] vector) {
-        return nearestCentroidIdx(vector, centroids, numCells);
-    }
-
-    private static int nearestCentroidIdx(float[] vector, float[][] centroids, int k) {
-        int best = 0;
-        float bestDist = Float.MAX_VALUE;
-        for (int c = 0; c < k; c++) {
-            float dist = squaredL2(vector, centroids[c]);
-            if (dist < bestDist) {
-                bestDist = dist;
-                best = c;
-            }
-        }
-        return best;
-    }
-
-    private int[] findNearestCentroids(float[] query, int nprobe) {
-        int actualProbe = Math.min(nprobe, numCells);
-        float[] dists = new float[numCells];
-        for (int c = 0; c < numCells; c++) {
-            dists[c] = squaredL2(query, centroids[c]);
-        }
-
-        // Partial sort: find top-nprobe nearest
-        Integer[] indices = new Integer[numCells];
-        for (int i = 0; i < numCells; i++) {
-            indices[i] = i;
-        }
-        Arrays.sort(indices, (a, b) -> Float.compare(dists[a], dists[b]));
-
-        int[] result = new int[actualProbe];
-        for (int i = 0; i < actualProbe; i++) {
-            result[i] = indices[i];
-        }
-        return result;
-    }
-
-    private static float squaredL2(float[] a, float[] b) {
-        float sum = 0;
-        for (int i = 0; i < a.length; i++) {
-            float diff = a[i] - b[i];
-            sum += diff * diff;
-        }
-        return sum;
-    }
 }

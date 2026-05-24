@@ -43,8 +43,10 @@ public class BM25Index implements KeywordIndex {
 
     private static final Logger log = LoggerFactory.getLogger(BM25Index.class);
 
-    /** Threshold: use parallel term scoring when total postings exceed this. */
-    private static final int PARALLEL_POSTING_THRESHOLD = 5_000;
+    /** Threshold: use parallel term scoring when total postings exceed this.
+     * Set conservatively — virtual thread scheduling overhead only pays off
+     * for large posting lists. Below 20K, sequential scoring is faster. */
+    private static final int PARALLEL_POSTING_THRESHOLD = 20_000;
 
     private final Analyzer analyzer;
     private final float k1;

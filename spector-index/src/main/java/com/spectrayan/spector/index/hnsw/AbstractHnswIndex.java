@@ -61,6 +61,28 @@ public abstract class AbstractHnswIndex implements VectorIndex {
     protected final ReentrantReadWriteLock.WriteLock writeLock = rwLock.writeLock();
     protected final ReentrantReadWriteLock.ReadLock readLock = rwLock.readLock();
 
+    // ── Pre-allocated scratch for addConnection() pruning (accessed under writeLock only) ──
+    //
+    // addConnection() is always called under writeLock (from add()), so only ONE thread
+    // accesses these arrays at a time. A plain instance field is correct — no ThreadLocal needed.
+    //
+    // Size = max(maxLevel0Connections, m) + 2 covers all pruning cases:
+    //   layer 0: at most maxLevel0Connections current neighbors + 1 new = maxLevel0Connections + 1
+    //   upper:   at most m current neighbors + 1 new = m + 1
+    private final float[] pruneScores;
+    private final int[]   pruneIndices;
+
+    // ── Pre-allocated unvisited buffer for searchLayer() (per-thread via ThreadLocal) ──
+    //
+    // searchLayer() is called from:
+    //   add()    — under writeLock (single writer, serialized)
+    //   search() — under readLock  (concurrent readers, each needs its own buffer)
+    //
+    // ThreadLocal gives each virtual thread its own buffer, eliminating the per-call
+    // allocation AND the Arrays.copyOf fallback that occurred when the buffer was too small.
+    // Buffer size = max(maxLevel0Connections, m) * 2 covers the realistic worst case.
+    private final ThreadLocal<int[]> unvisitedBufLocal;
+
     /**
      * Creates the HNSW graph structure.
      *
@@ -82,6 +104,15 @@ public abstract class AbstractHnswIndex implements VectorIndex {
         this.neighbors = new int[capacity][];
         this.upperNeighbors = new int[capacity][][];
         this.nodeLevels = new int[capacity];
+
+        // Pre-allocated pruning scratch for addConnection() — sized for the larger of the two maxConn values
+        int maxPruneSize = Math.max(params.maxLevel0Connections(), params.m()) + 2;
+        this.pruneScores  = new float[maxPruneSize];
+        this.pruneIndices = new int[maxPruneSize];
+
+        // Per-thread unvisited buffer for searchLayer() — prevents per-search allocation
+        final int unvisitedInitSize = Math.max(params.maxLevel0Connections(), params.m()) * 2;
+        this.unvisitedBufLocal = ThreadLocal.withInitial(() -> new int[unvisitedInitSize]);
     }
 
     // ─────────────── Template methods (subclass hooks) ───────────────
@@ -290,8 +321,10 @@ public abstract class AbstractHnswIndex implements VectorIndex {
         workQueue.add(entryNode, entryDist);
         visited.set(entryNode);
 
-        // Reusable buffer for unvisited neighbors (avoids allocation per iteration)
-        int[] unvisitedBuf = new int[params.maxLevel0Connections() * 2];
+        // Use the pre-allocated per-thread buffer — no allocation per call.
+        // If a node somehow has more neighbors than the buffer size (extremely unlikely
+        // with well-configured params), we fall back to a local array just that once.
+        int[] unvisitedBuf = unvisitedBufLocal.get();
 
         while (!workQueue.isEmpty()) {
             float currentDist = workQueue.topScore();
@@ -309,7 +342,11 @@ public abstract class AbstractHnswIndex implements VectorIndex {
                 if (!visited.get(neighbor)) {
                     visited.set(neighbor);
                     if (unvisitedCount >= unvisitedBuf.length) {
-                        unvisitedBuf = Arrays.copyOf(unvisitedBuf, unvisitedBuf.length * 2);
+                        // Rare: node has more neighbors than our buffer. Grow the ThreadLocal buffer.
+                        int[] grown = new int[unvisitedBuf.length * 2];
+                        System.arraycopy(unvisitedBuf, 0, grown, 0, unvisitedCount);
+                        unvisitedBufLocal.set(grown);
+                        unvisitedBuf = grown;
                     }
                     unvisitedBuf[unvisitedCount++] = neighbor;
                 }
@@ -353,24 +390,49 @@ public abstract class AbstractHnswIndex implements VectorIndex {
         }
 
         if (currentNeighbors.length < maxConn) {
+            // Neighbor list not yet full — extend it by one.
+            // This allocation is structurally unavoidable: the graph stores int[] per node.
             int[] newNeighbors = new int[currentNeighbors.length + 1];
             System.arraycopy(currentNeighbors, 0, newNeighbors, 0, currentNeighbors.length);
             newNeighbors[currentNeighbors.length] = toNode;
             setNeighbors(fromNode, layer, newNeighbors);
         } else {
+            // Neighbor list full: must prune. Find the best maxConn from (currentNeighbors + toNode).
+            //
+            // Uses pre-allocated pruneScores/pruneIndices instance fields (safe under writeLock).
+            // In-place insertion sort over maxConn+1 elements (typically 17 or 33) — zero allocation,
+            // O(maxConn²) = O(289) for M=16 which is negligible vs distance computation.
             float[] fromVec = getNodeVector(fromNode);
-            NeighborQueue queue = new NeighborQueue(maxConn + 1, false);
-            for (int n : currentNeighbors) {
-                queue.add(n, similarityFunction.compute(fromVec, getNodeVector(n)));
-            }
-            queue.add(toNode, similarityFunction.compute(fromVec, getNodeVector(toNode)));
+            boolean higherIsBetter = similarityFunction.higherIsBetter();
 
-            ScoredResult[] best = queue.toSortedResults(null, similarityFunction.higherIsBetter());
-            int keepCount = Math.min(best.length, maxConn);
-            int[] pruned = new int[keepCount];
-            for (int i = 0; i < keepCount; i++) {
-                pruned[i] = best[i].index();
+            // Fill pre-allocated scratch: score each current neighbor and the new candidate
+            int pruneSize = 0;
+            for (int n : currentNeighbors) {
+                pruneScores[pruneSize]  = similarityFunction.compute(fromVec, getNodeVector(n));
+                pruneIndices[pruneSize] = n;
+                pruneSize++;
             }
+            pruneScores[pruneSize]  = similarityFunction.compute(fromVec, getNodeVector(toNode));
+            pruneIndices[pruneSize] = toNode;
+            pruneSize++;
+
+            // In-place insertion sort: best-first order (descending for similarity, ascending for distance)
+            for (int i = 1; i < pruneSize; i++) {
+                float sc  = pruneScores[i];
+                int   idx = pruneIndices[i];
+                int j = i - 1;
+                while (j >= 0 && (higherIsBetter ? pruneScores[j] < sc : pruneScores[j] > sc)) {
+                    pruneScores[j + 1]  = pruneScores[j];
+                    pruneIndices[j + 1] = pruneIndices[j];
+                    j--;
+                }
+                pruneScores[j + 1]  = sc;
+                pruneIndices[j + 1] = idx;
+            }
+
+            // Keep the best maxConn (the sorted head of pruneIndices)
+            int[] pruned = new int[maxConn];  // unavoidable: graph structure requires a stored int[]
+            System.arraycopy(pruneIndices, 0, pruned, 0, maxConn);
             setNeighbors(fromNode, layer, pruned);
         }
     }

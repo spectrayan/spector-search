@@ -27,6 +27,11 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-commons</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-embed-ollama</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>
