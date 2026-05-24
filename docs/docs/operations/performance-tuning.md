@@ -209,7 +209,7 @@ var config = SpectorConfig.DEFAULT
 
 - **Add CPU cores** → Concurrent throughput scaling (up to ~3.7× at 16 threads measured)
 - **Add RAM** → Support larger capacity without IVF-PQ compression
-- **Add GPU** → Batch throughput improvement for bulk operations (crossover at batch size ~16–32)
+- **Add GPU** → GPU infrastructure is in place (CUDA context + memory management); CUDA kernel dispatch for batch similarity is planned
 
 ### ➡️ Horizontal Scaling (Distributed Mode)
 
