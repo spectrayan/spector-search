@@ -12,5 +12,7 @@ window.MathJax = {
 };
 
 document$.subscribe(() => {
-  MathJax.typesetPromise();
+  if (typeof MathJax !== "undefined" && MathJax.typesetPromise) {
+    MathJax.typesetPromise();
+  }
 });
