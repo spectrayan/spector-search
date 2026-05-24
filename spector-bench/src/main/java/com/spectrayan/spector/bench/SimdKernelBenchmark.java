@@ -16,9 +16,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-import com.spectrayan.spector.core.similarity.CosineSimilarity;
-import com.spectrayan.spector.core.similarity.DotProduct;
-import com.spectrayan.spector.core.similarity.EuclideanDistance;
+import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 /**
  * JMH benchmarks for SIMD similarity kernels.
@@ -57,21 +55,16 @@ public class SimdKernelBenchmark {
 
     @Benchmark
     public void dotProduct(Blackhole bh) {
-        bh.consume(DotProduct.compute(vectorA, vectorB));
+        bh.consume(SimilarityFunction.DOT_PRODUCT.compute(vectorA, vectorB));
     }
 
     @Benchmark
     public void cosineSimilarity(Blackhole bh) {
-        bh.consume(CosineSimilarity.compute(vectorA, vectorB));
+        bh.consume(SimilarityFunction.COSINE.compute(vectorA, vectorB));
     }
 
     @Benchmark
     public void euclideanDistanceSquared(Blackhole bh) {
-        bh.consume(EuclideanDistance.computeSquared(vectorA, vectorB));
-    }
-
-    @Benchmark
-    public void euclideanDistance(Blackhole bh) {
-        bh.consume(EuclideanDistance.compute(vectorA, vectorB));
+        bh.consume(SimilarityFunction.EUCLIDEAN.compute(vectorA, vectorB));
     }
 }
