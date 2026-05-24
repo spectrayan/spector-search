@@ -17,13 +17,17 @@ import org.junit.jupiter.api.Test;
 class PackedDotProductTest {
 
     private static final float TOLERANCE = 1e-6f;
+    /**
+     * Tolerance for SIMD-vs-scalar large dimension comparisons.
+     * FMA accumulation differs from sequential summation only by floating-point rounding order.
+     * FMA is more accurate; we allow 1e-4f relative difference for 384 dimensions.
+     */
+    private static final float SIMD_TOLERANCE = 1e-4f;
 
     @Test
     @DisplayName("SIMD availability should be detected")
     void shouldDetectSimdAvailability() {
-        // Just verify the method doesn't throw; actual value depends on runtime
         boolean available = PackedDotProduct.isSimdAvailable();
-        // On a standard JDK 21+ with --add-modules, this should be true
         assertThat(available).isNotNull();
     }
 
@@ -74,7 +78,7 @@ class PackedDotProductTest {
     }
 
     @Test
-    @DisplayName("INT4: SIMD and scalar produce identical results for 384 dimensions")
+    @DisplayName("INT4: SIMD and scalar produce numerically equivalent results for 384 dimensions")
     void int4SimdEqualsScalarLargeDimension() {
         int dimensions = 384;
         Random rng = new Random(42);
@@ -95,10 +99,12 @@ class PackedDotProductTest {
         }
         byte[] packedDoc = NibblePacker.pack(levels, levels.length);
 
-        float simdResult = PackedDotProduct.computeInt4(query, packedDoc, centroids4, dimensions);
+        float simdResult   = PackedDotProduct.computeInt4(query, packedDoc, centroids4, dimensions);
         float scalarResult = PackedDotProduct.computeInt4Scalar(query, packedDoc, centroids4, dimensions);
 
-        assertThat(simdResult).isEqualTo(scalarResult);
+        // FMA accumulation (SIMD) differs from sequential summation (scalar) only by rounding order.
+        // FMA is more numerically accurate; exact bitwise equality is not a correct requirement.
+        assertThat(simdResult).isCloseTo(scalarResult, within(SIMD_TOLERANCE));
     }
 
     @Test
@@ -161,7 +167,7 @@ class PackedDotProductTest {
     }
 
     @Test
-    @DisplayName("INT2: SIMD and scalar produce identical results for 384 dimensions")
+    @DisplayName("INT2: SIMD and scalar produce numerically equivalent results for 384 dimensions")
     void int2SimdEqualsScalarLargeDimension() {
         int dimensions = 384;
         Random rng = new Random(123);
@@ -182,10 +188,12 @@ class PackedDotProductTest {
         }
         byte[] packedDoc = CrumbPacker.pack(levels, levels.length);
 
-        float simdResult = PackedDotProduct.computeInt2(query, packedDoc, centroids2, dimensions);
+        float simdResult   = PackedDotProduct.computeInt2(query, packedDoc, centroids2, dimensions);
         float scalarResult = PackedDotProduct.computeInt2Scalar(query, packedDoc, centroids2, dimensions);
 
-        assertThat(simdResult).isEqualTo(scalarResult);
+        // FMA accumulation (SIMD) differs from sequential summation (scalar) only by rounding order.
+        // FMA is more numerically accurate; exact bitwise equality is not a correct requirement.
+        assertThat(simdResult).isCloseTo(scalarResult, within(SIMD_TOLERANCE));
     }
 
     @Test
@@ -253,10 +261,10 @@ class PackedDotProductTest {
         }
         byte[] packedDoc = NibblePacker.pack(levels, levels.length);
 
-        float simd = PackedDotProduct.computeInt4(query, packedDoc, centroids4, dimensions);
+        float simd   = PackedDotProduct.computeInt4(query, packedDoc, centroids4, dimensions);
         float scalar = PackedDotProduct.computeInt4Scalar(query, packedDoc, centroids4, dimensions);
 
-        assertThat(simd).isEqualTo(scalar);
+        assertThat(simd).isCloseTo(scalar, within(SIMD_TOLERANCE));
     }
 
     @Test
@@ -281,9 +289,9 @@ class PackedDotProductTest {
         }
         byte[] packedDoc = CrumbPacker.pack(levels, levels.length);
 
-        float simd = PackedDotProduct.computeInt2(query, packedDoc, centroids2, dimensions);
+        float simd   = PackedDotProduct.computeInt2(query, packedDoc, centroids2, dimensions);
         float scalar = PackedDotProduct.computeInt2Scalar(query, packedDoc, centroids2, dimensions);
 
-        assertThat(simd).isEqualTo(scalar);
+        assertThat(simd).isCloseTo(scalar, within(SIMD_TOLERANCE));
     }
 }

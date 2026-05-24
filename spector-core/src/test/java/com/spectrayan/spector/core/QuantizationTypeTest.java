@@ -7,6 +7,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
 /**
  * Unit tests for {@link QuantizationType} enum including INT4 and INT2 variants.
  */
@@ -14,12 +19,13 @@ class QuantizationTypeTest {
 
     @Test
     void testEnumVariantsExist() {
-        assertEquals(5, QuantizationType.values().length);
+        assertEquals(6, QuantizationType.values().length);
         QuantizationType.valueOf("NONE");
         QuantizationType.valueOf("SCALAR_INT8");
         QuantizationType.valueOf("SCALAR_INT4");
         QuantizationType.valueOf("SCALAR_INT2");
         QuantizationType.valueOf("TURBO_QUANT");
+        QuantizationType.valueOf("VASQ");
     }
 
     @Test
@@ -67,5 +73,19 @@ class QuantizationTypeTest {
         // 1 << 32 in Java int wraps (shift by 32 % 32 = 0), so result is 1.
         // This is acceptable since levels() is not meaningful for NONE.
         assertEquals(1, QuantizationType.NONE.levels());
+    }
+
+    @Test
+    void vasq_bitsPerDimension_is_8() {
+        assertEquals(8, QuantizationType.VASQ.bitsPerDimension());
+    }
+
+    @Test
+    void vasq_bytesPerVector_throws() {
+        // VASQ storage size depends on paddedDim = nextPow2(dimensions), not dimensions.
+        // Use VasqEncoder.bytesPerVector() instead.
+        org.junit.jupiter.api.Assertions.assertThrows(
+                UnsupportedOperationException.class,
+                () -> QuantizationType.VASQ.bytesPerVector(768));
     }
 }
