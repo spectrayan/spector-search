@@ -15,6 +15,8 @@
 - **🎯 High Recall** — HNSW approximate nearest-neighbor search with configurable recall@K ≥ 80%
 - **⚡ Sub-Millisecond Queries** — Branchless SIMD kernels with masked tail handling
 - **🗜️ Multi-Level Quantization** — INT8 (4×), INT4 (8×), and INT2 (16×) scalar quantization with non-uniform calibration and configurable rescore
+- **🗜️ VASQ Quantization** — FWHT-rotated affine INT8 quantization with exact-norm header for high-accuracy zero-copy compression (retaining 99.5%+ recall)
+- **🎯 SpectorIndex (IVF-HNSW-VASQ)** — Multi-level adaptive vector index yielding 99.5%–100% recall on real text embeddings at aggressive 3% partition scanning rates
 - **🗜️ IVF-PQ Index** — Inverted file with product quantization for 32× memory compression at billion scale
 - **🤖 LLM Re-ranking** — Listwise relevance scoring via Ollama for precision-critical retrieval
 - **🖥️ GPU Acceleration** — CUDA kernel loader + SIMD batch similarity via Panama FFM
@@ -42,19 +44,29 @@ spector-search/
 ├── [spector-engine/](spector-engine/)       # Unified engine facade + lifecycle
 ├── [spector-server/](spector-server/)       # REST API (Javalin + virtual threads)
 ├── [spector-cluster/](spector-cluster/)      # Distributed gRPC search (coordinator + shards)
+├── [spector-client/](spector-client/)       # Developer-facing Java SDK client
+├── [spector-cli/](spector-cli/)          # Terminal-based admin CLI (spectorctl)
+├── [spector-ingestion/](spector-ingestion/)    # High-throughput streaming document processing pipelines
+├── [spector-rag/](spector-rag/)          # Zero-dependency Retrieval-Augmented Generation pipeline
+├── [spector-spring/](spector-spring/)       # Spring Boot starter and Spring AI integration auto-configurations
 └── [spector-bench/](spector-bench/)        # JMH benchmarks
 ```
 
 ### Module Dependency Graph
 
 ```
-cluster → engine → query → index → core
-                        → index → storage → core
-server  → engine
-engine  → gpu (optional)
-engine  → commons
-engine  → embed-api
-gpu     → core, storage
+cluster   → engine    → query   → index → core
+                                → index → storage → core
+server    → engine
+client    → server (HTTP)
+cli       → server (HTTP)
+spring    → engine
+rag       → engine
+ingestion → engine
+engine    → gpu (optional)
+engine    → commons
+engine    → embed-api
+gpu       → core, storage
 ```
 
 ## 🚀 Quick Start
@@ -212,34 +224,34 @@ Sub-microsecond vector math at every dimension:
 
 | Scale | Keyword (BM25) | Vector (HNSW) | Hybrid (RRF) |
 |-------|---------------|---------------|--------------| 
-| **10K docs** | **0.19 ms** avg / 3.79 ms p99 | **0.05 ms** avg / 0.10 ms p99 | **0.17 ms** avg / 0.37 ms p99 |
-| **50K docs** | **0.42 ms** avg / 0.68 ms p99 | **0.09 ms** avg / 0.19 ms p99 | **0.50 ms** avg / 0.81 ms p99 |
-| **100K docs** | **0.98 ms** avg / 1.39 ms p99 | **0.13 ms** avg / 0.26 ms p99 | **1.01 ms** avg / 1.22 ms p99 |
+| **10K docs** | **0.18 ms** avg / 0.33 ms p99 | **0.04 ms** avg / 0.07 ms p99 | **0.17 ms** avg / 0.26 ms p99 |
+| **50K docs** | **0.44 ms** avg / 0.59 ms p99 | **0.08 ms** avg / 0.11 ms p99 | **0.51 ms** avg / 0.84 ms p99 |
+| **100K docs** | **1.53 ms** avg / 1.94 ms p99 | **0.10 ms** avg / 0.22 ms p99 | **1.76 ms** avg / 2.81 ms p99 |
 
 ### Search Throughput (queries/sec)
 
-| Scale | Keyword | Vector | Hybrid | Vector top-100 |
-|-------|---------|--------|--------|----------------|
-| **10K docs** | **5,194** | **18,824** | **5,828** | — |
-| **50K docs** | **2,406** | **10,980** | **1,988** | — |
-| **100K docs** | **1,019** | **7,556** | **994** | — |
+| Scale | Keyword | Vector | Hybrid |
+|-------|---------|--------|--------|
+| **10K docs** | **5,490** | **23,726** | **5,993** |
+| **50K docs** | **2,264** | **13,287** | **1,958** |
+| **100K docs** | **653** | **9,925** | **569** |
 
 ### Ingestion Throughput
 
 | Dataset Size | Time | Rate | Memory |
 |-------------|------|------|--------|
-| 10,000 | 2.5s | **3,931 docs/s** | +19 MB |
-| 50,000 | 15.1s | **3,308 docs/s** | +93 MB |
-| 100,000 | 38.2s | **2,618 docs/s** | +187 MB |
+| 10,000 | 2.1s | **4,679 docs/s** | +48 MB |
+| 50,000 | 20.5s | **2,430 docs/s** | +86 MB |
+| 100,000 | 1m 2s | **1,597 docs/s** | +202 MB |
 
-### Concurrency Scaling (50K docs, 384-dim, Hybrid Search)
+### Concurrency Scaling (50K docs, 128-dim, Hybrid Search)
 
 | Threads | Throughput | Avg Latency | Scaling Factor |
 |---------|-----------|-------------|----------------|
-| 1 | 3,739 ops/s | 0.26 ms | 1.0× |
-| 4 | 10,317 ops/s | 0.37 ms | **2.8×** |
-| 8 | 11,812 ops/s | 0.58 ms | **3.2×** |
-| 16 | 14,022 ops/s | 1.00 ms | **3.7×** |
+| 1 | 1,231 ops/s | 0.81 ms | 1.0× |
+| 4 | 2,894 ops/s | 1.38 ms | **2.3×** |
+| 8 | 5,466 ops/s | 1.46 ms | **4.4×** |
+| 16 | 7,635 ops/s | 1.99 ms | **6.2×** |
 
 > Run the full benchmark suite: `mvn -pl spector-bench exec:java`
 > HTML report generated at `spector-bench/target/performance-report.html`
@@ -257,7 +269,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Language | Avg Latency | P99 Latency | Notes |
 |--------|----------|------------|------------|-------|
-| **Spector Search** | Java 25 | **0.13 ms** | **0.26 ms** | SIMD via Vector API, pure in-process, 100K docs |
+| **Spector Search** | Java 25 | **0.10 ms** | **0.22 ms** | SIMD via Vector API, pure in-process, 100K docs |
 | hnswlib | C++ | ~0.1–0.5 ms | ~1 ms | Fastest native HNSW; single-threaded |
 | FAISS (HNSW) | C++/Python | ~0.2–0.8 ms | ~1–2 ms | Versatile; GPU support available |
 | Apache Lucene 9+ | Java | ~1–5 ms | ~5–10 ms | Segment-based; force-merge helps |
@@ -273,7 +285,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Avg Latency | Notes |
 |--------|------------|-------|
-| **Spector Search** | **0.98 ms** | float[] scoring, min-heap top-K, virtual-thread parallel terms |
+| **Spector Search** | **1.53 ms** | float[] scoring, min-heap top-K, virtual-thread parallel terms |
 | Elasticsearch | <1–5 ms | Inverted index + skip lists, highly optimized |
 | Apache Lucene | <1–3 ms | Raw engine, no network overhead |
 | Weaviate (BM25) | ~10–30 ms | Go-based BM25 for hybrid search |
@@ -282,7 +294,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Approach | Avg Latency | Notes |
 |--------|----------|------------|-------|
-| **Spector Search** | RRF (parallel virtual threads) | **1.01 ms** | Both legs sub-ms at 10K; parallel via virtual threads |
+| **Spector Search** | RRF (parallel virtual threads) | **1.76 ms** | Both legs sub-ms at 10K; parallel via virtual threads |
 | Elasticsearch | RRF / linear combination | ~10–30 ms | Mature query planner, skip-list BM25 |
 | Qdrant | Sparse+Dense fusion | ~15–30 ms | Rust-based sparse vectors |
 | Weaviate | Hybrid BM25+HNSW | ~25–40 ms | Unified API, built-in vectorization |
@@ -291,7 +303,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Rate (100K docs) | Notes |
 |--------|-----------------|-------|
-| **Spector Search** | **2,194 docs/s** | In-process, HNSW graph build included |
+| **Spector Search** | **1,597 docs/s** | In-process, HNSW graph build included |
 | Elasticsearch | ~2,000–5,000 docs/s | Bulk API, depends on mapping & replicas |
 | Milvus | ~3,000–8,000 docs/s | Batch insert optimized |
 | Qdrant | ~2,000–5,000 docs/s | Payload indexing included |
@@ -316,13 +328,14 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 ### Where Spector Excels
 
-- **🚀 Sub-millisecond vector search**: 0.05ms at 10K, 0.13ms at 100K (128-dim), competitive with native C++ implementations
-- **🔥 Fast BM25**: Sub-millisecond keyword search at scale — comparable to raw Lucene
+- **🚀 Sub-millisecond vector search**: 0.04ms at 10K, 0.10ms at 100K (128-dim), competitive with native C++ implementations
+- **🔥 Fast BM25**: Sub-millisecond keyword search at 10K/50K scale — comparable to raw Lucene
 - **🧵 Modern JVM**: Only search engine built on Java 25 virtual threads + Vector API
 - **📦 Zero-dependency embedded**: Drop-in JAR, no external infrastructure needed
-- **⚡ 14K+ ops/sec concurrent**: 14,022 hybrid searches/sec at 16 threads (384-dim)
-- **🎯 18K+ vector QPS**: 18,824 vector queries/sec at 10K docs
-- **🗜️ IVF-PQ + TurboQuant**: 8–32× memory reduction for large-scale datasets
+- **⚡ 7.6K+ ops/sec concurrent**: 7,635 hybrid searches/sec at 16 threads (128-dim)
+- **🎯 23K+ vector QPS**: 23,726 vector queries/sec at 10K docs
+- **🗜️ IVF-PQ + VASQ + TurboQuant**: 8–32× memory reduction for large-scale datasets with high-accuracy calibration
+- **🔬 99.5%+ Recall**: IVF-HNSW-VASQ (`SpectorIndex`) achieves near-perfect recall on real semantic embeddings scanning just 3% of the clusters
 - **🤖 LLM re-ranking**: Listwise Ollama-powered relevance scoring
 - **🖥️ GPU acceleration**: CUDA kernel launcher + SIMD batch similarity via Panama FFM
 - **🌐 Distributed search**: gRPC-based fan-out/merge with consistent hash sharding
