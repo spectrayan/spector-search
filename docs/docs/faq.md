@@ -49,14 +49,14 @@ try (var engine = new SpectorEngine(SpectorConfig.DEFAULT.withDimensions(384))) 
 
 | Aspect | ⚡ Spector Search | Elasticsearch |
 |--------|---------------|--------------|
-| Vector search latency | **0.07 ms** | 2–10 ms |
-| Hybrid search latency | **0.66 ms** | 10–30 ms |
+| Vector search latency | **0.13 ms** (100K, in-process) | 2–10 ms |
+| Hybrid search latency | **1.01 ms** (100K, in-process) | 10–30 ms |
 | Deployment | Embedded JAR or server | Cluster only |
 | Dependencies | **Zero** (JDK only) | JVM + heavy stack |
 | GPU support | ✅ CUDA | ❌ |
 | IVF-PQ compression | ✅ 32× | ❌ |
 
-> Elasticsearch excels at distributed full-text search with a mature query language and ecosystem. Spector excels at raw in-process performance, embedded use, and modern JVM features. The latency gap narrows for network-bound deployments.
+> Elasticsearch excels at distributed full-text search with a mature query language and ecosystem. Spector excels at raw in-process performance, embedded use, and modern JVM features. The latency advantage is largest for in-process embedded use; network-bound deployments narrow the gap.
 
 ---
 

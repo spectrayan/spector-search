@@ -196,14 +196,17 @@ Spector Search is designed from the ground up for Java virtual threads:
 
 ### 📈 Scaling Results
 
-At 50K docs with hybrid search:
+At 50K docs with hybrid search (384-dim, production-realistic):
 
 | Virtual Threads | Throughput | Scaling |
 |-----------------|-----------|---------|
-| 1 | 3,231 ops/s | 1.0× |
-| 4 | 11,390 ops/s | **3.5×** |
-| 8 | 15,884 ops/s | **4.9×** |
-| 16 | 17,726 ops/s | **5.5×** |
+| 1 | 3,739 ops/s | 1.0× |
+| 4 | 10,317 ops/s | **2.8×** |
+| 8 | 11,812 ops/s | **3.2×** |
+| 16 | 14,022 ops/s | **3.7×** |
+
+> [!NOTE]
+> Scaling depends on vector dimensions and workload type. 384-dim shows ~3.7× at 16 threads due to higher per-query memory bandwidth. Individual HNSW queries are inherently sequential (graph traversal data dependencies) — scaling comes from concurrent queries sharing CPU cores.
 
 ---
 

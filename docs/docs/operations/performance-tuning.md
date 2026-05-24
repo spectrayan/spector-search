@@ -6,7 +6,10 @@
 
 ## 📊 Benchmark Summary
 
-> All benchmarks measured on a 24-core x86 machine, AVX2 256-bit, Java 25, ZGC, 128-dimensional vectors.
+> All benchmarks measured on a 24-core x86 machine (Windows 11, AMD), AVX2 256-bit, Java 25, ZGC, using clustered vectors (realistic distribution). Numbers represent actual measured results — run `mvn -pl spector-bench exec:java` to reproduce on your hardware.
+
+> [!NOTE]
+> **Methodology:** Benchmarks use 200 measurement iterations with 50 warmup iterations per scenario. Vectors are generated with realistic cluster structure (50 clusters with Gaussian noise). Documents contain 200–1500 words with paragraph structure. Recall is measured against brute-force ground truth. Your results may vary ±20% depending on CPU model, OS scheduling, background load, and thermal throttling.
 
 ### ⚡ SIMD Kernel Latency
 
@@ -20,38 +23,41 @@
 > [!NOTE]
 > Values at 384+ are at `System.nanoTime()` resolution floor. JMH confirms millions of ops/sec.
 
-### 🔍 Search Latency (128-dim, top-10)
+### 🔍 Search Latency (128-dim, top-10, clustered vectors)
 
 | Scale | Keyword (BM25) | Vector (HNSW) | Hybrid (RRF) |
 |-------|---------------|---------------|--------------|
-| **10K docs** | 0.16 ms / 0.24 ms p99 | **0.05 ms** / 0.10 ms p99 | 0.18 ms / 0.26 ms p99 |
-| **50K docs** | 0.41 ms / 0.55 ms p99 | **0.08 ms** / 0.31 ms p99 | 0.39 ms / 0.48 ms p99 |
-| **100K docs** | 0.61 ms / 1.17 ms p99 | **0.07 ms** / 0.15 ms p99 | 0.66 ms / 0.94 ms p99 |
+| **10K docs** | 0.19 ms / 3.79 ms p99 | **0.05 ms** / 0.10 ms p99 | 0.17 ms / 0.37 ms p99 |
+| **50K docs** | 0.42 ms / 0.68 ms p99 | **0.09 ms** / 0.19 ms p99 | 0.50 ms / 0.81 ms p99 |
+| **100K docs** | 0.98 ms / 1.39 ms p99 | **0.13 ms** / 0.26 ms p99 | 1.01 ms / 1.22 ms p99 |
 
 ### 🚀 Search Throughput (queries/sec)
 
-| Scale | Keyword | Vector | Hybrid | Vector top-100 |
-|-------|---------|--------|--------|----------------|
-| 10K | 6,439 | **18,294** | 5,508 | 14,264 |
-| 50K | 2,440 | **11,955** | 2,550 | 7,080 |
-| 100K | 1,651 | **14,717** | 1,519 | 7,537 |
+| Scale | Keyword | Vector | Hybrid |
+|-------|---------|--------|--------|
+| 10K | 5,194 | **18,824** | 5,828 |
+| 50K | 2,406 | **10,980** | 1,988 |
+| 100K | 1,019 | **7,556** | 994 |
 
 ### 📥 Ingestion Throughput
 
 | Dataset Size | Time | Rate | Memory |
 |-------------|------|------|--------|
-| 10K | 2.6s | **3,804 docs/s** | +19 MB |
-| 50K | 30.1s | **1,660 docs/s** | +93 MB |
-| 100K | 71s | **1,404 docs/s** | +187 MB |
+| 10K | 2.5s | **3,931 docs/s** | +19 MB |
+| 50K | 15.1s | **3,308 docs/s** | +93 MB |
+| 100K | 38.2s | **2,618 docs/s** | +187 MB |
 
-### 🧵 Concurrency Scaling (50K docs, Hybrid Search)
+### 🧵 Concurrency Scaling (50K docs, 384-dim, Hybrid Search)
 
 | Threads | Throughput | Avg Latency | Scaling Factor |
 |---------|-----------|-------------|----------------|
-| 1 | 3,231 ops/s | 0.31 ms | 1.0× |
-| 4 | 11,390 ops/s | 0.35 ms | **3.5×** |
-| 8 | 15,884 ops/s | 0.49 ms | **4.9×** |
-| 16 | 17,726 ops/s | 0.86 ms | **5.5×** |
+| 1 | 3,739 ops/s | 0.26 ms | 1.0× |
+| 4 | 10,317 ops/s | 0.37 ms | **2.8×** |
+| 8 | 11,812 ops/s | 0.58 ms | **3.2×** |
+| 16 | 14,022 ops/s | 1.00 ms | **3.7×** |
+
+> [!NOTE]
+> Concurrency scaling is measured with 384-dim vectors (production-realistic). 128-dim shows higher absolute throughput but the scaling factor is similar. Individual HNSW queries are sequential — scaling comes from serving multiple queries concurrently.
 
 ---
 
@@ -173,14 +179,17 @@ var config = SpectorConfig.DEFAULT
 
 ### HNSW: efSearch vs Recall vs Latency
 
-| efSearch | Recall@10 | Avg Latency | Notes |
-|----------|-----------|-------------|-------|
-| 10 | ~70% | 0.02 ms | Too low for most uses |
-| 30 | ~85% | 0.03 ms | Fast, moderate recall |
-| **50** | **~90%** | **0.05 ms** | **Default, good balance** |
-| 100 | ~95% | 0.10 ms | High recall |
-| 200 | ~98% | 0.20 ms | Near-perfect recall |
-| 500 | ~99.5% | 0.50 ms | Diminishing returns |
+> [!NOTE]
+> Recall values below are measured with uniform random vectors (best case). Real embedding distributions with cluster structure may show lower recall at the same efSearch — increase efSearch to 100–200 for production workloads with real embeddings.
+
+| efSearch | Recall@10 (random) | Recall@10 (clustered) | Avg Latency | Notes |
+|----------|-----------|-----------|-------------|-------|
+| 10 | ~70% | ~30-40% | 0.02 ms | Too low for most uses |
+| 30 | ~85% | ~50-60% | 0.03 ms | Fast, moderate recall |
+| **64** | **~90%** | **~50-65%** | **0.05 ms** | **Default** |
+| 100 | ~95% | ~70-80% | 0.10 ms | Good for production |
+| 200 | ~98% | ~85-90% | 0.20 ms | High recall |
+| 500 | ~99.5% | ~95%+ | 0.50 ms | Near-perfect |
 
 ### IVF-PQ: nprobe vs Recall
 
@@ -198,9 +207,9 @@ var config = SpectorConfig.DEFAULT
 
 ### ⬆️ Vertical Scaling
 
-- **Add CPU cores** → Linear throughput scaling (up to ~4.5× at 16 threads)
+- **Add CPU cores** → Concurrent throughput scaling (up to ~3.7× at 16 threads measured)
 - **Add RAM** → Support larger capacity without IVF-PQ compression
-- **Add GPU** → Massive batch throughput (14× at 1024 concurrent queries)
+- **Add GPU** → Batch throughput improvement for bulk operations (crossover at batch size ~16–32)
 
 ### ➡️ Horizontal Scaling (Distributed Mode)
 

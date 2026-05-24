@@ -213,7 +213,7 @@ graph TD
 | 1024 | 51.2 ms | 3.5 ms | **14.6×** |
 
 > [!IMPORTANT]
-> Results at 384 dimensions, 100K document vectors, RTX 4090. GPU breakeven point is around batch size 16–32.
+> GPU performance results at 384 dimensions, 100K document vectors, RTX 4090. GPU breakeven point is around batch size 16–32. These numbers are from isolated GPU benchmark tests — actual speedup in production depends on PCIe bandwidth, host-device transfer overhead, and concurrent system load. GPU acceleration is most beneficial for bulk batch operations (re-indexing, batch similarity), not individual query serving.
 
 ---
 

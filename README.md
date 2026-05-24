@@ -212,34 +212,34 @@ Sub-microsecond vector math at every dimension:
 
 | Scale | Keyword (BM25) | Vector (HNSW) | Hybrid (RRF) |
 |-------|---------------|---------------|--------------| 
-| **10K docs** | **0.16 ms** avg / 0.24 ms p99 | **0.05 ms** avg / 0.10 ms p99 | **0.18 ms** avg / 0.26 ms p99 |
-| **50K docs** | **0.41 ms** avg / 0.55 ms p99 | **0.08 ms** avg / 0.31 ms p99 | **0.39 ms** avg / 0.48 ms p99 |
-| **100K docs** | **0.61 ms** avg / 1.17 ms p99 | **0.07 ms** avg / 0.15 ms p99 | **0.66 ms** avg / 0.94 ms p99 |
+| **10K docs** | **0.19 ms** avg / 3.79 ms p99 | **0.05 ms** avg / 0.10 ms p99 | **0.17 ms** avg / 0.37 ms p99 |
+| **50K docs** | **0.42 ms** avg / 0.68 ms p99 | **0.09 ms** avg / 0.19 ms p99 | **0.50 ms** avg / 0.81 ms p99 |
+| **100K docs** | **0.98 ms** avg / 1.39 ms p99 | **0.13 ms** avg / 0.26 ms p99 | **1.01 ms** avg / 1.22 ms p99 |
 
 ### Search Throughput (queries/sec)
 
 | Scale | Keyword | Vector | Hybrid | Vector top-100 |
 |-------|---------|--------|--------|----------------|
-| **10K docs** | **6,439** | **18,294** | **5,508** | 14,264 |
-| **50K docs** | **2,440** | **11,955** | **2,550** | 7,080 |
-| **100K docs** | **1,651** | **14,717** | **1,519** | 7,537 |
+| **10K docs** | **5,194** | **18,824** | **5,828** | — |
+| **50K docs** | **2,406** | **10,980** | **1,988** | — |
+| **100K docs** | **1,019** | **7,556** | **994** | — |
 
 ### Ingestion Throughput
 
 | Dataset Size | Time | Rate | Memory |
 |-------------|------|------|--------|
-| 10,000 | 2.6s | **3,804 docs/s** | +19 MB |
-| 50,000 | 30.1s | **1,660 docs/s** | +93 MB |
-| 100,000 | 71s | **1,404 docs/s** | +187 MB |
+| 10,000 | 2.5s | **3,931 docs/s** | +19 MB |
+| 50,000 | 15.1s | **3,308 docs/s** | +93 MB |
+| 100,000 | 38.2s | **2,618 docs/s** | +187 MB |
 
-### Concurrency Scaling (50K docs, Hybrid Search)
+### Concurrency Scaling (50K docs, 384-dim, Hybrid Search)
 
 | Threads | Throughput | Avg Latency | Scaling Factor |
 |---------|-----------|-------------|----------------|
-| 1 | 3,231 ops/s | 0.31 ms | 1.0× |
-| 4 | 11,390 ops/s | 0.35 ms | **3.5×** |
-| 8 | 15,884 ops/s | 0.49 ms | **4.9×** |
-| 16 | 17,726 ops/s | 0.86 ms | **5.5×** |
+| 1 | 3,739 ops/s | 0.26 ms | 1.0× |
+| 4 | 10,317 ops/s | 0.37 ms | **2.8×** |
+| 8 | 11,812 ops/s | 0.58 ms | **3.2×** |
+| 16 | 14,022 ops/s | 1.00 ms | **3.7×** |
 
 > Run the full benchmark suite: `mvn -pl spector-bench exec:java`
 > HTML report generated at `spector-bench/target/performance-report.html`
@@ -254,7 +254,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Language | Avg Latency | P99 Latency | Notes |
 |--------|----------|------------|------------|-------|
-| **Spector Search** | Java 25 | **0.07 ms** | **0.15 ms** | SIMD via Vector API, pure in-process |
+| **Spector Search** | Java 25 | **0.13 ms** | **0.26 ms** | SIMD via Vector API, pure in-process, 100K docs |
 | hnswlib | C++ | ~0.1–0.5 ms | ~1 ms | Fastest native HNSW; single-threaded |
 | FAISS (HNSW) | C++/Python | ~0.2–0.8 ms | ~1–2 ms | Versatile; GPU support available |
 | Apache Lucene 9+ | Java | ~1–5 ms | ~5–10 ms | Segment-based; force-merge helps |
@@ -270,7 +270,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Avg Latency | Notes |
 |--------|------------|-------|
-| **Spector Search** | **0.61 ms** | float[] scoring, min-heap top-K, virtual-thread parallel terms |
+| **Spector Search** | **0.98 ms** | float[] scoring, min-heap top-K, virtual-thread parallel terms |
 | Elasticsearch | <1–5 ms | Inverted index + skip lists, highly optimized |
 | Apache Lucene | <1–3 ms | Raw engine, no network overhead |
 | Weaviate (BM25) | ~10–30 ms | Go-based BM25 for hybrid search |
@@ -279,7 +279,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Approach | Avg Latency | Notes |
 |--------|----------|------------|-------|
-| **Spector Search** | RRF (parallel virtual threads) | **0.66 ms** | Both legs sub-ms; shared vthread executor |
+| **Spector Search** | RRF (parallel virtual threads) | **1.01 ms** | Both legs sub-ms at 10K; parallel via virtual threads |
 | Elasticsearch | RRF / linear combination | ~10–30 ms | Mature query planner, skip-list BM25 |
 | Qdrant | Sparse+Dense fusion | ~15–30 ms | Rust-based sparse vectors |
 | Weaviate | Hybrid BM25+HNSW | ~25–40 ms | Unified API, built-in vectorization |
@@ -313,12 +313,12 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 ### Where Spector Excels
 
-- **🚀 Sub-millisecond vector search**: 0.07ms avg vector search at 100K docs, competitive with native C++ implementations
-- **🔥 Fast BM25**: 0.61ms keyword search — comparable to raw Lucene, faster than full Elasticsearch stack
+- **🚀 Sub-millisecond vector search**: 0.05ms at 10K, 0.13ms at 100K (128-dim), competitive with native C++ implementations
+- **🔥 Fast BM25**: Sub-millisecond keyword search at scale — comparable to raw Lucene
 - **🧵 Modern JVM**: Only search engine built on Java 25 virtual threads + Vector API
 - **📦 Zero-dependency embedded**: Drop-in JAR, no external infrastructure needed
-- **⚡ 17K+ ops/sec concurrent**: 17,726 hybrid searches/sec at 16 threads (5.5× scaling)
-- **🎯 14K+ vector QPS**: 14,717 vector queries/sec at 100K docs
+- **⚡ 14K+ ops/sec concurrent**: 14,022 hybrid searches/sec at 16 threads (384-dim)
+- **🎯 18K+ vector QPS**: 18,824 vector queries/sec at 10K docs
 - **🗜️ IVF-PQ + TurboQuant**: 8–32× memory reduction for large-scale datasets
 - **🤖 LLM re-ranking**: Listwise Ollama-powered relevance scoring
 - **🖥️ GPU acceleration**: CUDA kernel launcher + SIMD batch similarity via Panama FFM

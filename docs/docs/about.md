@@ -56,13 +56,24 @@ Unlike most vector databases that rely on C++, Rust, or Python bindings, Spector
 
 ### ⚡ Sub-Millisecond at Scale
 
-At 100K documents (128 dimensions, top-10):
+At 100K documents (128 dimensions, top-10, HNSW M=16, efSearch=64):
 
 | Search Type | Average Latency | Throughput |
 |-------------|----------------|------------|
-| Vector | **0.07 ms** | 14,717 QPS |
-| Keyword | **0.61 ms** | 1,651 QPS |
-| Hybrid | **0.66 ms** | 1,519 QPS |
+| Vector | **0.13 ms** | 7,556 QPS |
+| Keyword | **0.98 ms** | 1,019 QPS |
+| Hybrid | **1.01 ms** | 994 QPS |
+
+At 10K documents (same config):
+
+| Search Type | Average Latency | Throughput |
+|-------------|----------------|------------|
+| Vector | **0.05 ms** | 18,824 QPS |
+| Keyword | **0.19 ms** | 5,194 QPS |
+| Hybrid | **0.17 ms** | 5,828 QPS |
+
+> [!NOTE]
+> Latency scales with dataset size and vector dimensions. 384-dim vectors take ~2.5× longer than 128-dim due to SIMD distance computation cost. All numbers measured on 24-core x86, AVX2, Java 25, ZGC with realistic clustered vectors.
 
 ### 🏠 Dual Deployment Modes
 
@@ -86,7 +97,7 @@ Product quantization provides **32× memory compression** for billion-scale data
 
 | Engine | Language | Vector Avg | Vector P99 |
 |--------|----------|-----------|-----------|
-| **⚡ Spector Search** | **Java 25** | **0.07 ms** | **0.15 ms** |
+| **⚡ Spector Search** | **Java 25** | **0.13 ms** | **0.26 ms** |
 | hnswlib | C++ | 0.1–0.5 ms | ~1 ms |
 | FAISS | C++ | 0.2–0.8 ms | 1–2 ms |
 | Lucene 9+ | Java | 1–5 ms | 5–10 ms |

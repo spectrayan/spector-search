@@ -222,13 +222,13 @@ graph TD
 
 | Cluster Size | Shards | Documents | Estimated Throughput |
 |-------------|--------|-----------|---------------------|
-| 2 nodes | 2–4 | Up to 500K | ~40K QPS |
-| 4 nodes | 4–8 | Up to 2M | ~80K QPS |
-| 8 nodes | 8–16 | Up to 5M | ~150K QPS |
-| 16 nodes | 16–32 | Up to 10M | ~250K QPS |
+| 2 nodes | 2–4 | Up to 500K | ~28K QPS |
+| 4 nodes | 4–8 | Up to 2M | ~55K QPS |
+| 8 nodes | 8–16 | Up to 5M | ~100K QPS |
+| 16 nodes | 16–32 | Up to 10M | ~180K QPS |
 
-> [!TIP]
-> Throughput estimates assume 128-dim vectors, top-10, hybrid search. Actual results depend on hardware and query complexity.
+> [!NOTE]
+> Throughput estimates assume 128-dim vectors, top-10, hybrid search, extrapolated from single-node measured throughput of ~14K concurrent hybrid ops/s at 16 threads. Actual cluster throughput depends on network latency, shard balance, query routing overhead, and hardware homogeneity. These are projected estimates, not measured cluster benchmarks.
 
 ---
 
