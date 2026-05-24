@@ -252,14 +252,14 @@ The Vector API automatically selects the best SIMD width for your hardware:
 SIMD kernels achieve sub-microsecond latency:
 
 | Dimension | Dot Product P50 | Cosine P50 |
-|-----------|----------------|-----------|
-| 32 | 200 ns | 500 ns |
-| 128 | 100 ns | <100 ns |
+|-----------|----------------|-----------| 
+| 32 | 200 ns | 1,100 ns |
+| 128 | <100 ns | <100 ns |
 | 384 | ~100 ns | ~100 ns |
 | 768 | ~100 ns | ~100 ns |
 
 > [!NOTE]
-> Values at 384+ dimensions are at `System.nanoTime()` resolution floor. JMH confirms millions of ops/sec throughput.
+> Values at 128+ dimensions are at `System.nanoTime()` resolution floor. JMH confirms millions of ops/sec throughput.
 
 ### 🎨 Design Principles
 
