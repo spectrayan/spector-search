@@ -174,6 +174,95 @@ class SpectorEngineTest {
         assertThat(config.effectivePqSubspaces()).isGreaterThanOrEqualTo(4);
     }
 
+    // ─────────────── VASQ Engine Integration ───────────────
+
+    @Test
+    void vasq_configBuilder_setsCorrectQuantization() {
+        var config = SpectorConfig.DEFAULT
+                .withDimensions(128)
+                .withCapacity(1000)
+                .withVasq();
+
+        assertThat(config.quantization())
+                .isEqualTo(com.spectrayan.spector.core.quantization.QuantizationType.VASQ);
+        // Default oversampling for VASQ is 3
+        assertThat(config.effectiveOversamplingFactor()).isEqualTo(3);
+    }
+
+    @Test
+    void vasq_engineBuilder_fluentApi() {
+        var config = SpectorEngine.builder()
+                .dimensions(64)
+                .capacity(500)
+                .similarity(SimilarityFunction.COSINE)
+                .vasq(3)
+                .config();  // inspect the config without building the engine
+
+        assertThat(config.quantization())
+                .isEqualTo(com.spectrayan.spector.core.quantization.QuantizationType.VASQ);
+        assertThat(config.effectiveOversamplingFactor()).isEqualTo(3);
+    }
+
+    @Test
+    void vasq_ingestAndVectorSearch_returnsResults() {
+        // Use capacity = numDocs to trigger VASQ auto-calibration immediately
+        int numDocs = 150;
+        var config = SpectorConfig.DEFAULT
+                .withDimensions(DIM)
+                .withCapacity(numDocs)
+                .withVasq();
+
+        try (var engine = new SpectorEngine(config)) {
+            Random rng = new Random(42);
+            for (int i = 0; i < numDocs; i++) {
+                engine.ingest("doc-" + i, "document number " + i, randomVector(DIM, rng));
+            }
+            assertThat(engine.documentCount()).isEqualTo(numDocs);
+
+            SearchResponse response = engine.vectorSearch(randomVector(DIM, 999L), 5);
+            assertThat(response.results()).isNotEmpty();
+            assertThat(response.results().length).isLessThanOrEqualTo(5);
+        }
+    }
+
+    @Test
+    void vasq_hybridSearch_returnsBothKeywordAndVector() {
+        int numDocs = 150;
+        var config = SpectorConfig.DEFAULT
+                .withDimensions(DIM)
+                .withCapacity(numDocs)
+                .withVasq();
+
+        try (var engine = new SpectorEngine(config)) {
+            Random rng = new Random(10);
+            float[] specialVec = randomVector(DIM, rng);
+            engine.ingest("special", "java programming language runtime", specialVec);
+
+            for (int i = 1; i < numDocs; i++) {
+                engine.ingest("doc-" + i, "unrelated document content " + i, randomVector(DIM, rng));
+            }
+
+            // Keyword search should find "special" by text
+            SearchResponse kwResp = engine.keywordSearch("java programming", 5);
+            assertThat(kwResp.results()).isNotEmpty();
+            assertThat(kwResp.results()[0].id()).isEqualTo("special");
+
+            // Vector search should find "special" by nearest vector
+            SearchResponse vecResp = engine.vectorSearch(specialVec, 5);
+            assertThat(vecResp.results()).isNotEmpty();
+        }
+    }
+
+    @Test
+    void vasq_withExplicitOversampling_configuredCorrectly() {
+        var config = SpectorConfig.DEFAULT
+                .withDimensions(64)
+                .withCapacity(500)
+                .withVasq(5);
+
+        assertThat(config.effectiveOversamplingFactor()).isEqualTo(5);
+    }
+
     // ─────────────── Helpers ───────────────
 
     private static float[] randomVector(int dim, long seed) {
