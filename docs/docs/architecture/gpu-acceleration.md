@@ -11,8 +11,8 @@ graph TD
     Q["How many concurrent queries?"] --> Single["Single query<br/>Low concurrency"]
     Q --> Batch["Batch queries<br/>High concurrency"]
     
-    Single --> CPU["✅ CPU SIMD<br/>0.05ms, zero overhead"]
-    Batch --> GPU["✅ GPU CUDA<br/>14.6× speedup at 1024 batch"]
+    Single --> CPU["✅ CPU SIMD<br/>Best for individual queries"]
+    Batch --> GPU["⚠️ GPU CUDA<br/>Infrastructure ready, kernel WIP"]
     
     style CPU fill:#d4edda
     style GPU fill:#d4edda
@@ -205,15 +205,18 @@ graph TD
 
 | Batch Size | CPU SIMD | GPU | GPU Speedup |
 |-----------|----------|-----|-------------|
-| 1 | 0.05 ms | 0.5 ms | 0.1× (CPU wins) |
-| 8 | 0.4 ms | 0.6 ms | 0.7× |
-| 32 | 1.6 ms | 0.8 ms | **2×** |
-| 128 | 6.4 ms | 1.2 ms | **5.3×** |
-| 512 | 25.6 ms | 2.1 ms | **12.2×** |
-| 1024 | 51.2 ms | 3.5 ms | **14.6×** |
+| 1 | 0.018 ms | 0.015 ms | 1.1× |
+| 8 | 0.044 ms | 0.038 ms | 1.2× |
+| 32 | 0.001 ms | 0.076 ms | — |
+| 128 | 0.004 ms | 0.003 ms | 1.3× |
+| 512 | 0.014 ms | 0.011 ms | 1.3× |
+| 1024 | 0.036 ms | 0.029 ms | 1.2× |
+| 4096 | 0.127 ms | 0.115 ms | 1.1× |
 
-> [!IMPORTANT]
-> GPU performance results at 384 dimensions, 100K document vectors, RTX 4090. GPU breakeven point is around batch size 16–32. These numbers are from isolated GPU benchmark tests — actual speedup in production depends on PCIe bandwidth, host-device transfer overhead, and concurrent system load. GPU acceleration is most beneficial for bulk batch operations (re-indexing, batch similarity), not individual query serving.
+> [!WARNING]
+> **Current state (v0.1.0):** The GPU module initializes CUDA context and provides device memory management via Panama FFM, but the batch similarity computation currently uses CPU SIMD (Java Vector API) for both paths. Actual CUDA kernel dispatch for distance computation is planned for a future release. The numbers above reflect the current CPU SIMD performance for batch operations, measured on RTX 4060 Ti 16GB with 384-dim vectors.
+>
+> The GPU infrastructure (context creation, memory allocation, host↔device transfer handles) is complete and functional — what's missing is the PTX/CUBIN kernel for parallel distance computation on-device.
 
 ---
 
