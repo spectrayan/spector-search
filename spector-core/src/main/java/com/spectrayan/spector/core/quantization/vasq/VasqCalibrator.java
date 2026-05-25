@@ -212,16 +212,16 @@ public final class VasqCalibrator {
             // Collect column j
             for (int i = 0; i < n; i++) colBuf[i] = rotated[i][j];
 
-            // Percentile clip bounds
-            float[] sorted = Arrays.copyOf(colBuf, n);
-            Arrays.sort(sorted);
-            float lo = sorted[(int) (CLIP_PERCENTILE * (n - 1))];
-            float hi = sorted[(int) ((1f - CLIP_PERCENTILE) * (n - 1))];
+            // Sort in-place — no Arrays.copyOf allocation
+            Arrays.sort(colBuf, 0, n);
+            float lo = colBuf[(int) (CLIP_PERCENTILE * (n - 1))];
+            float hi = colBuf[(int) ((1f - CLIP_PERCENTILE) * (n - 1))];
 
-            // Mean of clipped values
+            // Mean of clipped values (colBuf is now sorted, but sum/count are order-independent)
             double sum = 0;
             int cnt = 0;
-            for (float v : colBuf) {
+            for (int i = 0; i < n; i++) {
+                float v = colBuf[i];
                 if (v >= lo && v <= hi) { sum += v; cnt++; }
             }
             if (cnt == 0) {
@@ -234,7 +234,8 @@ public final class VasqCalibrator {
 
             // Std dev of clipped values (Bessel-corrected)
             double var = 0;
-            for (float v : colBuf) {
+            for (int i = 0; i < n; i++) {
+                float v = colBuf[i];
                 if (v >= lo && v <= hi) {
                     double d = v - means[j];
                     var += d * d;

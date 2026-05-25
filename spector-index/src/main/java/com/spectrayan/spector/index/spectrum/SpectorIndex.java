@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -280,10 +279,15 @@ public final class SpectorIndex implements VectorIndex {
         // (nearestCentroid) where it operates in absolute space.
         int oversample = Math.max(k, k * config.oversamplingFactor());
 
-        // Global heap — maintains global top-K across all probed shards
-        // L2 distance: lower is better → max-heap (worst-at-top) for pruning
-        PriorityQueue<ScoredResult> globalHeap =
-                new PriorityQueue<>(k, (a, b) -> Float.compare(b.score(), a.score()));
+        // Array-based global top-K — zero GC during the merge (consistent with flatScan pattern)
+        // L2 distance: lower is better → sentinel is POSITIVE_INFINITY
+        float[]  topScores       = new float[k];
+        String[] topIds          = new String[k];
+        int[]    topStoreIndices = new int[k];
+        Arrays.fill(topScores, Float.POSITIVE_INFINITY);
+
+        float worstScore = Float.POSITIVE_INFINITY;
+        int   worstPos   = 0;
 
         for (int shardIdx : probeShards) {
             float[] c = centroids[shardIdx];
@@ -293,21 +297,37 @@ public final class SpectorIndex implements VectorIndex {
             ScoredResult[] localResults = shards[shardIdx].search(residualQuery, oversample);
 
             for (ScoredResult r : localResults) {
-                if (globalHeap.size() < k) {
-                    globalHeap.offer(r);
-                } else {
-                    float worstScore = globalHeap.peek().score();
-                    // L2: lower is better → replace if new score is lower than worst
-                    if (r.score() < worstScore) {
-                        globalHeap.poll();
-                        globalHeap.offer(r);
+                // L2: lower is better → replace if new score is lower than worst
+                if (r.score() < worstScore) {
+                    topScores[worstPos]       = r.score();
+                    topIds[worstPos]          = r.id();
+                    topStoreIndices[worstPos] = r.index();
+
+                    // Find the new worst — O(k) scan, negligible vs the O(nProbe) outer loop
+                    worstScore = topScores[0];
+                    worstPos   = 0;
+                    for (int j = 1; j < k; j++) {
+                        if (topScores[j] > worstScore) {
+                            worstScore = topScores[j];
+                            worstPos   = j;
+                        }
                     }
                 }
             }
         }
 
-        // Step 3: Sort by L2 distance (ascending — best first)
-        ScoredResult[] results = globalHeap.toArray(new ScoredResult[0]);
+        // Step 3: Materialize results and sort by L2 distance (ascending — best first)
+        int validCount = 0;
+        for (int i = 0; i < k; i++) {
+            if (topIds[i] != null) validCount++;
+        }
+        ScoredResult[] results = new ScoredResult[validCount];
+        int ri = 0;
+        for (int i = 0; i < k; i++) {
+            if (topIds[i] != null) {
+                results[ri++] = new ScoredResult(topIds[i], topStoreIndices[i], topScores[i]);
+            }
+        }
         Arrays.sort(results, (a, b) -> Float.compare(a.score(), b.score()));
         return results;
     }

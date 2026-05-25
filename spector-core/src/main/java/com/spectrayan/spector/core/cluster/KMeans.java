@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core.cluster;
 
+import com.spectrayan.spector.core.similarity.EuclideanDistance;
+
 import java.util.Arrays;
 import java.util.Random;
 
@@ -199,16 +201,16 @@ public final class KMeans {
      * <p>Returns the squared distance (no {@code sqrt}) for efficiency in comparisons
      * where the relative order is all that matters.</p>
      *
+     * <p>Delegates to the SIMD-accelerated {@link EuclideanDistance#computeSquared(float[], float[])}
+     * kernel, which uses the Java Vector API (Project Panama) for hardware-optimized
+     * computation. This is critical because {@code squaredL2} is called on every vector
+     * insertion (centroid routing) and every search (nProbe selection).</p>
+     *
      * @param a first vector
      * @param b second vector
      * @return squared L2 distance: {@code Σ (a[i] − b[i])²}
      */
     public static float squaredL2(float[] a, float[] b) {
-        float sum = 0;
-        for (int i = 0; i < a.length; i++) {
-            float diff = a[i] - b[i];
-            sum += diff * diff;
-        }
-        return sum;
+        return EuclideanDistance.computeSquared(a, b);
     }
 }

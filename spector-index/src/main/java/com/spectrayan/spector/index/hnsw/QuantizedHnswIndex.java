@@ -283,7 +283,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
 
     @Override
     protected float computeDistance(float[] query, int nodeIdx) {
-        return similarityFunction.compute(query, floatVectors[nodeIdx]);
+        return similarityFunction.computeForRanking(query, floatVectors[nodeIdx]);
     }
 
     @Override
@@ -402,7 +402,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
         ScoredResult[] exactResults = new ScoredResult[reRankCount];
         for (int i = 0; i < reRankCount; i++) {
             int nodeIdx = candidateIndices[i];
-            float exactScore = similarityFunction.compute(query, floatVectors[nodeIdx]);
+            float exactScore = similarityFunction.computeForRanking(query, floatVectors[nodeIdx]);
             exactResults[i] = new ScoredResult(ids[nodeIdx], nodeIdx, exactScore);
         }
 
@@ -440,7 +440,9 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
         // Context is local — zero shared mutable state between concurrent searches
         DistanceContext ctx = strategy.prepareQueryContext(query);
 
-        BitSet visited = new BitSet(nodeCount);
+        // Reuse per-thread BitSet from parent class — avoids per-search allocation
+        BitSet visited = visitedBitSetLocal.get();
+        visited.clear();
         NeighborQueue candidates = new NeighborQueue(ef + 1, ef, maxHeap());
         NeighborQueue workQueue = new NeighborQueue(ef + 1, minHeap());
 

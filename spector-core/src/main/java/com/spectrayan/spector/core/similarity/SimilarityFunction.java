@@ -43,6 +43,16 @@ public enum SimilarityFunction {
         }
 
         @Override
+        public float computeForRanking(float[] a, float[] b) {
+            return CosineSimilarity.compute(a, b);
+        }
+
+        @Override
+        public float computeForRanking(float[] a, int aOff, float[] b, int bOff, int len) {
+            return CosineSimilarity.compute(a, aOff, b, bOff, len);
+        }
+
+        @Override
         public float computeQuantizedFromSegment(float[] query, MemorySegment segment, long offset,
                                                   float[] mins, float[] scales, int length) {
             return QuantizedCosineSimilarity.compute(query, segment, offset, mins, scales, length);
@@ -73,6 +83,16 @@ public enum SimilarityFunction {
 
         @Override
         public float compute(float[] a, int aOff, float[] b, int bOff, int len) {
+            return DotProduct.compute(a, aOff, b, bOff, len);
+        }
+
+        @Override
+        public float computeForRanking(float[] a, float[] b) {
+            return DotProduct.compute(a, b);
+        }
+
+        @Override
+        public float computeForRanking(float[] a, int aOff, float[] b, int bOff, int len) {
             return DotProduct.compute(a, aOff, b, bOff, len);
         }
 
@@ -108,6 +128,16 @@ public enum SimilarityFunction {
         @Override
         public float compute(float[] a, int aOff, float[] b, int bOff, int len) {
             return EuclideanDistance.compute(a, aOff, b, bOff, len);
+        }
+
+        @Override
+        public float computeForRanking(float[] a, float[] b) {
+            return EuclideanDistance.computeSquared(a, b);
+        }
+
+        @Override
+        public float computeForRanking(float[] a, int aOff, float[] b, int bOff, int len) {
+            return EuclideanDistance.computeSquared(a, aOff, b, bOff, len);
         }
 
         @Override
@@ -158,6 +188,28 @@ public enum SimilarityFunction {
      * @return the similarity or distance score
      */
     public abstract float compute(float[] a, int aOff, float[] b, int bOff, int len);
+
+    /**
+     * Computes a score suitable for <em>ranking only</em> (relative ordering).
+     *
+     * <p>For COSINE and DOT_PRODUCT, this is identical to {@link #compute(float[], float[])}.
+     * For EUCLIDEAN, this returns the <em>squared</em> L2 distance (no {@code sqrt}),
+     * which preserves rank ordering while saving ~20 CPU cycles per call.
+     * <strong>Do not expose the result to users as a distance value</strong> — it
+     * is only valid for comparisons.</p>
+     *
+     * @param a first vector
+     * @param b second vector
+     * @return a rank-preserving score (not necessarily the true distance/similarity)
+     */
+    public abstract float computeForRanking(float[] a, float[] b);
+
+    /**
+     * Rank-preserving computation on vector slices.
+     *
+     * @see #computeForRanking(float[], float[])
+     */
+    public abstract float computeForRanking(float[] a, int aOff, float[] b, int bOff, int len);
 
     /**
      * Computes asymmetric similarity/distance between a float32 query and a quantized INT8
