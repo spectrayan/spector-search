@@ -39,6 +39,9 @@ public abstract class AbstractHnswIndex implements VectorIndex {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractHnswIndex.class);
 
+    /** Shared empty neighbor array — Flyweight to avoid per-call {@code new int[0]} allocations. */
+    private static final int[] EMPTY_NEIGHBORS = new int[0];
+
     protected final HnswParams params;
     protected final SimilarityFunction similarityFunction;
     protected final int dimensions;
@@ -82,6 +85,13 @@ public abstract class AbstractHnswIndex implements VectorIndex {
     // allocation AND the Arrays.copyOf fallback that occurred when the buffer was too small.
     // Buffer size = max(maxLevel0Connections, m) * 2 covers the realistic worst case.
     private final ThreadLocal<int[]> unvisitedBufLocal;
+
+    // ── Per-thread BitSet for searchLayer() — avoids per-call allocation ──
+    //
+    // searchLayer() needs a visited set. BitSet internally allocates a long[nodeCount/64].
+    // By reusing a ThreadLocal BitSet (cleared between calls), we eliminate that allocation
+    // on every search. The BitSet auto-grows if nodeCount increases between calls.
+    protected final ThreadLocal<BitSet> visitedBitSetLocal = ThreadLocal.withInitial(BitSet::new);
 
     /**
      * Creates the HNSW graph structure.
@@ -168,11 +178,11 @@ public abstract class AbstractHnswIndex implements VectorIndex {
             ids[nodeIdx] = id;
             storeIndices[nodeIdx] = storeIndex;
             nodeLevels[nodeIdx] = level;
-            neighbors[nodeIdx] = new int[0];
+            neighbors[nodeIdx] = EMPTY_NEIGHBORS;
             if (level > 0) {
                 upperNeighbors[nodeIdx] = new int[level][];
                 for (int l = 0; l < level; l++) {
-                    upperNeighbors[nodeIdx][l] = new int[0];
+                    upperNeighbors[nodeIdx][l] = EMPTY_NEIGHBORS;
                 }
             }
 
@@ -311,8 +321,10 @@ public abstract class AbstractHnswIndex implements VectorIndex {
      * distances, improving cache prefetch behavior for the vector store.</p>
      */
     protected NeighborQueue searchLayer(float[] query, int entryNode, int ef, int layer) {
-        int currentNodeCount = nodeCount;
-        BitSet visited = new BitSet(currentNodeCount);
+        // Reuse per-thread BitSet — clear() is O(size/64) which is fast, and avoids
+        // the long[] allocation that new BitSet(nodeCount) would trigger every call.
+        BitSet visited = visitedBitSetLocal.get();
+        visited.clear();
         NeighborQueue candidates = new NeighborQueue(ef + 1, ef, maxHeap());
         NeighborQueue workQueue = new NeighborQueue(ef + 1, minHeap());
 
@@ -408,11 +420,11 @@ public abstract class AbstractHnswIndex implements VectorIndex {
             // Fill pre-allocated scratch: score each current neighbor and the new candidate
             int pruneSize = 0;
             for (int n : currentNeighbors) {
-                pruneScores[pruneSize]  = similarityFunction.compute(fromVec, getNodeVector(n));
+                pruneScores[pruneSize]  = similarityFunction.computeForRanking(fromVec, getNodeVector(n));
                 pruneIndices[pruneSize] = n;
                 pruneSize++;
             }
-            pruneScores[pruneSize]  = similarityFunction.compute(fromVec, getNodeVector(toNode));
+            pruneScores[pruneSize]  = similarityFunction.computeForRanking(fromVec, getNodeVector(toNode));
             pruneIndices[pruneSize] = toNode;
             pruneSize++;
 
@@ -442,12 +454,12 @@ public abstract class AbstractHnswIndex implements VectorIndex {
     protected int[] getNeighbors(int nodeIdx, int layer) {
         if (layer == 0) {
             int[] n = neighbors[nodeIdx];
-            return n != null ? n : new int[0];
+            return n != null ? n : EMPTY_NEIGHBORS;
         } else {
             int[][] upper = upperNeighbors[nodeIdx];
-            if (upper == null || layer - 1 >= upper.length) return new int[0];
+            if (upper == null || layer - 1 >= upper.length) return EMPTY_NEIGHBORS;
             int[] n = upper[layer - 1];
-            return n != null ? n : new int[0];
+            return n != null ? n : EMPTY_NEIGHBORS;
         }
     }
 

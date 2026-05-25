@@ -275,7 +275,7 @@ final class SpectorShard {
         int   worstPos   = 0;
 
         for (int i = 0; i < n; i++) {
-            float score = fn.compute(residualQuery, 0, flatData, i * dimensions, dimensions);
+            float score = fn.computeForRanking(residualQuery, 0, flatData, i * dimensions, dimensions);
 
             boolean better = higherIsBetter ? score > worstScore : score < worstScore;
             if (better) {

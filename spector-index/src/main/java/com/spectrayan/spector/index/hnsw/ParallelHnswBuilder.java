@@ -173,6 +173,9 @@ public class ParallelHnswBuilder {
      */
     private static final class ParallelHnswGraph {
 
+        /** Shared empty neighbor array — Flyweight to avoid per-call allocations. */
+        private static final int[] EMPTY_NEIGHBORS = new int[0];
+
         private final int dimensions;
         private final int capacity;
         private final SimilarityFunction similarityFunction;
@@ -208,11 +211,11 @@ public class ParallelHnswBuilder {
             // Initialize node structures and locks
             for (int i = 0; i < capacity; i++) {
                 nodeLocks[i] = new ReentrantLock();
-                neighbors[i] = new int[0];
+                neighbors[i] = EMPTY_NEIGHBORS;
                 if (levels[i] > 0) {
                     upperNeighbors[i] = new int[levels[i]][];
                     for (int l = 0; l < levels[i]; l++) {
-                        upperNeighbors[i][l] = new int[0];
+                        upperNeighbors[i][l] = EMPTY_NEIGHBORS;
                     }
                 }
             }
@@ -348,9 +351,9 @@ public class ParallelHnswBuilder {
                     float[] fromVec = vectors[fromNode];
                     NeighborQueue queue = new NeighborQueue(maxConn + 1, false);
                     for (int n : currentNeighbors) {
-                        queue.add(n, similarityFunction.compute(fromVec, vectors[n]));
+                        queue.add(n, similarityFunction.computeForRanking(fromVec, vectors[n]));
                     }
-                    queue.add(toNode, similarityFunction.compute(fromVec, vectors[toNode]));
+                    queue.add(toNode, similarityFunction.computeForRanking(fromVec, vectors[toNode]));
 
                     ScoredResult[] best = queue.toSortedResults(null, similarityFunction.higherIsBetter());
                     int keepCount = Math.min(best.length, maxConn);
@@ -384,26 +387,26 @@ public class ParallelHnswBuilder {
         private int[] getNeighbors(int nodeIdx, int layer) {
             if (layer == 0) {
                 int[] n = neighbors[nodeIdx];
-                return n != null ? n : new int[0];
+                return n != null ? n : EMPTY_NEIGHBORS;
             } else {
                 int[][] upper = upperNeighbors[nodeIdx];
-                if (upper == null || layer - 1 >= upper.length) return new int[0];
+                if (upper == null || layer - 1 >= upper.length) return EMPTY_NEIGHBORS;
                 int[] n = upper[layer - 1];
-                return n != null ? n : new int[0];
+                return n != null ? n : EMPTY_NEIGHBORS;
             }
         }
 
         /** Greedy closest node at a given layer. */
         private int greedyClosest(float[] query, int startNode, int layer) {
             int current = startNode;
-            float currentDist = similarityFunction.compute(query, vectors[current]);
+            float currentDist = similarityFunction.computeForRanking(query, vectors[current]);
             boolean improved = true;
 
             while (improved) {
                 improved = false;
                 int[] nbrs = getNeighbors(current, layer);
                 for (int neighbor : nbrs) {
-                    float dist = similarityFunction.compute(query, vectors[neighbor]);
+                    float dist = similarityFunction.computeForRanking(query, vectors[neighbor]);
                     if (isBetter(dist, currentDist)) {
                         current = neighbor;
                         currentDist = dist;
@@ -420,7 +423,7 @@ public class ParallelHnswBuilder {
             NeighborQueue candidates = new NeighborQueue(ef + 1, ef, maxHeap());
             NeighborQueue workQueue = new NeighborQueue(ef + 1, minHeap());
 
-            float entryDist = similarityFunction.compute(query, vectors[entryNode]);
+            float entryDist = similarityFunction.computeForRanking(query, vectors[entryNode]);
             candidates.add(entryNode, entryDist);
             workQueue.add(entryNode, entryDist);
             visited.set(entryNode);
@@ -437,7 +440,7 @@ public class ParallelHnswBuilder {
                 for (int neighbor : nbrs) {
                     if (!visited.get(neighbor)) {
                         visited.set(neighbor);
-                        float dist = similarityFunction.compute(query, vectors[neighbor]);
+                        float dist = similarityFunction.computeForRanking(query, vectors[neighbor]);
                         if (candidates.size() < ef || isBetter(dist, candidates.topScore())) {
                             candidates.add(neighbor, dist);
                             workQueue.add(neighbor, dist);
