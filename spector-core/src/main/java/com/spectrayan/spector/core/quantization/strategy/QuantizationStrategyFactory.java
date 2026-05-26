@@ -4,6 +4,7 @@ import com.spectrayan.spector.core.quantization.NonUniformQuantizer;
 import com.spectrayan.spector.core.quantization.QuantizationType;
 import com.spectrayan.spector.core.quantization.ScalarQuantizer;
 import com.spectrayan.spector.core.quantization.TurboQuantizer;
+import com.spectrayan.spector.core.quantization.vasq.Vasq4Encoder;
 import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
 import com.spectrayan.spector.core.quantization.vasq.VasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
@@ -47,6 +48,7 @@ public final class QuantizationStrategyFactory {
      * @param nonUniformQuantizer required for SCALAR_INT4 / SCALAR_INT2 (may be null for others)
      * @param turboQuantizer     required for TURBO_QUANT (may be null for others)
      * @param vasqEncoder        required for VASQ (may be null for others)
+     * @param vasq4Encoder       required for VASQ_4 (may be null for others)
      * @param similarityFunction the distance metric (must not be null)
      * @return a fully initialized {@link QuantizationStrategy}
      * @throws IllegalArgumentException if a required sub-quantizer is missing or dimensions mismatch
@@ -57,6 +59,7 @@ public final class QuantizationStrategyFactory {
             NonUniformQuantizer nonUniformQuantizer,
             TurboQuantizer turboQuantizer,
             VasqEncoder vasqEncoder,
+            Vasq4Encoder vasq4Encoder,
             SimilarityFunction similarityFunction) {
 
         if (type == null) throw new IllegalArgumentException("QuantizationType must not be null");
@@ -97,9 +100,31 @@ public final class QuantizationStrategyFactory {
                 }
                 yield new VasqStrategy(vasqEncoder, similarityFunction);
             }
+            case VASQ_4 -> {
+                if (vasq4Encoder == null) {
+                    throw new IllegalArgumentException("Vasq4Encoder is required for VASQ_4");
+                }
+                yield new Vasq4Strategy(vasq4Encoder, similarityFunction);
+            }
             case NONE -> throw new IllegalArgumentException(
                     "NONE is not a quantized type — use a plain float store instead");
         };
+    }
+
+    /**
+     * Backward-compatible overload without Vasq4Encoder parameter.
+     *
+     * <p>Delegates to the full overload with {@code vasq4Encoder = null}.</p>
+     */
+    public static QuantizationStrategy create(
+            QuantizationType type,
+            ScalarQuantizer scalarQuantizer,
+            NonUniformQuantizer nonUniformQuantizer,
+            TurboQuantizer turboQuantizer,
+            VasqEncoder vasqEncoder,
+            SimilarityFunction similarityFunction) {
+        return create(type, scalarQuantizer, nonUniformQuantizer, turboQuantizer,
+                vasqEncoder, null, similarityFunction);
     }
 
     /**
@@ -116,6 +141,7 @@ public final class QuantizationStrategyFactory {
      * @param nonUniformQuantizer required for SCALAR_INT4 / SCALAR_INT2
      * @param turboQuantizer     required for TURBO_QUANT
      * @param vasqEncoder        required for VASQ
+     * @param vasq4Encoder       required for VASQ_4
      * @param similarityFunction the distance metric
      * @return a fully initialized {@link QuantizationStrategy}
      * @throws IllegalArgumentException if required quantizer missing or dimension mismatch detected
@@ -127,6 +153,7 @@ public final class QuantizationStrategyFactory {
             NonUniformQuantizer nonUniformQuantizer,
             TurboQuantizer turboQuantizer,
             VasqEncoder vasqEncoder,
+            Vasq4Encoder vasq4Encoder,
             SimilarityFunction similarityFunction) {
 
         // Dimension consistency checks (mirrors original QuantizedVectorStore validation)
@@ -151,8 +178,29 @@ public final class QuantizationStrategyFactory {
             throw new IllegalArgumentException(
                     "VasqEncoder originalDim " + vasqEncoder.params().originalDim() + " != store dims " + dimensions);
         }
+        if (type == QuantizationType.VASQ_4 && vasq4Encoder != null
+                && vasq4Encoder.params().originalDim() != dimensions) {
+            throw new IllegalArgumentException(
+                    "Vasq4Encoder originalDim " + vasq4Encoder.params().originalDim() + " != store dims " + dimensions);
+        }
 
-        return create(type, scalarQuantizer, nonUniformQuantizer, turboQuantizer, vasqEncoder, similarityFunction);
+        return create(type, scalarQuantizer, nonUniformQuantizer, turboQuantizer,
+                vasqEncoder, vasq4Encoder, similarityFunction);
+    }
+
+    /**
+     * Backward-compatible overload without Vasq4Encoder parameter.
+     */
+    public static QuantizationStrategy createWithDimCheck(
+            QuantizationType type,
+            int dimensions,
+            ScalarQuantizer scalarQuantizer,
+            NonUniformQuantizer nonUniformQuantizer,
+            TurboQuantizer turboQuantizer,
+            VasqEncoder vasqEncoder,
+            SimilarityFunction similarityFunction) {
+        return createWithDimCheck(type, dimensions, scalarQuantizer, nonUniformQuantizer,
+                turboQuantizer, vasqEncoder, null, similarityFunction);
     }
 
     /**
@@ -165,6 +213,18 @@ public final class QuantizationStrategyFactory {
     public static QuantizationStrategy createVasq(VasqParams params,
                                                    SimilarityFunction similarityFunction) {
         return new VasqStrategy(params, similarityFunction);
+    }
+
+    /**
+     * Creates a VASQ-4 strategy directly from {@link VasqParams} (convenience overload).
+     *
+     * @param params             calibrated VASQ-4 parameters (bitWidth must be 4)
+     * @param similarityFunction distance metric
+     * @return a fully initialized VASQ-4 {@link QuantizationStrategy}
+     */
+    public static QuantizationStrategy createVasq4(VasqParams params,
+                                                    SimilarityFunction similarityFunction) {
+        return new Vasq4Strategy(params, similarityFunction);
     }
 
     // ─────────────── Internals ───────────────
