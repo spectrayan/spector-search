@@ -125,13 +125,35 @@ public final class ConcurrentTasks {
     }
 
     /**
-     * Convenience overload for exactly two tasks.
+     * Convenience overload for exactly two tasks of the same type.
      *
      * @return a two-element list [resultA, resultB]
      */
     public static <T> List<T> forkJoinAll(Callable<T> taskA, Callable<T> taskB)
             throws ConcurrentExecutionException, InterruptedException {
         return forkJoinAll(List.of(taskA, taskB));
+    }
+
+    /**
+     * Optimized two-task fork-join for heterogeneous result types.
+     *
+     * <p>Avoids all list allocations — forks exactly two tasks and returns
+     * a typed pair. This is the hot-path specialization for
+     * {@code HybridSearchOrchestrator} (keyword ∥ vector).</p>
+     *
+     * @param taskA first task
+     * @param taskB second task
+     * @param <A>   result type of first task
+     * @param <B>   result type of second task
+     * @return a {@link Pair} containing both results
+     * @throws ConcurrentExecutionException if either task fails
+     * @throws InterruptedException         if the calling thread is interrupted
+     */
+    public static <A, B> Pair<A, B> forkJoin2(Callable<A> taskA, Callable<B> taskB)
+            throws ConcurrentExecutionException, InterruptedException {
+        return STRUCTURED_AVAILABLE
+                ? forkJoin2Structured(taskA, taskB)
+                : forkJoin2Classic(taskA, taskB);
     }
 
     // ── Structured implementation ───────────────────────────────────────
@@ -146,9 +168,44 @@ public final class ConcurrentTasks {
                 subtasks.add(scope.fork(task::call));
             }
             scope.join(); // auto-cancels siblings on first failure
-            return subtasks.stream().map(Subtask::get).toList();
+
+            // Direct loop — avoids Stream/Iterator/intermediate list allocation
+            List<T> results = new ArrayList<>(subtasks.size());
+            for (Subtask<T> st : subtasks) {
+                results.add(st.get());
+            }
+            return results;
         } catch (StructuredTaskScope.FailedException e) {
             throw new ConcurrentExecutionException("Structured fork-join failed", e.getCause());
+        }
+    }
+
+    @SuppressWarnings({"preview", "unchecked"})
+    private static <A, B> Pair<A, B> forkJoin2Structured(Callable<A> taskA, Callable<B> taskB)
+            throws ConcurrentExecutionException, InterruptedException {
+        try (var scope = StructuredTaskScope.open(
+                StructuredTaskScope.Joiner.awaitAllSuccessfulOrThrow())) {
+            Subtask<A> a = scope.fork(taskA::call);
+            Subtask<B> b = scope.fork(taskB::call);
+            scope.join();
+            return new Pair<>(a.get(), b.get());
+        } catch (StructuredTaskScope.FailedException e) {
+            throw new ConcurrentExecutionException("Structured fork-join failed", e.getCause());
+        }
+    }
+
+    private static <A, B> Pair<A, B> forkJoin2Classic(Callable<A> taskA, Callable<B> taskB)
+            throws ConcurrentExecutionException, InterruptedException {
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<A> futureA = executor.submit(taskA);
+            Future<B> futureB = executor.submit(taskB);
+            try {
+                return new Pair<>(futureA.get(), futureB.get());
+            } catch (java.util.concurrent.ExecutionException e) {
+                futureA.cancel(true);
+                futureB.cancel(true);
+                throw new ConcurrentExecutionException("Task failed", e.getCause());
+            }
         }
     }
 
@@ -235,10 +292,11 @@ public final class ConcurrentTasks {
                 // Expected — some tasks didn't finish within the deadline
             }
 
-            // Inspect subtask states after join
-            List<PartialResult.Entry<T>> successes = new ArrayList<>();
-            List<String> timedOut = new ArrayList<>();
-            List<PartialResult.Failure> failures = new ArrayList<>();
+            // Inspect subtask states after join — pre-sized to avoid resize
+            int n = subtasks.size();
+            List<PartialResult.Entry<T>> successes = new ArrayList<>(n);
+            List<String> timedOut = new ArrayList<>(n);
+            List<PartialResult.Failure> failures = new ArrayList<>(n);
 
             for (int i = 0; i < subtasks.size(); i++) {
                 Subtask<T> subtask = subtasks.get(i);
@@ -265,9 +323,10 @@ public final class ConcurrentTasks {
                 entries.add(new FutureEntry<>(task.label(), executor.submit(task.callable())));
             }
 
-            List<PartialResult.Entry<T>> successes = new ArrayList<>();
-            List<String> timedOut = new ArrayList<>();
-            List<PartialResult.Failure> failures = new ArrayList<>();
+            int n = entries.size();
+            List<PartialResult.Entry<T>> successes = new ArrayList<>(n);
+            List<String> timedOut = new ArrayList<>(n);
+            List<PartialResult.Failure> failures = new ArrayList<>(n);
 
             long deadlineMs = System.currentTimeMillis() + timeout.toMillis();
 
@@ -296,6 +355,20 @@ public final class ConcurrentTasks {
     // ═══════════════════════════════════════════════════════════════════════
     //  Supporting types
     // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * A typed pair of results from {@link #forkJoin2}.
+     *
+     * <p>Zero-overhead alternative to {@code List<T>} when exactly two tasks
+     * with potentially different result types are forked concurrently.
+     * Avoids list allocation, iterator creation, and index-based access.</p>
+     *
+     * @param first  result of the first task
+     * @param second result of the second task
+     * @param <A>    type of first result
+     * @param <B>    type of second result
+     */
+    public record Pair<A, B>(A first, B second) {}
 
     /**
      * A labeled task for use with {@link #forkJoinPartial}.

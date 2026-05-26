@@ -125,7 +125,7 @@ public class HybridSearchOrchestrator implements AutoCloseable {
     /**
      * Executes hybrid search: parallel fan-out → RRF fusion.
      *
-     * <p>Uses {@link ConcurrentTasks#forkJoinAll} for parallel execution.
+     * <p>Uses {@link ConcurrentTasks#forkJoin2} for zero-allocation parallel execution.
      * In structured concurrency mode, if either sub-search fails, the other is
      * automatically cancelled — preventing thread leaks.</p>
      */
@@ -141,13 +141,13 @@ public class HybridSearchOrchestrator implements AutoCloseable {
         int retrievalK = Math.max(query.topK() * 2, 50);
 
         try {
-            List<ScoredResult[]> results = ConcurrentTasks.forkJoinAll(
+            var pair = ConcurrentTasks.forkJoin2(
                     () -> keywordIndex.search(query.text(), retrievalK),
                     () -> vectorIndex.search(query.vector(), retrievalK)
             );
 
             return ReciprocalRankFusion.fuse(
-                    new ScoredResult[][]{results.get(0), results.get(1)},
+                    new ScoredResult[][]{pair.first(), pair.second()},
                     query.topK()
             );
 
