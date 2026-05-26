@@ -183,10 +183,109 @@ graph LR
 | Float32 (baseline) | 1× | 100% | ⚡ | Reference |
 | **Scalar INT8** | 4× | 95-99% | ⚡⚡ | Simple, good baseline |
 | **VASQ INT8** | ~4× | **97-99.5%** | ⚡⚡ | FWHT rotation removes outlier impact |
+| **VASQ-4 (INT4)** | **6-8×** | **95-99%** | ⚡⚡ | Nibble-packed FWHT + 3× rescore recommended |
 | Scalar INT4 | 8× | 85-95% | ⚡⚡ | Aggressive, needs rescore |
 | Product Quantization | 32× | 80-92% | ⚡ | Complex, requires training |
 
 VASQ achieves the compression of standard INT8 with recall approaching float32 — because the FWHT rotation ensures every dimension contributes equally to the quantized distance.
+
+---
+
+## 🔢 VASQ-4: INT4 Nibble-Packed Quantization
+
+VASQ-4 extends the VASQ pipeline to 4-bit quantization, achieving **~2× additional compression** over VASQ-8 (6–8× total vs float32).
+
+### Why It Works
+
+The FWHT rotation that makes VASQ-8 work is equally beneficial for INT4:
+
+- After FWHT, all dimensions contribute equally → INT4 quantization noise is **isotropic**
+- With IVF residuals, the tight range means INT4 on residuals ≈ INT6–INT7 on absolute vectors
+- 15 quantization levels (vs 255 for INT8) is sufficient for ranking with oversampling rescore
+
+### Memory Layout
+
+```
+[float32 normSq (4 bytes)] [INT4 × paddedDim nibble-packed (paddedDim/2 bytes)]
+```
+
+Two 4-bit values are packed per byte using **offset encoding** (shifting [-7, 7] to [0, 14]):
+
+```
+byte = (hiNibble << 4) | loNibble
+```
+
+| Dims | Float32 | VASQ-8 | VASQ-4 | VASQ-4 Compression |
+|------|---------|--------|--------|-------------------|
+| 384 → 512 | 1,536 B | 516 B | 260 B | **5.9×** |
+| 768 → 1024 | 3,072 B | 1,028 B | 516 B | **6.0×** |
+| 4096 | 16,384 B | 4,100 B | 2,052 B | **8.0×** |
+
+### Calibration
+
+VASQ-4 uses **tighter clipping** than VASQ-8 (2.5σ vs 3.0σ) to optimize for 15 quantization levels:
+
+```java
+VasqParams params = VasqCalibrator.calibrate4bit(corpus, dimensions, seed);
+// params.bitWidth() == 4
+// params.bytesPerVector() == 4 + paddedDim / 2
+```
+
+### SIMD Kernel
+
+The `Vasq4SimdKernel` extracts nibbles via shift+mask in each loop iteration, providing natural instruction-level parallelism:
+
+```java
+// Load VL packed bytes = 2×VL dimensions
+ByteVector packed = ByteVector.fromMemorySegment(B_SPECIES, segment, offset, nativeOrder);
+
+// Extract high nibbles (even dims) and low nibbles (odd dims)
+ByteVector hi = packed.lanewise(LSHR, 4).and(0x0F);  // → [0, 14]
+ByteVector lo = packed.and(0x0F);                      // → [0, 14]
+
+// Widen to float32 and FMA with deinterleaved query arrays
+accHi = ((FloatVector) hi.castShape(F_SPECIES, 0)).fma(qTildeHi[i], accHi);
+accLo = ((FloatVector) lo.castShape(F_SPECIES, 0)).fma(qTildeLo[i], accLo);
+```
+
+The hi/lo split gives the CPU two independent FMA chains — one for even dimensions and one for odd — maximizing pipeline utilization.
+
+### Usage
+
+=== "Builder API"
+
+    ```java
+    SpectorEngine engine = SpectorEngine.builder()
+        .dimensions(768)
+        .capacity(500_000)
+        .vasq4()              // VASQ-4 with default 3× rescore
+        .build();
+    ```
+
+=== "Config API"
+
+    ```java
+    SpectorConfig config = SpectorConfig.DEFAULT
+        .withDimensions(768)
+        .withVasq4(5);        // 5× oversampling for higher recall
+    ```
+
+=== "Direct Index API"
+
+    ```java
+    QuantizedHnswIndex index = QuantizedHnswIndex.vasq4(
+        768, 100_000, SimilarityFunction.COSINE, HnswParams.DEFAULT, 3);
+    ```
+
+### Expected Recall
+
+| Configuration | Recall@10 | Notes |
+|--------------|-----------|-------|
+| VASQ-4 (no rescore) | ~95–97% | Direct quantized distance only |
+| VASQ-4 (2× rescore) | ~96–98% | Moderate oversampling |
+| **VASQ-4 (3× rescore)** | **~97–99%** | **Recommended default** |
+| VASQ-4 (5× rescore) | ~98–99% | Higher latency, diminishing returns |
+| VASQ-8 (no rescore) | ~97–99.5% | For comparison |
 
 ---
 
@@ -197,35 +296,39 @@ VASQ achieves the compression of standard INT8 with recall approaching float32 �
 Calibrates min/max statistics per dimension from a representative sample:
 
 ```java
-VasqParams params = VasqCalibrator.calibrate(flatData, sampleSize, dimensions);
-// params contains: paddedDim, mins[], scales[], normalization constants
+// VASQ-8 calibration
+VasqParams params8 = VasqCalibrator.calibrate(flatData, sampleSize, dimensions);
+
+// VASQ-4 calibration (tighter clipping for 15 levels)
+VasqParams params4 = VasqCalibrator.calibrate4bit(flatData, sampleSize, dimensions);
 ```
 
-### VasqStrategy
+### VasqStrategy / Vasq4Strategy
 
 Encodes vectors and computes asymmetric distances:
 
 ```java
+// VASQ-8
 VasqStrategy strategy = new VasqStrategy(params, SimilarityFunction.EUCLIDEAN);
 
-// Encode a residual vector to INT8
+// VASQ-4
+Vasq4Strategy strategy4 = new Vasq4Strategy(params4, SimilarityFunction.EUCLIDEAN);
+
+// Both implement QuantizationStrategy — same API
 byte[] encoded = strategy.encode(residualVector);
-
-// Prepare a query for fast scanning
-VasqQueryState qs = strategy.prepareQuery(residualQuery);
-
-// Compute approximate distance (SIMD-accelerated)
 float dist = strategy.computeDistance(segment, offset, qs);
 ```
 
-### VasqSimdKernel
+### VasqSimdKernel / Vasq4SimdKernel
 
 The Panama SIMD kernel that computes VASQ distances directly from off-heap memory:
 
 ```java
-// Zero-copy: reads INT8 codes directly from MemorySegment
+// VASQ-8: Zero-copy INT8 codes from MemorySegment
 float l2Dist = VasqSimdKernel.computeL2(segment, offset, paddedDim, queryState);
-float dotDist = VasqSimdKernel.computeDot(segment, offset, paddedDim, queryState);
+
+// VASQ-4: Zero-copy nibble-packed INT4 codes from MemorySegment
+float l2Dist4 = Vasq4SimdKernel.computeL2(segment, offset, halfPaddedDim, queryState4);
 ```
 
 ---
@@ -249,6 +352,7 @@ The quantization error is now distributed uniformly across all dimensions (becau
 ## 🔗 See Also
 
 - [Large-Scale Benchmarks](real-embedding-benchmarks.md) — Empirical sweeps for real embeddings and HNSW shard promotions.
+- [Roadmap](../roadmap.md) — Future compression improvements (VASQ-PQ, padding-aware storage, norm f16)
 - [Understanding Quantization](understanding-quantization.md) — All quantization techniques compared
 - [SpectorIndex Architecture](spector-index-architecture.md) — How VASQ fits into the IVF-HNSW index
 - [VASQ Whitepaper](vasq-spectorindex-whitepaper.md) — Academic treatment with proofs and benchmarks

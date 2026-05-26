@@ -29,7 +29,9 @@ Desktop.ini
 dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
+.mvn/maven.config
 .mvn/wrapper/maven-wrapper.jar
+.mvn
 
 # ──────────── Logs ────────────
 *.log

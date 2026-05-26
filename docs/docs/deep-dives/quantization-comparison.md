@@ -77,7 +77,7 @@ DiskBBQ (introduced experimentally) adds IVF-like partitioning on top of BBQ:
 
 ---
 
-## 🔵 Spector's Approach: Scalar INT8 + IVF-PQ
+## 🔵 Spector's Approach: Scalar + VASQ + VASQ-4 + IVF-PQ
 
 ### Why These Two?
 
@@ -88,7 +88,9 @@ The two-method strategy covers the full spectrum:
 | Need | Solution | Compression | Recall |
 |------|----------|-------------|--------|
 | Quality-first (≤50M vectors) | Scalar INT8 | 4× | 95–99% |
+| Quality + rotation (≤50M) | **VASQ INT8** | 4× | **97–99.5%** |
 | Balanced (10M–100M vectors) | Scalar INT4 | 8× | 85–95% |
+| Balanced + rotation (10M–100M) | **VASQ-4** | **6–8×** | **95–99%** |
 | Memory-constrained (50M–500M) | Scalar INT2 | 16× | 75–90% |
 | Scale-first (100M–1B+ vectors) | IVF-PQ | 32× | 75–90% |
 
@@ -231,7 +233,7 @@ Which quantization methods are available in each engine:
 
 | Engine | Scalar INT8 | Scalar INT4/INT2 | Binary | Product Quantization | IVF-PQ | DiskANN | Rescoring |
 |--------|:-----------:|:----------------:|:------:|:-------------------:|:------:|:-------:|:---------:|
-| **Spector Search** | ✅ | ✅ (non-uniform) | ❌ | ✅ (via IVF-PQ) | ✅ | ❌ | ✅ (configurable oversampling) |
+| **Spector Search** | ✅ | ✅ (non-uniform) | ❌ | ✅ (via IVF-PQ) | ✅ | ❌ | ✅ (VASQ/VASQ-4 + configurable oversampling) |
 | **Elasticsearch** | ✅ | ❌ | ✅ (BBQ) | ❌ | ❌ | ❌ | ✅ (asymmetric) |
 | **Milvus** | ✅ (IVF-SQ8) | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
 | **Qdrant** | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ (oversampling) |
@@ -242,7 +244,7 @@ Which quantization methods are available in each engine:
 
 | Engine | 4× (Scalar) Recall | 8× (INT4) Recall | 16× (INT2) Recall | 32× (Best Method) Recall | Architecture Constraint |
 |--------|:------------------:|:-----------------:|:------------------:|:------------------------:|------------------------|
-| **Spector** | 95–99% | 85–95% (INT4+rescore) | 75–90% (INT2+rescore) | 80–92% (IVF-PQ) | None (purpose-built) |
+| **Spector** | 97–99.5% (VASQ) | 95–99% (VASQ-4+rescore) | 75–90% (INT2+rescore) | 80–92% (IVF-PQ) | None (purpose-built) |
 | **Elasticsearch** | 95–99% | — | — | 70–90% (BBQ + rescore) | Lucene segments |
 | **Milvus** | 95–99% | — | — | 80–92% (IVF-PQ) | Distributed complexity |
 | **Qdrant** | 95–99% | — | — | 65–85% (Binary + oversample) | Per-segment quantization |

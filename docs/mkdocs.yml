@@ -120,6 +120,7 @@ nav:
       - Performance Tuning: operations/performance-tuning.md
       - Contributing: operations/contributing.md
   - FAQ: faq.md
+  - Roadmap: roadmap.md
 
 extra_css:
   - stylesheets/extra.css

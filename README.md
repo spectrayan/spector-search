@@ -16,6 +16,7 @@
 - **⚡ Sub-Millisecond Queries** — Branchless SIMD kernels with masked tail handling
 - **🗜️ Multi-Level Quantization** — INT8 (4×), INT4 (8×), and INT2 (16×) scalar quantization with non-uniform calibration and configurable rescore
 - **🗜️ VASQ Quantization** — FWHT-rotated affine INT8 quantization with exact-norm header for high-accuracy zero-copy compression (retaining 99.5%+ recall)
+- **🗜️ VASQ-4 Quantization** — INT4 nibble-packed variant of VASQ achieving 6–8× compression vs float32 with 97–99% recall (with 3× rescore)
 - **🎯 SpectorIndex (IVF-HNSW-VASQ)** — Multi-level adaptive vector index yielding 99.5%–100% recall on real text embeddings at aggressive 3% partition scanning rates
 - **🗜️ IVF-PQ Index** — Inverted file with product quantization for 32× memory compression at billion scale
 - **🤖 LLM Re-ranking** — Listwise relevance scoring via Ollama for precision-critical retrieval
@@ -177,6 +178,22 @@ try (var engine = new SpectorEngine(config)) {
 }
 ```
 
+### VASQ-4 Quantization (6–8× Compression)
+
+```java
+// Fluent builder with VASQ-4 quantization
+var engine = SpectorEngine.builder()
+    .dimensions(4096)           // e.g., qwen3-embedding
+    .capacity(500_000)
+    .vasq4()                    // INT4 FWHT-rotated, 3× rescore default
+    .build();
+
+// Or with explicit oversampling
+var config = SpectorConfig.DEFAULT
+    .withDimensions(768)
+    .withVasq4(5);              // 5× oversampling for higher recall
+```
+
 ## ⚙️ Configuration
 
 | Parameter | Default | Description |
@@ -191,7 +208,7 @@ try (var engine = new SpectorEngine(config)) {
 | `b` | 0.75 | BM25 document length normalization |
 | `RRF k` | 60 | Reciprocal Rank Fusion constant |
 | `gpuEnabled` | false | Enable CUDA GPU acceleration |
-| `quantization` | NONE | Quantization type: NONE, SCALAR_INT8, SCALAR_INT4, SCALAR_INT2 |
+| `quantization` | NONE | Quantization type: NONE, SCALAR_INT8, SCALAR_INT4, SCALAR_INT2, VASQ, VASQ_4 |
 | `oversamplingFactor` | auto | Rescore oversampling (INT4→3, INT2→5, INT8→1). Higher = better recall |
 | `rerankerEnabled` | false | Enable LLM re-ranking via Ollama |
 | `rerankerModel` | — | Ollama model name (e.g., "llama3.2") |
@@ -319,7 +336,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 | **Off-Heap Vectors** | ✅ Panama MemorySegment | ✅ Lucene MMapDir | ✅ MMapDir | ❌ Heap-only | ✅ Mmap | ✅ Mmap |
 | **Virtual Threads** | ✅ Native Loom | ❌ Platform threads | N/A | N/A | N/A | N/A |
 | **Zero Dependencies** | ✅ JDK only | ❌ Heavy stack | ✅ Standalone | ✅ Header-only | ❌ Tokio runtime | ❌ etcd, MinIO, Pulsar |
-| **Quantization** | ✅ Scalar INT8/INT4/INT2 + PQ | ✅ BBQ/Scalar | ✅ Scalar | ❌ None | ✅ Scalar/Binary | ✅ PQ/SQ |
+| **Quantization** | ✅ Scalar INT8/INT4/INT2 + VASQ/VASQ-4 + PQ | ✅ BBQ/Scalar | ✅ Scalar | ❌ None | ✅ Scalar/Binary | ✅ PQ/SQ |
 | **Disk-based Index** | ✅ HNSW serialization | ✅ Segment merge | ✅ MMap | ❌ In-memory | ✅ On-disk HNSW | ✅ DiskANN |
 | **IVF-PQ** | ✅ 32× compression | ❌ None | ❌ None | ❌ None | ❌ None | ✅ IVF_PQ |
 | **GPU Acceleration** | ✅ CUDA (Panama FFM) | ❌ None | ❌ None | ❌ None | ❌ None | ✅ GPU |
@@ -334,7 +351,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 - **📦 Zero-dependency embedded**: Drop-in JAR, no external infrastructure needed
 - **⚡ 7.6K+ ops/sec concurrent**: 7,635 hybrid searches/sec at 16 threads (128-dim)
 - **🎯 23K+ vector QPS**: 23,726 vector queries/sec at 10K docs
-- **🗜️ IVF-PQ + VASQ + TurboQuant**: 8–32× memory reduction for large-scale datasets with high-accuracy calibration
+- **🗜️ IVF-PQ + VASQ + VASQ-4 + TurboQuant**: 6–32× memory reduction for large-scale datasets with high-accuracy calibration
 - **🔬 99.5%+ Recall**: IVF-HNSW-VASQ (`SpectorIndex`) achieves near-perfect recall on real semantic embeddings scanning just 3% of the clusters
 - **🤖 LLM re-ranking**: Listwise Ollama-powered relevance scoring
 - **🖥️ GPU acceleration**: CUDA kernel launcher + SIMD batch similarity via Panama FFM
@@ -378,10 +395,18 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 - [x] Document deletion
 - [x] Auto-embed + bulk ingest endpoints
 - [x] gRPC TLS support
+- [x] VASQ-4 quantization (FWHT-rotated INT4, nibble-packed — 6–8× compression vs float32)
+- [ ] Padding-aware storage (skip zero-padded dims — 25% savings for non-pow2 dimensions)
+- [ ] Norm header compression (float32 → float16 — 2 bytes/vector savings)
+- [ ] VASQ-PQ hybrid (FWHT rotation + product quantization — 16–32× compression)
+- [ ] Flat-mode VASQ (VASQ compression of flat-shard residuals — 3× on flat shards)
+- [ ] Adaptive bit-width VASQ (per-dimension variable bit allocation)
 - [ ] GPU kernel dispatch (CUDA compute for batch similarity — requires CUDA Toolkit)
 - [ ] NPU acceleration (Intel/AMD NPU for INT8 batch operations via OpenVINO or DirectML)
 - [ ] WASM runtime for edge deployment
 - [ ] Structured concurrency (JEP 462) for fan-out search with cancellation propagation
+
+> See the [detailed Roadmap](docs/docs/roadmap.md) for in-depth descriptions, projected savings, and implementation plans.
 
 ## 🤝 Contributing
 
