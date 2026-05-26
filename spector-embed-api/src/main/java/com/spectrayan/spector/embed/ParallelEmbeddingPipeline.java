@@ -1,23 +1,33 @@
 package com.spectrayan.spector.embed;
 
+import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
+import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.Callable;
 
 /**
  * Parallel embedding pipeline that processes text chunks in configurable batches
- * using virtual threads.
+ * using structured concurrency.
  *
  * <p>Features:</p>
  * <ul>
  *   <li>Configurable batch sizes for grouping chunks</li>
- *   <li>Virtual thread-based parallelism for concurrent batch processing</li>
+ *   <li>Structured concurrency-based parallelism via {@link ConcurrentTasks}</li>
  *   <li>Retry logic for failed batches with configurable retry count</li>
  *   <li>Failure isolation: failed batches don't block remaining batches</li>
  *   <li>Ordering preservation: output[i] always corresponds to input[i]</li>
  * </ul>
+ *
+ * <h3>Concurrency</h3>
+ * <p>Uses {@link ConcurrentTasks#forkJoinAll} which provides dual-mode concurrency:
+ * structured concurrency (JEP 505) by default, or classic virtual-thread executor
+ * when disabled via {@code -Dspector.concurrency.structured=false}.</p>
+ *
+ * <p>Since {@code processBatch()} handles all exceptions internally and never throws,
+ * the structured concurrency fail-fast behavior is safe — it won't cancel sibling
+ * batches on failure.</p>
  *
  * <p>Validates: Requirements 7.1, 7.2, 7.3, 7.4</p>
  */
@@ -41,7 +51,7 @@ public class ParallelEmbeddingPipeline {
      * Embeds a list of text chunks in parallel batches.
      *
      * <p>Chunks are split into batches of {@code config.batchSize()}, and each batch
-     * is submitted to a virtual thread for concurrent processing. Failed batches are
+     * is submitted concurrently via {@link ConcurrentTasks}. Failed batches are
      * retried up to {@code config.maxRetries()} times. If all retries are exhausted,
      * the failure is recorded and processing continues with remaining batches.</p>
      *
@@ -68,36 +78,33 @@ public class ParallelEmbeddingPipeline {
         List<List<String>> batches = partition(texts, batchSize);
         int numBatches = batches.size();
 
-        // Results array preserving order; one sub-list per batch
-        @SuppressWarnings("unchecked")
-        List<PipelineEmbeddingResult>[] batchResults = new List[numBatches];
+        // Build tasks — each batch is a Callable that never throws
+        // (processBatch handles errors internally)
+        List<Callable<List<PipelineEmbeddingResult>>> tasks = new ArrayList<>(numBatches);
+        for (int batchIdx = 0; batchIdx < numBatches; batchIdx++) {
+            final List<String> batch = batches.get(batchIdx);
+            final int startIndex = batchIdx * batchSize;
+            final int retries = maxRetries;
+            tasks.add(() -> processBatch(batch, startIndex, retries));
+        }
 
-        // Process batches in parallel using virtual threads
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<List<PipelineEmbeddingResult>>> futures = new ArrayList<>(numBatches);
-
-            for (int batchIdx = 0; batchIdx < numBatches; batchIdx++) {
-                final int idx = batchIdx;
-                final List<String> batch = batches.get(idx);
-                final int startIndex = idx * batchSize;
-                final int retries = maxRetries;
-
-                futures.add(executor.submit(() -> processBatch(batch, startIndex, retries)));
+        // Execute all batches in parallel
+        List<List<PipelineEmbeddingResult>> batchResults;
+        try {
+            batchResults = ConcurrentTasks.forkJoinAll(tasks);
+        } catch (ConcurrentExecutionException | InterruptedException e) {
+            // Should not happen since processBatch handles errors internally,
+            // but handle defensively
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
             }
-
-            // Collect results in order
-            for (int i = 0; i < numBatches; i++) {
-                try {
-                    batchResults[i] = futures.get(i).get();
-                } catch (Exception e) {
-                    // Should not happen since processBatch handles errors internally,
-                    // but handle defensively
-                    List<String> batch = batches.get(i);
-                    int startIndex = i * batchSize;
-                    batchResults[i] = createFailureResults(batch, startIndex,
-                            "Unexpected error: " + e.getMessage());
-                }
+            // Fall back to failure results for all chunks
+            List<PipelineEmbeddingResult> failureResults = new ArrayList<>(totalChunks);
+            for (int i = 0; i < totalChunks; i++) {
+                failureResults.add(PipelineEmbeddingResult.failure(i,
+                        "Unexpected concurrent error: " + e.getMessage()));
             }
+            return failureResults;
         }
 
         // Flatten batch results into a single ordered list
@@ -110,6 +117,10 @@ public class ParallelEmbeddingPipeline {
 
     /**
      * Processes a single batch with retry logic.
+     *
+     * <p><b>Important:</b> This method never throws — it catches all exceptions
+     * and returns failure results. This is critical for structured concurrency
+     * compatibility, since throwing would cancel sibling batches.</p>
      *
      * @param batch      the texts in this batch
      * @param startIndex the global index of the first chunk in this batch

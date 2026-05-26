@@ -1,5 +1,7 @@
 package com.spectrayan.spector.query;
 
+import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
+import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import com.spectrayan.spector.index.KeywordIndex;
 import com.spectrayan.spector.index.ScoredResult;
 import com.spectrayan.spector.index.VectorIndex;
@@ -9,16 +11,13 @@ import com.spectrayan.spector.storage.DocumentStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.List;
 
 /**
  * Orchestrates hybrid search across keyword and vector indexes.
  *
  * <p>In {@link SearchQuery.SearchMode#HYBRID} mode, keyword and vector searches
- * are executed in parallel on virtual threads, then merged via
+ * are executed in parallel using {@link ConcurrentTasks}, then merged via
  * {@link ReciprocalRankFusion}.</p>
  *
  * <h3>Execution Model</h3>
@@ -28,10 +27,11 @@ import java.util.concurrent.Future;
  *   <li>{@code HYBRID} — fans out both in parallel, fuses via RRF</li>
  * </ul>
  *
- * <h3>Performance</h3>
- * <p>Uses a shared virtual-thread executor to avoid per-query lifecycle overhead.
- * Virtual threads are extremely cheap (~few hundred bytes each), so a shared
- * unbounded executor with per-task threads is optimal.</p>
+ * <h3>Concurrency</h3>
+ * <p>Uses {@link ConcurrentTasks#forkJoinAll} which provides dual-mode concurrency:
+ * structured concurrency (JEP 505) with automatic cancellation by default, or
+ * classic virtual-thread executor when structured concurrency is disabled via
+ * {@code -Dspector.concurrency.structured=false}.</p>
  */
 public class HybridSearchOrchestrator implements AutoCloseable {
 
@@ -39,7 +39,6 @@ public class HybridSearchOrchestrator implements AutoCloseable {
 
     private final KeywordIndex keywordIndex;
     private final VectorIndex vectorIndex;
-    private final ExecutorService executor;
     private final Reranker reranker;       // nullable
     private final DocumentStore docStore;  // nullable, needed for re-ranking
 
@@ -67,7 +66,6 @@ public class HybridSearchOrchestrator implements AutoCloseable {
         this.vectorIndex = vectorIndex;
         this.reranker = reranker;
         this.docStore = docStore;
-        this.executor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
@@ -105,7 +103,7 @@ public class HybridSearchOrchestrator implements AutoCloseable {
 
     @Override
     public void close() {
-        executor.close();
+        // No executor to close — ConcurrentTasks manages scope per-call
     }
 
     // ─────────────── Mode handlers ───────────────
@@ -127,8 +125,9 @@ public class HybridSearchOrchestrator implements AutoCloseable {
     /**
      * Executes hybrid search: parallel fan-out → RRF fusion.
      *
-     * <p>Uses the shared virtual-thread executor for lightweight parallelism.
-     * Each sub-search runs on its own virtual thread for maximum concurrency.</p>
+     * <p>Uses {@link ConcurrentTasks#forkJoinAll} for parallel execution.
+     * In structured concurrency mode, if either sub-search fails, the other is
+     * automatically cancelled — preventing thread leaks.</p>
      */
     private ScoredResult[] executeHybridSearch(SearchQuery query) {
         boolean hasKeyword = keywordIndex != null && query.text() != null;
@@ -142,27 +141,23 @@ public class HybridSearchOrchestrator implements AutoCloseable {
         int retrievalK = Math.max(query.topK() * 2, 50);
 
         try {
-            Future<ScoredResult[]> keywordFuture = executor.submit(
-                    () -> keywordIndex.search(query.text(), retrievalK));
-            Future<ScoredResult[]> vectorFuture = executor.submit(
-                    () -> vectorIndex.search(query.vector(), retrievalK));
-
-            ScoredResult[] keywordResults = keywordFuture.get();
-            ScoredResult[] vectorResults = vectorFuture.get();
+            List<ScoredResult[]> results = ConcurrentTasks.forkJoinAll(
+                    () -> keywordIndex.search(query.text(), retrievalK),
+                    () -> vectorIndex.search(query.vector(), retrievalK)
+            );
 
             return ReciprocalRankFusion.fuse(
-                    new ScoredResult[][]{keywordResults, vectorResults},
+                    new ScoredResult[][]{results.get(0), results.get(1)},
                     query.topK()
             );
 
+        } catch (ConcurrentExecutionException e) {
+            log.error("Hybrid search failed", e.getCause());
+            return new ScoredResult[0];
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Hybrid search interrupted", e);
             return new ScoredResult[0];
-        } catch (ExecutionException e) {
-            log.error("Hybrid search failed", e.getCause());
-            return new ScoredResult[0];
         }
     }
 }
-

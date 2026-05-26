@@ -4,10 +4,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.Callable;
+
+import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
+import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorMask;
@@ -95,21 +95,20 @@ public final class ParallelPqTrainer {
 
         float[][][] codebooks = new float[numSubspaces][][];
 
-        // Parallelize sub-quantizer training across virtual threads (one per subspace)
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<float[][]>> futures = new ArrayList<>(numSubspaces);
+        // Build tasks — one per subspace
+        List<Callable<float[][]>> tasks = new ArrayList<>(numSubspaces);
+        for (int m = 0; m < numSubspaces; m++) {
+            final int offset = m * dsub;
+            final long subspaceSeed = seed + m;
+            tasks.add(() -> trainSubspace(vectors, offset, dsub, actualK, iters, subspaceSeed));
+        }
+
+        // Execute all subspaces in parallel via ConcurrentTasks
+        try {
+            List<float[][]> results = ConcurrentTasks.forkJoinAll(tasks);
 
             for (int m = 0; m < numSubspaces; m++) {
-                final int offset = m * dsub;
-                // Each subspace gets its own seed derived from the base seed
-                final long subspaceSeed = seed + m;
-
-                futures.add(executor.submit(() -> trainSubspace(
-                        vectors, offset, dsub, actualK, iters, subspaceSeed)));
-            }
-
-            for (int m = 0; m < numSubspaces; m++) {
-                float[][] centroids = futures.get(m).get();
+                float[][] centroids = results.get(m);
                 // Pad to numCentroids if actualK < numCentroids
                 if (centroids.length < numCentroids) {
                     float[][] padded = new float[numCentroids][dsub];
@@ -121,11 +120,11 @@ public final class ParallelPqTrainer {
                     codebooks[m] = centroids;
                 }
             }
+        } catch (ConcurrentExecutionException e) {
+            throw new RuntimeException("PQ subspace training failed", e.getCause());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("PQ training interrupted", e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("PQ subspace training failed", e.getCause());
         }
 
         return codebooks;

@@ -9,16 +9,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.Callable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
+import com.spectrayan.spector.commons.concurrent.ConcurrentTasks.LabeledTask;
+import com.spectrayan.spector.commons.concurrent.ConcurrentTasks.PartialResult;
 import com.spectrayan.spector.index.ScoredResult;
 
 /**
@@ -32,6 +30,12 @@ import com.spectrayan.spector.index.ScoredResult;
  *   <li>Returns partial results when some shards time out, with metadata indicating which shards timed out</li>
  *   <li>Returns empty result with error when all shards are unreachable</li>
  * </ul>
+ *
+ * <h3>Concurrency</h3>
+ * <p>Uses {@link ConcurrentTasks#forkJoinPartial} for deadline-based fan-out.
+ * In structured concurrency mode (JEP 505), uses {@code awaitAll()} joiner with
+ * {@code Configuration.withTimeout()} for clean timeout handling. Falls back to
+ * classic virtual-thread executor with per-future timeouts when disabled.</p>
  *
  * <h3>Timeout</h3>
  * <p>Configurable between 1 and 60 seconds (default: 10 seconds).</p>
@@ -51,7 +55,6 @@ public class DistributedQueryCoordinator implements AutoCloseable {
 
     private final List<ShardEndpoint> shardEndpoints;
     private final Duration timeout;
-    private final ExecutorService executor;
 
     /**
      * Creates a coordinator with default timeout (10s).
@@ -82,7 +85,6 @@ public class DistributedQueryCoordinator implements AutoCloseable {
 
         this.shardEndpoints = List.copyOf(shardEndpoints);
         this.timeout = timeout;
-        this.executor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
@@ -138,15 +140,16 @@ public class DistributedQueryCoordinator implements AutoCloseable {
 
     @Override
     public void close() {
-        executor.close();
+        // No executor to close — ConcurrentTasks manages scope per-call
         log.info("DistributedQueryCoordinator closed");
     }
 
     // ─────────────── Core Fan-Out Logic ───────────────
 
     /**
-     * Generic fan-out that issues requests in parallel, collects results with timeout,
-     * merges by descending score with deduplication, and returns appropriate result type.
+     * Generic fan-out that issues requests in parallel via {@link ConcurrentTasks#forkJoinPartial},
+     * collects results with timeout, merges by descending score with deduplication,
+     * and returns appropriate result type.
      */
     private QueryResult fanOut(List<ShardEndpoint> shards,
                                ShardSearchFunction searchFn,
@@ -155,60 +158,55 @@ public class DistributedQueryCoordinator implements AutoCloseable {
             return QueryResult.allShardsUnreachable(List.of());
         }
 
-        // Submit all shard requests in parallel
-        Map<String, Future<ScoredResult[]>> futuresByShardId = new LinkedHashMap<>();
-        for (ShardEndpoint shard : shards) {
-            Future<ScoredResult[]> future = executor.submit(() -> {
-                try (RemoteShardClient client = new RemoteShardClient(shard.toNodeEndpoint())) {
-                    return searchFn.search(client);
-                }
-            });
-            futuresByShardId.put(shard.shardId(), future);
-        }
+        // Build labeled tasks for each shard
+        List<LabeledTask<ScoredResult[]>> tasks = shards.stream()
+                .map(shard -> new LabeledTask<>(shard.shardId(),
+                        (Callable<ScoredResult[]>) () -> {
+                            try (RemoteShardClient client = new RemoteShardClient(shard.toNodeEndpoint())) {
+                                return searchFn.search(client);
+                            }
+                        }))
+                .toList();
 
-        // Collect results with timeout
-        List<ScoredResult> allResults = new ArrayList<>();
-        List<String> timedOutShards = new ArrayList<>();
-        List<String> failedShards = new ArrayList<>();
+        try {
+            PartialResult<ScoredResult[]> partial = ConcurrentTasks.forkJoinPartial(tasks, timeout);
 
-        for (var entry : futuresByShardId.entrySet()) {
-            String shardId = entry.getKey();
-            Future<ScoredResult[]> future = entry.getValue();
-            try {
-                ScoredResult[] shardResults = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-                if (shardResults != null) {
-                    allResults.addAll(Arrays.asList(shardResults));
-                }
-            } catch (TimeoutException e) {
-                timedOutShards.add(shardId);
-                future.cancel(true);
+            // Log timeouts and failures
+            for (String shardId : partial.timedOut()) {
                 log.warn("Shard '{}' timed out after {}s", shardId, timeout.toSeconds());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                failedShards.add(shardId);
-                log.warn("Interrupted waiting for shard '{}'", shardId);
-            } catch (ExecutionException e) {
-                failedShards.add(shardId);
-                log.warn("Shard '{}' failed: {}", shardId, e.getCause().getMessage());
             }
+            for (PartialResult.Failure failure : partial.failures()) {
+                log.warn("Shard '{}' failed: {}", failure.label(), failure.cause().getMessage());
+            }
+
+            // All shards unreachable
+            if (partial.allFailed()) {
+                return QueryResult.allShardsUnreachable(partial.unreachableLabels());
+            }
+
+            // Collect successful results
+            List<ScoredResult> allResults = new ArrayList<>();
+            for (PartialResult.Entry<ScoredResult[]> entry : partial.successes()) {
+                if (entry.result() != null) {
+                    allResults.addAll(Arrays.asList(entry.result()));
+                }
+            }
+
+            // Merge and deduplicate
+            List<ScoredResult> merged = mergeAndDeduplicate(allResults, topK);
+
+            // Return partial or complete
+            if (!partial.timedOut().isEmpty()) {
+                return QueryResult.partial(merged, partial.timedOut());
+            }
+            return QueryResult.complete(merged);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Distributed query interrupted");
+            return QueryResult.allShardsUnreachable(
+                    shards.stream().map(ShardEndpoint::shardId).toList());
         }
-
-        // All shards unreachable
-        List<String> unreachableShards = new ArrayList<>(timedOutShards);
-        unreachableShards.addAll(failedShards);
-        if (unreachableShards.size() == shards.size()) {
-            return QueryResult.allShardsUnreachable(unreachableShards);
-        }
-
-        // Merge and deduplicate
-        List<ScoredResult> merged = mergeAndDeduplicate(allResults, topK);
-
-        // Return partial or complete
-        if (!timedOutShards.isEmpty()) {
-            return QueryResult.partial(merged, timedOutShards);
-        }
-
-        return QueryResult.complete(merged);
     }
 
     // ─────────────── Merge and Deduplication ───────────────
@@ -233,7 +231,7 @@ public class DistributedQueryCoordinator implements AutoCloseable {
                     incoming.score() > existing.score() ? incoming : existing);
         }
 
-        // Sort by descending score and take top-K
+        // Sort by score descending and take top-K
         List<ScoredResult> merged = new ArrayList<>(bestByDocId.values());
         merged.sort(Comparator.naturalOrder()); // ScoredResult.compareTo is descending
         if (merged.size() > topK) {
