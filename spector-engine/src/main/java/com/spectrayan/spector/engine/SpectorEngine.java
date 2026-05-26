@@ -766,6 +766,27 @@ public class SpectorEngine implements AutoCloseable {
             return this;
         }
 
+        /**
+         * Enables VASQ-4 (FWHT-rotated INT4, nibble-packed) quantization with default oversampling (3).
+         *
+         * <p>VASQ-4 provides ~2× additional compression over VASQ-8 (6–8× vs float32).
+         * Auto-calibrates with tighter clipping (2.5σ) for optimal use of 15 quantization levels.</p>
+         */
+        public Builder vasq4() {
+            this.config = config.withVasq4();
+            return this;
+        }
+
+        /**
+         * Enables VASQ-4 quantization with an explicit oversampling factor.
+         *
+         * @param oversamplingFactor number of extra candidates before rescoring (≥ 1; 3 recommended)
+         */
+        public Builder vasq4(int oversamplingFactor) {
+            this.config = config.withVasq4(oversamplingFactor);
+            return this;
+        }
+
         /** Sets persistence mode and data directory. */
         public Builder persistence(PersistenceMode mode, Path directory) {
             this.config = config.withPersistence(mode, directory);

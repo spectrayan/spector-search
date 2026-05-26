@@ -246,6 +246,28 @@ public record SpectorConfig(
     }
 
     /**
+     * Builder-style to enable VASQ-4 (FWHT-rotated INT4, nibble-packed) quantization.
+     *
+     * <p>VASQ-4 provides ~2× additional compression over VASQ-8 at the cost of slightly
+     * lower fidelity. With oversampling rescore, recall@10 is typically 97–99%.</p>
+     *
+     * @param oversamplingFactor rescore oversampling factor (≥ 1; 3 recommended)
+     */
+    public SpectorConfig withVasq4(int oversamplingFactor) {
+        return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
+                QuantizationType.VASQ_4, persistenceMode, dataDirectory,
+                indexType, ivfNlist, ivfNprobe, pqSubspaces,
+                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
+                Math.max(1, oversamplingFactor),
+                spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
+    }
+
+    /** Builder-style to enable VASQ-4 with the default oversampling factor (3). */
+    public SpectorConfig withVasq4() {
+        return withVasq4(3);
+    }
+
+    /**
      * Builder-style to set the rescore oversampling factor.
      *
      * <p>The oversampling factor controls how many extra candidates are retrieved
@@ -301,7 +323,7 @@ public record SpectorConfig(
     public int effectiveOversamplingFactor() {
         if (oversamplingFactor > 0) return oversamplingFactor;
         return switch (quantization) {
-            case SCALAR_INT4, TURBO_QUANT, VASQ -> 3;
+            case SCALAR_INT4, TURBO_QUANT, VASQ, VASQ_4 -> 3;
             case SCALAR_INT2 -> 5;
             default -> 1;
         };

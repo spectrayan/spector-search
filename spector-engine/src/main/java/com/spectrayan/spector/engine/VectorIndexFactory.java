@@ -95,6 +95,16 @@ public class VectorIndexFactory {
                     config.similarityFunction(), config.hnswParams(), oversampling);
         }
 
+        if (qt == QuantizationType.VASQ_4) {
+            int oversampling = config.effectiveOversamplingFactor();
+            log.info("Creating QuantizedHnswIndex (VASQ-4): dims={}, capacity={}, oversampling={}",
+                    config.dimensions(), config.capacity(), oversampling);
+            // VASQ-4 uses auto-calibration with tighter clipping (2.5σ, 15 levels).
+            return QuantizedHnswIndex.vasq4(
+                    config.dimensions(), config.capacity(),
+                    config.similarityFunction(), config.hnswParams(), oversampling);
+        }
+
         if (qt == QuantizationType.SCALAR_INT8) {
             log.info("Creating QuantizedHnswIndex (SQ8): dims={}, capacity={}",
                     config.dimensions(), config.capacity());
