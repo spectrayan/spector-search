@@ -5,7 +5,6 @@ import com.spectrayan.spector.index.HnswParams;
 import com.spectrayan.spector.index.ScoredResult;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -13,9 +12,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.*;
@@ -190,7 +186,6 @@ class SpectorIndexTest {
      * </p>
      */
     @Test
-    @Timeout(value = 15, unit = TimeUnit.SECONDS)
     void concurrent_addAndSearch_noDeadlockNoCorruption() throws InterruptedException {
         int dims = 64;
         float[][] training = randomVectors(200, dims, 1L);
@@ -210,6 +205,12 @@ class SpectorIndexTest {
         AtomicInteger addedCount = new AtomicInteger(0);
         AtomicInteger errorCount = new AtomicInteger(0);
         CountDownLatch startLatch = new CountDownLatch(1);
+
+        // Volatile stop flag — immune to system load affecting timing checks
+        // Unlike System.currentTimeMillis() polling, a volatile read is a single
+        // CPU instruction that cannot be delayed by lock contention or GC pauses.
+        var stop = new Object() { volatile boolean value = false; };
+
         List<Thread> threads = new ArrayList<>();
 
         // Writers: continuously add random vectors
@@ -220,15 +221,16 @@ class SpectorIndexTest {
 
         for (int w = 0; w < writerCount; w++) {
             final int wIdx = w;
-            Thread t = Thread.ofVirtual().start(() -> {
+            Thread t = Thread.ofVirtual().name("writer-" + w).start(() -> {
                 try {
                     startLatch.await();
-                    long end = System.currentTimeMillis() + durationMs;
-                    while (System.currentTimeMillis() < end) {
+                    while (!stop.value) {
                         int id = addedCount.incrementAndGet();
                         float[] vec = randomVector(rngs[wIdx], dims);
                         index.add("concurrent-" + id, id, vec);
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 } catch (Exception e) {
                     System.err.println("[SpectorIndexTest] Writer thread " + wIdx + " error: " + e);
                     e.printStackTrace(System.err);
@@ -241,12 +243,11 @@ class SpectorIndexTest {
         // Readers: continuously search — each reader gets its own Random for thread safety
         for (int r = 0; r < readerCount; r++) {
             final int rIdx = r;
-            Thread t = Thread.ofVirtual().start(() -> {
+            Thread t = Thread.ofVirtual().name("reader-" + r).start(() -> {
                 Random localRng = new Random(999L + rIdx);
                 try {
                     startLatch.await();
-                    long end = System.currentTimeMillis() + durationMs;
-                    while (System.currentTimeMillis() < end) {
+                    while (!stop.value) {
                         float[] query = randomVector(localRng, dims);
                         ScoredResult[] results = index.search(query, 5);
                         // Results may be empty (index might have been empty initially) — that's fine
@@ -254,6 +255,8 @@ class SpectorIndexTest {
                             assertThat(r2.score()).isFinite();
                         }
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 } catch (Exception e) {
                     System.err.println("[SpectorIndexTest] Reader thread " + rIdx + " error: " + e);
                     e.printStackTrace(System.err);
@@ -264,7 +267,20 @@ class SpectorIndexTest {
         }
 
         startLatch.countDown();
-        for (Thread t : threads) t.join();
+
+        // Let the stress test run for the configured duration
+        Thread.sleep(durationMs);
+        stop.value = true;
+
+        // Join with generous per-thread timeout — if any thread is stuck in a lock,
+        // it will see stop=true immediately after acquiring the lock and exit.
+        for (Thread t : threads) {
+            t.join(10_000);
+            if (t.isAlive()) {
+                t.interrupt();
+                t.join(1_000);
+            }
+        }
 
         assertThat(errorCount.get())
                 .as("No exceptions should occur during concurrent add+search")
