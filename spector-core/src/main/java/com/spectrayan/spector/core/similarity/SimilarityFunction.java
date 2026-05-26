@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core.similarity;
 
+import com.spectrayan.spector.core.quantization.vasq.Vasq4QueryState;
+import com.spectrayan.spector.core.quantization.vasq.Vasq4SimdKernel;
 import com.spectrayan.spector.core.quantization.vasq.VasqQueryState;
 import com.spectrayan.spector.core.quantization.vasq.VasqSimdKernel;
 
@@ -275,6 +277,28 @@ public enum SimilarityFunction {
             case DOT_PRODUCT -> VasqSimdKernel.computeDot(segment, offset, paddedDim, qs);
             // For cosine, inner product in FWHT-rotated space. Equals cosine for unit vectors.
             case COSINE      -> VasqSimdKernel.computeDot(segment, offset, paddedDim, qs);
+        };
+    }
+
+    /**
+     * Computes VASQ-4 quantized distance using a pre-prepared VASQ-4 query context and
+     * an off-heap {@link MemorySegment} storing nibble-packed INT4 encoded vectors.
+     *
+     * <p><b>Zero-copy:</b> reads directly from off-heap memory with zero JVM GC allocations.
+     * This is the hot path for VASQ-4 HNSW graph traversal.</p>
+     *
+     * @param segment  off-heap memory segment containing the encoded vector database
+     * @param offset   byte offset of the target vector's 4-byte norm header
+     * @param halfDim  half of paddedDim (number of nibble-packed code bytes to process)
+     * @param qs       pre-prepared VASQ-4 query state (from {@link com.spectrayan.spector.core.quantization.vasq.Vasq4QueryPrep})
+     * @return distance or similarity score appropriate for this function
+     */
+    public float computeVasq4(MemorySegment segment, long offset,
+                               int halfDim, Vasq4QueryState qs) {
+        return switch (this) {
+            case EUCLIDEAN   -> Vasq4SimdKernel.computeL2(segment, offset, halfDim, qs);
+            case DOT_PRODUCT -> Vasq4SimdKernel.computeDot(segment, offset, halfDim, qs);
+            case COSINE      -> Vasq4SimdKernel.computeDot(segment, offset, halfDim, qs);
         };
     }
 
