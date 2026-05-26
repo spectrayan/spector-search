@@ -19,6 +19,10 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-index</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

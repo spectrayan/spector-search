@@ -14,6 +14,11 @@
     <name>Spector Embedding API</name>
     <description>SPI interface for embedding providers. Zero dependencies — implement this to plug in any embedding model.</description>
 
-    <!-- No internal dependencies — this is a pure SPI module -->
+    <dependencies>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
+    </dependencies>
 
 </project>
