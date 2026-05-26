@@ -5,11 +5,12 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.Callable;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
+import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -240,37 +241,38 @@ public class BM25Index implements KeywordIndex {
      */
     private float[] scoreTermsParallel(List<String> terms, int n,
                                         int nDocs, double avgDL, int[] docLens) {
+        // Build tasks — one per term
+        List<Callable<float[]>> tasks = new ArrayList<>(terms.size());
+        for (String term : terms) {
+            tasks.add(() -> {
+                List<Posting> postings = invertedIndex.get(term);
+                if (postings == null) return null;
+                float idf = computeIdf(postings.size(), nDocs);
+                float[] termScores = new float[n];
+                accumulatePostings(postings, idf, termScores, docLens, avgDL);
+                return termScores;
+            });
+        }
+
         float[] mergedScores = new float[n];
 
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<float[]>> futures = new ArrayList<>(terms.size());
-
-            for (String term : terms) {
-                futures.add(executor.submit(() -> {
-                    List<Posting> postings = invertedIndex.get(term);
-                    if (postings == null) return null;
-                    float idf = computeIdf(postings.size(), nDocs);
-                    float[] termScores = new float[n];
-                    accumulatePostings(postings, idf, termScores, docLens, avgDL);
-                    return termScores;
-                }));
-            }
+        try {
+            List<float[]> results = ConcurrentTasks.forkJoinAll(tasks);
 
             // Merge: add each per-term array into the merged result
-            for (var future : futures) {
-                float[] termScores = future.get();
+            for (float[] termScores : results) {
                 if (termScores != null) {
                     for (int i = 0; i < n; i++) {
                         mergedScores[i] += termScores[i];
                     }
                 }
             }
-        } catch (InterruptedException e) {
-            java.lang.Thread.currentThread().interrupt();
-            log.warn("Parallel BM25 scoring interrupted", e);
-        } catch (ExecutionException e) {
+        } catch (ConcurrentExecutionException e) {
             log.error("Parallel BM25 scoring failed, falling back to sequential", e.getCause());
             return scoreTermsSequential(terms, n, nDocs, avgDL, docLens);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Parallel BM25 scoring interrupted", e);
         }
 
         return mergedScores;

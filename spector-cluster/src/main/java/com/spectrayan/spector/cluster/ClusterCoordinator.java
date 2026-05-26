@@ -1,12 +1,14 @@
 package com.spectrayan.spector.cluster;
 
+import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
+import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import com.spectrayan.spector.index.ScoredResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
 
 /**
  * Coordinator node for distributed Spector search.
@@ -19,6 +21,13 @@ import java.util.concurrent.*;
  * <pre>
  *   Client → Coordinator → [Shard 1, Shard 2, ..., Shard N] → Merge → Client
  * </pre>
+ *
+ * <h3>Concurrency</h3>
+ * <p>Uses {@link ConcurrentTasks#forkJoinAll} for parallel shard fan-out.
+ * In structured concurrency mode (JEP 505), if any shard fails, all other
+ * shard queries are automatically cancelled — preventing thread leaks.
+ * Falls back to classic virtual-thread executor when structured concurrency
+ * is disabled via {@code -Dspector.concurrency.structured=false}.</p>
  *
  * <h3>Search Flow</h3>
  * <ol>
@@ -39,7 +48,6 @@ public class ClusterCoordinator implements AutoCloseable {
 
     private final ClusterConfig config;
     private final List<RemoteShardClient> shardClients;
-    private final ExecutorService executor;
 
     /**
      * Creates a cluster coordinator.
@@ -49,14 +57,14 @@ public class ClusterCoordinator implements AutoCloseable {
     public ClusterCoordinator(ClusterConfig config) {
         this.config = config;
         this.shardClients = new ArrayList<>();
-        this.executor = Executors.newVirtualThreadPerTaskExecutor();
 
         // Create gRPC clients for each shard
         for (var node : config.nodes()) {
             shardClients.add(new RemoteShardClient(node));
         }
 
-        log.info("ClusterCoordinator initialized: {} shards", config.shardCount());
+        log.info("ClusterCoordinator initialized: {} shards, structuredConcurrency={}",
+                config.shardCount(), ConcurrentTasks.isStructuredConcurrencyEnabled());
     }
 
     /**
@@ -69,14 +77,11 @@ public class ClusterCoordinator implements AutoCloseable {
     public ScoredResult[] vectorSearch(float[] queryVector, int topK) {
         long startTime = System.nanoTime();
 
-        // Fan out to all shards in parallel
-        List<Future<ScoredResult[]>> futures = new ArrayList<>();
-        for (var client : shardClients) {
-            futures.add(executor.submit(() -> client.vectorSearch(queryVector, topK)));
-        }
-
-        // Collect and merge results
-        ScoredResult[] merged = collectAndMerge(futures, topK);
+        ScoredResult[] merged = fanOutAndMerge(
+                shardClients.stream()
+                        .map(client -> (Callable<ScoredResult[]>) () -> client.vectorSearch(queryVector, topK))
+                        .toList(),
+                topK);
 
         long elapsed = (System.nanoTime() - startTime) / 1_000_000;
         log.debug("Distributed vector search: {} shards, {} results, {}ms",
@@ -95,12 +100,11 @@ public class ClusterCoordinator implements AutoCloseable {
     public ScoredResult[] keywordSearch(String queryText, int topK) {
         long startTime = System.nanoTime();
 
-        List<Future<ScoredResult[]>> futures = new ArrayList<>();
-        for (var client : shardClients) {
-            futures.add(executor.submit(() -> client.keywordSearch(queryText, topK)));
-        }
-
-        ScoredResult[] merged = collectAndMerge(futures, topK);
+        ScoredResult[] merged = fanOutAndMerge(
+                shardClients.stream()
+                        .map(client -> (Callable<ScoredResult[]>) () -> client.keywordSearch(queryText, topK))
+                        .toList(),
+                topK);
 
         long elapsed = (System.nanoTime() - startTime) / 1_000_000;
         log.debug("Distributed keyword search: {} shards, {} results, {}ms",
@@ -120,12 +124,11 @@ public class ClusterCoordinator implements AutoCloseable {
     public ScoredResult[] hybridSearch(String queryText, float[] queryVector, int topK) {
         long startTime = System.nanoTime();
 
-        List<Future<ScoredResult[]>> futures = new ArrayList<>();
-        for (var client : shardClients) {
-            futures.add(executor.submit(() -> client.hybridSearch(queryText, queryVector, topK)));
-        }
-
-        ScoredResult[] merged = collectAndMerge(futures, topK);
+        ScoredResult[] merged = fanOutAndMerge(
+                shardClients.stream()
+                        .map(client -> (Callable<ScoredResult[]>) () -> client.hybridSearch(queryText, queryVector, topK))
+                        .toList(),
+                topK);
 
         long elapsed = (System.nanoTime() - startTime) / 1_000_000;
         log.debug("Distributed hybrid search: {} shards, {} results, {}ms",
@@ -173,34 +176,41 @@ public class ClusterCoordinator implements AutoCloseable {
         for (var client : shardClients) {
             client.close();
         }
-        executor.close();
         log.info("ClusterCoordinator closed");
+    }
+
+    // ─────────────── Core Fan-Out ───────────────
+
+    /**
+     * Fans out tasks in parallel using {@link ConcurrentTasks}, collects all results,
+     * and merges into global top-K.
+     */
+    private ScoredResult[] fanOutAndMerge(List<Callable<ScoredResult[]>> tasks, int topK) {
+        try {
+            List<ScoredResult[]> shardResults = ConcurrentTasks.forkJoinAll(tasks);
+            return mergeResults(shardResults, topK);
+        } catch (ConcurrentExecutionException e) {
+            log.warn("Shard search failed: {}", e.getCause().getMessage());
+            return new ScoredResult[0];
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Distributed search interrupted");
+            return new ScoredResult[0];
+        }
     }
 
     // ─────────────── Result merging ───────────────
 
     /**
-     * Collects results from all shard futures and merges into global top-K.
-     * Uses a min-heap to efficiently track the K best results across all shards.
+     * Merges results from all shards into global top-K.
+     * Sorts by score descending and takes top-K.
      */
-    private ScoredResult[] collectAndMerge(List<Future<ScoredResult[]>> futures, int topK) {
-        // Collect all results
+    private ScoredResult[] mergeResults(List<ScoredResult[]> shardResults, int topK) {
         List<ScoredResult> allResults = new ArrayList<>();
-        for (var future : futures) {
-            try {
-                ScoredResult[] shardResults = future.get(10, TimeUnit.SECONDS);
-                allResults.addAll(Arrays.asList(shardResults));
-            } catch (TimeoutException e) {
-                log.warn("Shard timed out");
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Merge interrupted");
-            } catch (ExecutionException e) {
-                log.warn("Shard search failed: {}", e.getCause().getMessage());
-            }
+        for (ScoredResult[] results : shardResults) {
+            allResults.addAll(Arrays.asList(results));
         }
 
-        // Sort by score descending and take top-K
         allResults.sort(Comparator.naturalOrder()); // ScoredResult is Comparable (descending)
         int count = Math.min(topK, allResults.size());
         return allResults.subList(0, count).toArray(ScoredResult[]::new);
