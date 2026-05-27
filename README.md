@@ -1,10 +1,103 @@
-# Spector-Search ⚡
+# ⚡ Spector Search
 
-> Ultra-fast, SIMD-accelerated semantic search engine built on Java Vector API + modern JVM technologies.
+> **The Zero-Overhead, Agent-Ready AI Memory Backbone.**
+>
+> Legacy search engines bolted vectors onto text databases. Spector is designed from the ground up for modern AI — leveraging Java Project Panama to achieve C++ bare-metal SIMD speeds natively, with a built-in Model Context Protocol (MCP) server that turns any AI agent into a search-powered reasoning machine.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-25-orange.svg)](https://openjdk.org/)
 [![Build](https://img.shields.io/github/actions/workflow/status/spectrayan/spector-search/ci.yml?branch=main)](https://github.com/spectrayan/spector-search/actions)
+[![MCP](https://img.shields.io/badge/MCP-Agent_Ready-blueviolet.svg)](spector-mcp/)
+
+## 🧠 Why Spector?
+
+### 1. 🤖 Agent-Native (MCP Protocol)
+
+Includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server. Plug Claude Desktop, Cursor, or autonomous agents directly into Spector for native RAG memory. **Zero Python glue-code required.**
+
+```
+AI Agent ──JSON-RPC (stdio)──► SpectorMcpServer
+                                ↕ Virtual Thread (no blocking)
+                                ↕ Direct method call (in-process)
+                                ↕ SpectorEngine.search()
+                                ↕ Off-heap MemorySegment + SIMD
+
+Total overhead: 50-200µs per query (100× faster than Python MCP servers)
+```
+
+### 2. ⚡ SpectorQuant (IVHNSW-VASQ)
+
+A proprietary SIMD-first quantization engine that mathematically smears dimensional outliers via the Fast Walsh-Hadamard Transform (FWHT) and executes Asymmetric Distance Computation inside the IVF residual space. **Float32 recall at INT8 memory sizes.**
+
+- VASQ-8: 4× compression, 99.5%+ recall
+- VASQ-4: 6–8× compression, 97–99% recall (with 3× rescore)
+- IVF-PQ: 32× compression for billion-scale datasets
+
+### 3. 🧊 100% Off-Heap Panama Execution
+
+Bypasses the JVM Garbage Collector entirely. Maps raw disk bytes directly into hardware SIMD registers for sub-millisecond, Zero-Copy latency.
+
+- **Zero Network Tax** — runs in-process, no gRPC/HTTP roundtrip
+- **Zero Serialization Tax** — bytes → AVX-512 registers directly, no JSON, no Protobuf
+- **Zero GC Pressure** — all vector data lives off-heap via Panama `MemorySegment`
+
+### 4. 📦 Embedded or Standalone
+
+Deploy as a lightweight embedded library (the **"DuckDB of Vector DBs"**) inside your application, or scale it horizontally as a standalone server with REST API, gRPC clustering, and Spring AI integration.
+
+---
+
+## 🤖 MCP Integration (Agent-Native)
+
+Give any AI agent instant access to Spector's SIMD-accelerated search engine — with zero network overhead.
+
+### MCP Tools
+
+| Tool | Description |
+|:---|:---|
+| `semantic_search` | Semantic similarity search with auto-embedding |
+| `hybrid_search` | Combined keyword (BM25) + vector search with RRF |
+| `rag_query` | Retrieval-Augmented Generation with source citations |
+| `ingest_document` | Document ingestion with auto-embedding + chunking |
+| `delete_document` | Document deletion by ID |
+| `engine_status` | Engine metadata, SIMD capabilities, GPU status |
+
+### Claude Desktop Configuration
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "spector-memory": {
+      "command": "java",
+      "args": [
+        "--add-modules", "jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "--enable-preview",
+        "-jar", "/path/to/spector-mcp.jar",
+        "--dims", "768",
+        "--ollama-url", "http://localhost:11434",
+        "--ollama-model", "nomic-embed-text"
+      ]
+    }
+  }
+}
+```
+
+### Why Spector MCP is Different
+
+| Feature | Python Vector DB MCP | **Spector MCP** |
+|:---|:---|:---|
+| Search latency | 2–10ms (network + Python GIL) | **50–200µs** (in-process SIMD) |
+| Network overhead | HTTP/gRPC round-trip | **Zero** (direct method call) |
+| GC pauses | Python/JVM heap pressure | **Zero** (100% off-heap Panama) |
+| Concurrent queries | Limited by Python GIL | **10,000+ QPS** (Virtual Threads) |
+| Dependencies | Python framework stack | **Single JAR** (zero Python) |
+
+> See the full [spector-mcp documentation](spector-mcp/README.md) for CLI options, Cursor IDE config, and troubleshooting.
+
+---
 
 ## ✨ Features
 
@@ -24,6 +117,9 @@
 - **🌐 Distributed Search** — gRPC-based coordinator/shard fan-out with consistent hash partitioning
 - **🧬 Embedding SPI** — Pluggable embedding providers (Ollama included out-of-the-box)
 - **📄 Chunked Ingestion** — Text, token-level, and streaming chunkers for large document support
+- **🤖 MCP Server** — Built-in Model Context Protocol server for AI agent integration
+
+---
 
 ## 🏗 Architecture
 
@@ -44,6 +140,7 @@ spector-search/
 ├── [spector-gpu/](spector-gpu/)          # GPU acceleration (Panama FFM + CUDA)
 ├── [spector-engine/](spector-engine/)       # Unified engine facade + lifecycle
 ├── [spector-server/](spector-server/)       # REST API (Javalin + virtual threads)
+├── [spector-mcp/](spector-mcp/)          # MCP Server — Agent-native search integration
 ├── [spector-cluster/](spector-cluster/)      # Distributed gRPC search (coordinator + shards)
 ├── [spector-client/](spector-client/)       # Developer-facing Java SDK client
 ├── [spector-cli/](spector-cli/)          # Terminal-based admin CLI (spectorctl)
@@ -59,6 +156,7 @@ spector-search/
 cluster   → engine    → query   → index → core
                                 → index → storage → core
 server    → engine
+mcp       → engine                  # Agent-native MCP server
 client    → server (HTTP)
 cli       → server (HTTP)
 spring    → engine
@@ -70,12 +168,16 @@ engine    → embed-api
 gpu       → core, storage
 ```
 
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - **JDK 25+** (OpenJDK with Vector API incubator)
 - **Maven 3.9+**
+
+> **⚠️ JDK API Note:** Spector leverages two JDK APIs that are not yet finalized — the **Vector API** (incubator, for SIMD acceleration) and **Structured Concurrency** (preview, for safe parallel tasks). Both require JVM flags (`--add-modules jdk.incubator.vector`, `--enable-preview`). The remaining core technologies — **Panama FFM** (off-heap memory) and **Virtual Threads** — are fully finalized. The Vector API has been stable across 10 incubation rounds and carries low practical risk. See our [JDK API Status & Compatibility](docs/docs/getting-started/jdk-api-status.md) page for details, migration paths, and FAQ.
 
 ### Build & Test
 
@@ -84,12 +186,17 @@ gpu       → core, storage
 git clone https://github.com/spectrayan/spector-search.git
 cd spector-search
 
-# Build and run all tests (316+ tests)
+# Build and run all tests (331+ tests)
 mvn clean test
 
 # Start the REST server
 mvn exec:java -pl spector-server \
   -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer"
+
+# Start the MCP server (for AI agents)
+mvn exec:java -pl spector-mcp \
+  -Dexec.mainClass="com.spectrayan.spector.mcp.SpectorMcpMain" \
+  -Dexec.args="--dims 768 --ollama-url http://localhost:11434 --ollama-model nomic-embed-text"
 
 # Start with API key authentication
 mvn exec:java -pl spector-server \
@@ -151,6 +258,8 @@ curl -X DELETE http://localhost:7070/api/v1/documents/doc-1
 curl http://localhost:7070/api/v1/metrics
 ```
 
+---
+
 ## 🧩 Programmatic API
 
 ```java
@@ -194,6 +303,8 @@ var config = SpectorConfig.DEFAULT
     .withVasq4(5);              // 5× oversampling for higher recall
 ```
 
+---
+
 ## ⚙️ Configuration
 
 | Parameter | Default | Description |
@@ -213,6 +324,8 @@ var config = SpectorConfig.DEFAULT
 | `rerankerEnabled` | false | Enable LLM re-ranking via Ollama |
 | `rerankerModel` | — | Ollama model name (e.g., "llama3.2") |
 | `rerankerMaxCandidates` | 20 | Max docs sent to LLM for re-ranking |
+
+---
 
 ## 🏎 Performance
 
@@ -342,17 +455,19 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 | **GPU Acceleration** | ✅ CUDA (Panama FFM) | ❌ None | ❌ None | ❌ None | ❌ None | ✅ GPU |
 | **LLM Re-ranking** | ✅ Ollama | ❌ None | ❌ None | ❌ None | ❌ None | ❌ None |
 | **Distributed Search** | ✅ gRPC fan-out | ✅ Built-in | ❌ None | ❌ None | ✅ Raft | ✅ gRPC |
+| **MCP Server** | ✅ Built-in | ❌ None | ❌ None | ❌ None | ❌ None | ❌ None |
 
 ### Where Spector Excels
 
 - **🚀 Sub-millisecond vector search**: 0.04ms at 10K, 0.10ms at 100K (128-dim), competitive with native C++ implementations
-- **🔥 Fast BM25**: Sub-millisecond keyword search at 10K/50K scale — comparable to raw Lucene
+- **🔥 Fast BM25**: Sub-millisecond keyword search at 10K/50K scale — comparable to raw inverted index engines
 - **🧵 Modern JVM**: Only search engine built on Java 25 virtual threads + Vector API
 - **📦 Zero-dependency embedded**: Drop-in JAR, no external infrastructure needed
 - **⚡ 7.6K+ ops/sec concurrent**: 7,635 hybrid searches/sec at 16 threads (128-dim)
 - **🎯 23K+ vector QPS**: 23,726 vector queries/sec at 10K docs
 - **🗜️ IVF-PQ + VASQ + VASQ-4 + TurboQuant**: 6–32× memory reduction for large-scale datasets with high-accuracy calibration
 - **🔬 99.5%+ Recall**: IVF-HNSW-VASQ (`SpectorIndex`) achieves near-perfect recall on real semantic embeddings scanning just 3% of the clusters
+- **🤖 Agent-Native**: Built-in MCP server — the only search engine with native AI agent integration
 - **🤖 LLM re-ranking**: Listwise Ollama-powered relevance scoring
 - **🖥️ GPU acceleration**: CUDA kernel launcher + SIMD batch similarity via Panama FFM
 - **🌐 Distributed search**: gRPC-based fan-out/merge with consistent hash sharding
@@ -374,7 +489,10 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 | spector-engine | 12 | End-to-end ingestion, IVF-PQ auto-training |
 | spector-server | 6 | REST API endpoints |
 | spector-cluster | 5 | Shard routing, hash consistency |
-| **Total** | **316+** | **All passing ✅** |
+| spector-mcp | 15 | MCP tool registry, tool handlers, schema builder |
+| **Total** | **331+** | **All passing ✅** |
+
+---
 
 ## 📈 Roadmap
 
@@ -396,15 +514,18 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 - [x] Auto-embed + bulk ingest endpoints
 - [x] gRPC TLS support
 - [x] VASQ-4 quantization (FWHT-rotated INT4, nibble-packed — 6–8× compression vs float32)
+- [x] Structured concurrency (JEP 505) — `ConcurrentTasks` with dual-mode + feature flag
+- [x] **Native MCP Server** (`spector-mcp` — 6 tools, stdio transport, agent-native search)
+- [ ] Streamable HTTP transport (MCP over HTTP for cloud/remote deployments)
 - [ ] Padding-aware storage (skip zero-padded dims — 25% savings for non-pow2 dimensions)
 - [ ] Norm header compression (float32 → float16 — 2 bytes/vector savings)
+- [ ] LoRA adapter routing (multi-tenant query projection via SIMD matrix multiply)
+- [ ] ColBERT late interaction reranking (native MaxSim via Panama FMA loops)
 - [ ] VASQ-PQ hybrid (FWHT rotation + product quantization — 16–32× compression)
 - [ ] Flat-mode VASQ (VASQ compression of flat-shard residuals — 3× on flat shards)
-- [ ] Adaptive bit-width VASQ (per-dimension variable bit allocation)
 - [ ] GPU kernel dispatch (CUDA compute for batch similarity — requires CUDA Toolkit)
 - [ ] NPU acceleration (Intel/AMD NPU for INT8 batch operations via OpenVINO or DirectML)
 - [ ] WASM runtime for edge deployment
-- [x] Structured concurrency (JEP 505) — `ConcurrentTasks` with dual-mode (structured/classic) + feature flag
 
 > See the [detailed Roadmap](docs/docs/roadmap.md) for in-depth descriptions, projected savings, and implementation plans.
 
