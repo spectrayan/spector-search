@@ -1,8 +1,8 @@
 # ⚡ Welcome to Spector Search
 
-> **Ultra-fast, SIMD-accelerated semantic search engine built on Java Vector API + modern JVM technologies.**
+> **The Zero-Overhead, Agent-Ready AI Memory Backbone.**
 
-Welcome to the Spector Search wiki — your central hub for everything about Spector Search, a high-performance pure-Java vector search engine. Whether you're building RAG pipelines, powering recommendation systems, or need sub-millisecond search with zero infrastructure, you're in the right place.
+Welcome to the Spector Search documentation — your central hub for the high-performance, agent-native AI search engine. Whether you're connecting AI agents via MCP, building RAG pipelines, powering recommendation systems, or need sub-millisecond search with zero infrastructure, you're in the right place.
 
 ---
 
@@ -10,13 +10,14 @@ Welcome to the Spector Search wiki — your central hub for everything about Spe
 
 | Metric | Value |
 |--------|-------|
+| 🤖 MCP Tools | **6 agent-ready tools** (semantic, hybrid, RAG, ingest, delete, status) |
 | ⚡ Vector Search Latency | **0.05 ms** avg @ 10K docs (128-dim) |
 | 🔍 Keyword Search Latency | **0.98 ms** avg @ 100K docs |
 | 🧬 Hybrid Search Latency | **0.17 ms** avg @ 10K docs |
 | 🚀 Vector Throughput | **18,800 queries/sec** @ 10K |
 | 🧵 Concurrent Hybrid | **14,000+ ops/sec** @ 16 threads (384-dim) |
 | 🗜️ IVF-PQ + TurboQuant | **8–32× memory reduction** |
-| ✅ Test Suite | **316+ tests**, all passing |
+| ✅ Test Suite | **331+ tests**, all passing |
 | 📦 Dependencies | **Zero** (JDK only) |
 
 ---
@@ -29,7 +30,15 @@ Welcome to the Spector Search wiki — your central hub for everything about Spe
 |------|-------------|
 | [Getting Started](getting-started/quickstart.md) | Build, run, and search in 5 minutes |
 | [What is Spector Search](about.md) | Product overview, use cases, and comparisons |
+| [JDK API Status](getting-started/jdk-api-status.md) | Vector API, Panama FFM, and preview feature compatibility |
 | [FAQ](faq.md) | Common questions answered |
+
+### 🤖 Agent Integration (MCP)
+
+| Page | Description |
+|------|-------------|
+| [MCP Integration Architecture](architecture/mcp-integration.md) | How the MCP server works under the hood |
+| [MCP Server Guide](sdk-usage/mcp-server.md) | Setup for Claude Desktop, Cursor, and custom agents |
 
 ### 🏗️ Architecture & Concepts
 
@@ -65,17 +74,20 @@ Welcome to the Spector Search wiki — your central hub for everything about Spe
 
 ```mermaid
 graph LR
-    A[📄 Document] --> B[🧩 Chunking]
-    B --> C[🧠 Embedding]
-    C --> D[⚡ HNSW + BM25 Index]
-    D --> E[🔍 Hybrid Search]
-    E --> F[🎯 RRF Fusion]
-    F --> G[🤖 LLM Re-ranking]
-    G --> H[✨ Results]
+    A["🤖 AI Agent"] --> B["📡 MCP Server"]
+    B --> C["⚡ SpectorEngine"]
+    C --> D["🧠 Hybrid Search"]
+    D --> E["🎯 RRF Fusion"]
+    E --> F["🤖 LLM Re-ranking"]
+    F --> G["✨ Results"]
+    
+    H["📄 Document"] --> I["🧩 Chunking"]
+    I --> J["🧬 Embedding"]
+    J --> C
 ```
 
 > [!TIP]
-> New here? Start with [Getting Started](getting-started/quickstart.md) to build and run your first search in under 5 minutes.
+> New here? Start with [Getting Started](getting-started/quickstart.md) to build and run your first search in under 5 minutes. Want to connect an AI agent? See the [MCP Server Guide](sdk-usage/mcp-server.md).
 
 ---
 
@@ -85,10 +97,11 @@ graph LR
 |---|---|
 | **Language** | Java 25 |
 | **License** | Apache 2.0 |
-| **Modules** | 16 Maven modules |
+| **Modules** | 18 Maven modules |
 | **Dependencies** | Zero (JDK only) |
 | **SIMD** | AVX2 / AVX-512 / NEON |
 | **GPU** | CUDA via Panama FFM |
+| **MCP** | Built-in, 6 agent-ready tools |
 | **Distributed** | gRPC fan-out + consistent hashing |
 
 ---

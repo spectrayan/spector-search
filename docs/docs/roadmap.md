@@ -93,7 +93,7 @@ The 4-byte `float32 exactNormSq` header can be compressed to 2 bytes using `floa
 !!! note "Status: Future Research"
     Very high implementation effort. Most aggressive compression option.
 
-After FWHT rotation, instead of scalar INT8/INT4 quantization, apply **Product Quantization** to the rotated coordinates. The FWHT rotation makes coordinates near-independent (isotropized), which is the ideal input distribution for PQ — similar to how FAISS's OPQ (Optimized PQ) works, but using FWHT instead of a learned rotation.
+After FWHT rotation, instead of scalar INT8/INT4 quantization, apply **Product Quantization** to the rotated coordinates. The FWHT rotation makes coordinates near-independent (isotropized), which is the ideal input distribution for PQ — similar to how Optimized PQ (OPQ) works with learned rotations, but using FWHT instead of an expensive SVD-based rotation matrix.
 
 **Memory layout:**
 ```
@@ -173,6 +173,65 @@ Instead of uniform INT8 across all dimensions, assign more bits to high-variance
 
 ---
 
+## Agentic AI
+
+### ✅ Native MCP Server {#mcp-server}
+
+!!! success "Completed"
+    Implemented in `spector-mcp` module. 6 tools, stdio transport, agent-native search.
+
+Built-in [Model Context Protocol](https://modelcontextprotocol.io/) server that gives AI agents (Claude Desktop, Cursor, autonomous agents) direct, in-process access to Spector’s search engine. Zero network overhead — tool handlers call `SpectorEngine` directly via virtual threads.
+
+**Tools:** `semantic_search`, `hybrid_search`, `rag_query`, `ingest_document`, `delete_document`, `engine_status`
+
+**Architecture:**
+- `McpToolHandler` abstract base (template method: timing, error handling, arg parsing)
+- `ToolSchemaBuilder` fluent JSON schema construction
+- `SpectorToolRegistry` for Open/Closed Principle tool registration
+- `SpectorResourceProvider` + `SpectorPromptProvider` for MCP resources/prompts
+- `ResultFormatter` shared formatting utilities
+
+---
+
+### 🔜 Streamable HTTP Transport {#mcp-http}
+
+!!! info "Status: Planned (next)"
+    Stdio covers Claude Desktop, Cursor, and all local agents. HTTP needed for cloud/remote deployments.
+
+Add HTTP-based MCP transport for scenarios where the agent and Spector run on different machines. The official MCP SDK supports Streamable HTTP transport — Spector would expose the same 6 tools over an HTTP endpoint.
+
+**Use cases:** Cloud deployments, remote agent connections, multi-agent architectures.
+
+---
+
+### 🔬 LoRA Adapter Routing {#lora-routing}
+
+!!! note "Status: Future Research"
+    Requires LoRA weight format specification and SIMD matrix multiply implementation.
+
+Multi-tenant query projection via SIMD matrix multiply. Instead of creating separate indexes per tenant, store one base index and apply per-tenant LoRA weight matrices at query time using Panama FMA loops.
+
+**How it works:**
+- Ingest base model embeddings once
+- Each tenant uploads a small LoRA matrix ($W_A$, typically 768×32 or similar)
+- At query time: $q_{tenant} = q_{base} \times W_A$ (microseconds via Panama SIMD)
+- Search the same index with the projected query
+
+**Expected impact:** Zero-downtime multi-tenant customization without index duplication.
+
+---
+
+### 🔬 ColBERT Late Interaction Reranking {#colbert}
+
+!!! note "Status: Future Research"
+    Requires token-level vector storage and MaxSim SIMD kernel.
+
+Native ColBERT reranking using Panama FMA loops. ColBERT stores a vector for every token in a document, then computes relevance via MaxSim (maximum similarity per query token). Python struggles with this due to GIL contention when routing massive matrices between C++ and Python memory.
+
+**Spector advantage:** Off-heap `MemorySegment` arrays and Fused-Multiply-Add Panama loops can natively execute ColBERT MaxSim reranking faster than almost any competitor.
+
+---
+
 ## Compute & Hardware
 
 ### 🔜 GPU Kernel Dispatch {#gpu-dispatch}
@@ -240,12 +299,16 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 | # | Improvement | Compression | Recall Impact | Effort | Status |
 |---|------------|-------------|---------------|--------|--------|
 | 1 | **VASQ-4** | 6–8× vs float32 | -2 to -4% (mitigated w/ rescore) | Medium | ✅ Done |
-| 2 | **Padding-aware storage** | +25% (non-pow2 dims) | None (L2) | Low | 🔜 Next |
-| 3 | **Norm header f16** | +2 bytes/vec | Negligible | Very Low | 🔜 Next |
-| 4 | **VASQ-PQ hybrid** | 16–32× vs float32 | -7 to -15% | Very High | 🔬 Research |
-| 5 | **Flat-mode VASQ** | 3× on flat shards | None or -0.5% | Medium | 🔬 Research |
-| 6 | **Adaptive bit-width** | ~10–15% | Negligible | Very High | 🔴 Not planned |
-| 7 | **GPU kernel dispatch** | N/A (compute) | N/A | Medium | 🔜 Infra ready |
-| 8 | **NPU acceleration** | N/A (compute) | N/A | High | 🔬 Exploratory |
-| 9 | **WASM edge runtime** | N/A (deployment) | N/A | High | 🔬 Exploratory |
-| 10 | **Structured concurrency** | N/A (runtime) | N/A | Low | ✅ Done |
+| 2 | **Native MCP Server** | N/A (agent integration) | N/A | Medium | ✅ Done |
+| 3 | **Padding-aware storage** | +25% (non-pow2 dims) | None (L2) | Low | 🔜 Next |
+| 4 | **Norm header f16** | +2 bytes/vec | Negligible | Very Low | 🔜 Next |
+| 5 | **Streamable HTTP transport** | N/A (deployment) | N/A | Medium | 🔜 Planned |
+| 6 | **VASQ-PQ hybrid** | 16–32× vs float32 | -7 to -15% | Very High | 🔬 Research |
+| 7 | **Flat-mode VASQ** | 3× on flat shards | None or -0.5% | Medium | 🔬 Research |
+| 8 | **LoRA adapter routing** | N/A (multi-tenant) | N/A | High | 🔬 Research |
+| 9 | **ColBERT late interaction** | N/A (reranking) | N/A | High | 🔬 Research |
+| 10 | **Adaptive bit-width** | ~10–15% | Negligible | Very High | 🔴 Not planned |
+| 11 | **GPU kernel dispatch** | N/A (compute) | N/A | Medium | 🔜 Infra ready |
+| 12 | **NPU acceleration** | N/A (compute) | N/A | High | 🔬 Exploratory |
+| 13 | **WASM edge runtime** | N/A (deployment) | N/A | High | 🔬 Exploratory |
+| 14 | **Structured concurrency** | N/A (runtime) | N/A | Low | ✅ Done |
