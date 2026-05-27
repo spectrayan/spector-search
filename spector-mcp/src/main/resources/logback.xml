@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for the Spector MCP Server.
+  
+  CRITICAL: All logging MUST go to stderr (System.err), NOT stdout.
+  Stdout is reserved exclusively for the JSON-RPC 2.0 message stream
+  between the MCP server and the AI agent client. Any text written to
+  stdout that is not valid JSON-RPC will corrupt the protocol stream
+  and crash the agent connection.
+-->
+<configuration>
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Suppress noisy framework loggers -->
+    <logger name="io.modelcontextprotocol" level="WARN" />
+    <logger name="com.fasterxml.jackson" level="WARN" />
+
+    <!-- Spector MCP at INFO for operational visibility -->
+    <logger name="com.spectrayan.spector.mcp" level="INFO" />
+
+    <!-- Engine internals at WARN to reduce noise -->
+    <logger name="com.spectrayan.spector" level="WARN" />
+
+    <root level="INFO">
+        <appender-ref ref="STDERR" />
+    </root>
+</configuration>
