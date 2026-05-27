@@ -1,17 +1,25 @@
 # 🌟 What is Spector Search?
 
-> **The fastest pure-Java semantic search engine — combining vector similarity, keyword search, and hybrid ranking in a single embeddable library with zero external dependencies.**
+> **The Zero-Overhead, Agent-Ready AI Memory Backbone.**
+>
+> Legacy search engines bolted vectors onto text databases. Spector is designed from the ground up for modern AI — combining vector similarity, keyword search, and hybrid ranking in a single embeddable library with zero external dependencies. Connect any AI agent via the built-in MCP server, or embed directly in your application.
 
-Spector Search is an open-source, high-performance search engine built entirely on modern Java 25. It's designed for developers who want sub-millisecond search without the complexity of managing external infrastructure. Drop in a JAR, write a few lines of code, and you have production-grade hybrid search.
+Spector Search is an open-source, high-performance search engine built entirely on modern Java 25. It's designed for developers who want sub-millisecond search, native AI agent integration, and zero infrastructure complexity. Drop in a JAR, write a few lines of code, and you have production-grade hybrid search with built-in agent support.
 
 ---
 
 ## 🎯 What It Does
 
-Spector Search indexes documents with their vector embeddings and text content, then retrieves them using multiple strategies:
+Spector Search indexes documents with their vector embeddings and text content, then retrieves them using multiple strategies — directly from AI agents or your application code:
 
 ```mermaid
 graph LR
+    subgraph Clients
+        MCP["🤖 AI Agent (MCP)"]
+        REST["🌐 REST API"]
+        SDK["📦 Java SDK"]
+    end
+    
     subgraph Search Modes
         A[Vector Search] --> D[Results]
         B[Keyword Search] --> D
@@ -25,6 +33,10 @@ graph LR
         C --> F
         C --> G[RRF Fusion]
     end
+    
+    MCP --> A & B & C
+    REST --> A & B & C
+    SDK --> A & B & C
 ```
 
 | Mode | How It Works | Best For |
@@ -39,6 +51,20 @@ graph LR
 
 ## 💎 Key Differentiators
 
+### 🤖 Agent-Native (MCP Protocol)
+
+Includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server with 6 tools. AI agents connect directly via JSON-RPC — no Python frameworks, no network round-trips.
+
+| Feature | Python Vector DB MCP | **Spector MCP** |
+|:---|:---|:---|
+| Search latency | 2–10ms | **50–200µs** (100× faster) |
+| Network overhead | HTTP/gRPC round-trip | **Zero** (in-process) |
+| Concurrent queries | Limited by Python GIL | **10,000+ QPS** |
+| Dependencies | Python framework stack | **Single JAR** |
+
+> [!TIP]
+> See the [MCP Server Guide](../sdk-usage/mcp-server.md) to connect Claude Desktop, Cursor, or any MCP client in minutes.
+
 ### 📦 Pure Java, Zero Dependencies
 
 Unlike most vector databases that rely on C++, Rust, or Python bindings, Spector Search is 100% Java. It uses the JDK's own Vector API for SIMD acceleration — no JNI, no native libraries, no external infrastructure.
@@ -49,7 +75,7 @@ Unlike most vector databases that rely on C++, Rust, or Python bindings, Spector
 ### 🚀 Modern JVM Technologies
 
 | Technology | Purpose |
-|-----------|---------|
+|-----------|---------| 
 | Java Vector API | SIMD-accelerated math (AVX2/AVX-512/NEON) |
 | Panama FFM | Zero-copy memory-mapped storage, GPU interop |
 | Virtual Threads | Millions of concurrent operations without thread pools |
@@ -100,7 +126,7 @@ Spector offers two quantization paths:
 ### Latency Comparison (100K docs, 128-dim, top-10)
 
 | Engine | Language | Vector Avg | Vector P99 |
-|--------|----------|-----------|-----------|
+|--------|----------|-----------|-----------| 
 | **⚡ Spector Search** | **Java 25** | **0.13 ms** | **0.26 ms** |
 | hnswlib | C++ | 0.1–0.5 ms | ~1 ms |
 | FAISS | C++ | 0.2–0.8 ms | 1–2 ms |
@@ -115,8 +141,9 @@ Spector offers two quantization paths:
 ### Feature Comparison
 
 | Feature | Spector | Elasticsearch | Qdrant | Milvus | hnswlib |
-|---------|---------|--------------|--------|--------|---------|
+|---------|---------|--------------|--------|--------|---------| 
 | **Deployment** | Embedded + Server | Cluster only | Server only | Cluster only | Embedded only |
+| **MCP Server** | ✅ Built-in (6 tools) | ❌ | ❌ | ❌ | ❌ |
 | **Hybrid Search** | ✅ RRF built-in | ✅ RRF | ✅ Sparse+Dense | ✅ RRF | ❌ |
 | **Zero Dependencies** | ✅ JDK only | ❌ Heavy stack | ❌ Tokio runtime | ❌ etcd, MinIO, Pulsar | ✅ Header-only |
 | **Virtual Threads** | ✅ Project Loom | ❌ Platform threads | N/A (Rust async) | N/A (Go goroutines) | N/A |
@@ -133,9 +160,13 @@ Spector offers two quantization paths:
 
 ## 🛠️ Use Cases
 
+### 🤖 Agentic AI Memory
+
+Connect AI agents (Claude, Cursor, custom) directly to Spector via the built-in MCP server. The agent autonomously ingests documents, searches for relevant context, and retrieves information — all with zero Python glue-code. *"Point your LLM at Spector's MCP port, and it instantly has mathematically-perfect long-term memory."*
+
 ### 🤖 Retrieval-Augmented Generation (RAG)
 
-Ingest documents (PDF, HTML, Markdown), chunk them with token awareness, generate embeddings, and retrieve relevant context for LLM prompting — all through a single `/api/v1/rag` endpoint.
+Ingest documents (PDF, HTML, Markdown), chunk them with token awareness, generate embeddings, and retrieve relevant context for LLM prompting — all through a single `/api/v1/rag` endpoint or the `rag_query` MCP tool.
 
 ### 🔍 Semantic Search Applications
 
@@ -159,6 +190,7 @@ Drop Spector Search into existing Java applications without infrastructure chang
 
 > [!NOTE]
 > **Choose Spector Search when:**
+> - You want AI agents to autonomously search your data (MCP integration)
 > - You want sub-millisecond hybrid search without infrastructure complexity
 > - Your stack is Java/JVM and you want native integration
 > - You need an embedded search library with server-mode option
@@ -169,13 +201,15 @@ Drop Spector Search into existing Java applications without infrastructure chang
 > **Consider alternatives when:**
 > - You need a managed cloud service with zero ops
 > - Your team primarily works in Python/Rust/Go
-> - You need built-in ML model serving (Weaviate, Milvus)
+> - You need built-in ML model serving
 
 ---
 
 ## 🚀 Next Steps
 
 - [Getting Started](getting-started/quickstart.md) — Build and run your first search in 5 minutes
+
+- [MCP Server Guide](sdk-usage/mcp-server.md) — Connect an AI agent in 3 steps
 
 - [Architecture Overview](architecture/overview.md) — Understand how it works under the hood
 

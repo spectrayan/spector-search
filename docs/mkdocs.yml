@@ -1,5 +1,5 @@
 site_name: Spector Search Documentation
-site_description: Ultra-fast, SIMD-accelerated semantic search engine built on Java Vector API
+site_description: The Zero-Overhead, Agent-Ready AI Memory Backbone
 site_url: https://spectrayan.github.io/spector-search/
 repo_url: https://github.com/spectrayan/spector-search
 repo_name: spectrayan/spector-search
@@ -93,9 +93,11 @@ nav:
   - Getting Started:
       - Quick Start: getting-started/quickstart.md
       - Installation: getting-started/installation.md
+      - JDK API Status: getting-started/jdk-api-status.md
   - Architecture:
       - System Overview: architecture/overview.md
       - Core Concepts: architecture/core-concepts.md
+      - MCP Integration: architecture/mcp-integration.md
       - Ingestion Pipeline: architecture/ingestion-pipeline.md
       - RAG Pipeline: architecture/rag-pipeline.md
       - Distributed Mode: architecture/distributed-mode.md
@@ -112,6 +114,7 @@ nav:
       - "Whitepaper: VASQ + SpectorIndex": deep-dives/vasq-spectorindex-whitepaper.md
   - Reference:
       - REST API: api-reference/rest-endpoints.md
+      - MCP Server: sdk-usage/mcp-server.md
       - Java SDK: sdk-usage/java-client.md
       - Spring AI Integration: sdk-usage/spring-ai.md
       - CLI (spectorctl): cli-reference/spectorctl.md

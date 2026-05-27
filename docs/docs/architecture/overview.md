@@ -1,6 +1,6 @@
 # 🏗️ Architecture Overview
 
-> **Spector Search is a modular, JVM-native vector search engine organized as a Maven multi-module project.** This page covers the module structure, dependency graph, data flow, threading model, and memory architecture that make sub-millisecond search possible.
+> **Spector Search is a modular, JVM-native AI memory backbone organized as a Maven multi-module project.** This page covers the module structure, dependency graph, data flow, threading model, and memory architecture that make sub-millisecond, agent-native search possible.
 
 ---
 
@@ -39,6 +39,7 @@ graph LR
     subgraph "⚡ Engine & Interfaces"
         engine["spector-engine<br/><i>Unified facade + lifecycle</i>"]
         server["spector-server<br/><i>REST API + SSE streaming</i>"]
+        mcp["spector-mcp<br/><i>MCP Server — Agent-native</i>"]
         cluster["spector-cluster<br/><i>Distributed gRPC search</i>"]
         cli["spector-cli<br/><i>spectorctl CLI</i>"]
         client["spector-client<br/><i>Java client SDK</i>"]
@@ -61,6 +62,7 @@ graph LR
 graph TD
     server["🖥️ server"] --> cluster["🌐 cluster"]
     server --> engine["⚡ engine"]
+    mcp["🤖 mcp"] --> engine
 
     cluster --> engine
     engine --> query["🔍 query"]
@@ -94,6 +96,7 @@ graph TD
 |------|-------------|
 | `cluster → engine → query → index → storage → core` | Main data path |
 | `server → engine` | REST API entry point |
+| `mcp → engine` | MCP agent entry point (in-process, zero network) |
 | `engine → ingestion` | Document ingestion pipeline |
 | `engine → rag` | RAG context assembly pipeline |
 | `engine → gpu` | Optional GPU acceleration |
@@ -175,6 +178,33 @@ sequenceDiagram
 2. **BM25** and **HNSW** searches run in parallel on virtual threads
 3. **RRF Fusion** merges both ranked lists using `1/(k + rank)` scoring
 4. Optional **LLM Reranker** rescores top candidates via Ollama
+
+---
+
+## 🤖 Data Flow: MCP Agent Path
+
+```mermaid
+sequenceDiagram
+    participant Agent as 🤖 AI Agent (Claude/Cursor)
+    participant MCP as 📡 MCP Transport (stdio)
+    participant Handler as 🔧 McpToolHandler
+    participant Engine as ⚡ SpectorEngine
+    participant SIMD as 🔬 SIMD Kernels
+
+    Agent->>MCP: tools/call {"name": "semantic_search", "arguments": {"query": "..."}}
+    MCP->>Handler: SemanticSearchTool.execute(engine, args)
+    Handler->>Engine: engine.search(query, topK)
+    Engine->>SIMD: HNSW traversal (off-heap MemorySegment)
+    SIMD-->>Engine: ScoredResult[] (~100µs)
+    Engine-->>Handler: SearchResponse
+    Handler-->>MCP: CallToolResult
+    MCP-->>Agent: JSON-RPC response with search results
+```
+
+The MCP path is identical to the programmatic API path — the MCP server simply wraps `SpectorEngine` method calls with JSON-RPC transport. There is **zero network overhead** because everything runs in the same JVM process.
+
+> [!TIP]
+> For full MCP architecture details, tool schemas, and design patterns, see the dedicated [MCP Integration](mcp-integration.md) page.
 
 ---
 
