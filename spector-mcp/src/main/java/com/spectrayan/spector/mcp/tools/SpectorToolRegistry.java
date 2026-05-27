@@ -1,8 +1,10 @@
 package com.spectrayan.spector.mcp.tools;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.memory.SpectorMemory;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
 
@@ -12,7 +14,7 @@ import io.modelcontextprotocol.server.McpServerFeatures;
  * <p>To add a new tool:</p>
  * <ol>
  *   <li>Create a class extending {@link McpToolHandler}</li>
- *   <li>Add a single entry to the {@link #HANDLERS} list below</li>
+ *   <li>Add a single entry to the handlers list below</li>
  * </ol>
  *
  * <p>All tools are instantiated once and reused across requests.
@@ -26,21 +28,43 @@ public final class SpectorToolRegistry {
     /**
      * Returns the list of all tool handlers registered in this server.
      *
-     * <p>The list is intentionally declared inline for simplicity.
-     * Adding a new tool requires only one new entry here.</p>
-     *
-     * @param serverVersion the server version string (passed to EngineStatusTool)
+     * @param serverVersion the server version string
      * @return unmodifiable list of tool handlers
      */
     public static List<McpToolHandler> handlers(String serverVersion) {
-        return List.of(
-                new SemanticSearchTool(),
-                new HybridSearchTool(),
-                new RagQueryTool(),
-                new IngestDocumentTool(),
-                new DeleteDocumentTool(),
-                new EngineStatusTool(serverVersion)
-        );
+        return handlers(serverVersion, null);
+    }
+
+    /**
+     * Returns tool handlers including memory tools when SpectorMemory is available.
+     *
+     * @param serverVersion the server version string
+     * @param memory        optional SpectorMemory instance (null if memory is not enabled)
+     * @return list of tool handlers
+     */
+    public static List<McpToolHandler> handlers(String serverVersion, SpectorMemory memory) {
+        var handlers = new ArrayList<McpToolHandler>();
+
+        // Core search/ingest tools
+        handlers.add(new SemanticSearchTool());
+        handlers.add(new HybridSearchTool());
+        handlers.add(new RagQueryTool());
+        handlers.add(new IngestDocumentTool());
+        handlers.add(new DeleteDocumentTool());
+        handlers.add(new EngineStatusTool(serverVersion));
+
+        // Memory tools (available when SpectorMemory is configured)
+        if (memory != null) {
+            handlers.add(new CoreMemoryAppendTool(memory));
+            handlers.add(new WorkingMemoryScratchpadTool(memory));
+            handlers.add(new RecallContextTool(memory));
+            handlers.add(new MemoryReinforceTool(memory));
+            handlers.add(new MemoryForgetTool(memory));
+            handlers.add(new MemoryStatusTool(memory));
+            handlers.add(new MemoryIntrospectTool(memory));
+        }
+
+        return List.copyOf(handlers);
     }
 
     /**
@@ -52,7 +76,20 @@ public final class SpectorToolRegistry {
      */
     public static List<McpServerFeatures.SyncToolSpecification> createAll(
             SpectorEngine engine, String serverVersion) {
-        return handlers(serverVersion).stream()
+        return createAll(engine, serverVersion, null);
+    }
+
+    /**
+     * Creates all tool specifications including memory tools.
+     *
+     * @param engine        the Spector engine instance
+     * @param serverVersion the server version string
+     * @param memory        optional SpectorMemory instance
+     * @return list of MCP tool specifications
+     */
+    public static List<McpServerFeatures.SyncToolSpecification> createAll(
+            SpectorEngine engine, String serverVersion, SpectorMemory memory) {
+        return handlers(serverVersion, memory).stream()
                 .map(handler -> handler.toToolSpecification(engine))
                 .toList();
     }
