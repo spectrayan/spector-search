@@ -30,6 +30,13 @@
             <artifactId>spector-embed-api</artifactId>
         </dependency>
 
+        <!-- ── Cognitive Memory (16 biological mechanisms) ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-memory</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- ── Official Anthropic MCP Java SDK ── -->
         <dependency>
             <groupId>io.modelcontextprotocol.sdk</groupId>

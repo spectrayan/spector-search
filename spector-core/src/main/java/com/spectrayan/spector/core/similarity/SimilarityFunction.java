@@ -145,15 +145,8 @@ public enum SimilarityFunction {
         @Override
         public float computeQuantizedFromSegment(float[] query, MemorySegment segment, long offset,
                                                   float[] mins, float[] scales, int length) {
-            // Dequantize on-the-fly from off-heap segment, compute L2 — no byte[] intermediate
-            float sum = 0;
-            for (int i = 0; i < length; i++) {
-                int unsigned = segment.get(ValueLayout.JAVA_BYTE, offset + i) & 0xFF;
-                float d = unsigned * scales[i] + mins[i];
-                float diff = query[i] - d;
-                sum += diff * diff;
-            }
-            return (float) Math.sqrt(sum);
+            // SIMD-accelerated: processes laneCount dimensions per iteration via FloatVector FMA
+            return QuantizedEuclideanDistance.compute(query, segment, offset, mins, scales, length);
         }
 
         @Override
