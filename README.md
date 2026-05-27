@@ -99,9 +99,35 @@ Add to your `claude_desktop_config.json`:
 
 ---
 
+## 🧠 Cognitive Memory (`spector-memory`)
+
+Spector Memory is a biologically-inspired cognitive memory engine that gives AI agents the ability to **remember**, **forget**, **consolidate**, and **associate** — with microsecond latency and zero garbage collection pressure.
+
+| Brain Region | Package | Function |
+|---|---|---|
+| 🧠 Cerebral Cortex | `cortex/` | 4-tier memory (Working → Episodic → Semantic → Procedural) |
+| 🔗 Synapses | `synapse/` | 32-byte header, 6-phase SIMD scoring, Bloom filter gating |
+| ⚡ Dopamine | `dopamine/` | Surprise detection, auto-importance, flashbulb pinning |
+| 😱 Amygdala | `amygdala/` | Emotional valence (positive/negative/neutral) |
+| 🔄 Hebbian | `hebbian/` | "Neurons that fire together wire together" |
+| 🛏️ Hippocampus | `hippocampus/` | Sleep consolidation, synaptic pruning, partition rebuild |
+| 😴 Habituation | `habituation/` | Anti-filter bubble — penalizes repetitive recall |
+| 🚫 Inhibition | `inhibition/` | Explicit memory suppression |
+
+**Key differentiators vs. Mem0, Letta, Zep:**
+- **~2ms** recall latency at 1M memories (vs. 50-200ms)
+- **Zero GC** — 100% off-heap Panama storage
+- **Fused scoring** — similarity × importance × decay in a single SIMD pass (no truncation trap)
+- **Synaptic tag gating** — 64-bit Bloom filter eliminates 99% of candidates in 1 CPU cycle
+
+> 📖 See the full [Cognitive Memory documentation](docs/docs/memory/index.md) and the [module README](spector-memory/README.md).
+
+---
+
 ## ✨ Features
 
 - **🔥 SIMD-Accelerated** — Hardware-accelerated vector math via Java Vector API (AVX2/AVX-512/NEON)
+- **🧠 Cognitive Memory** — Biologically-inspired 4-tier memory with fused SIMD scoring, synaptic tags, temporal decay, surprise detection, and sleep consolidation
 - **🧠 Hybrid Search** — Combines semantic vector search (HNSW) with keyword search (BM25) via Reciprocal Rank Fusion
 - **💾 Zero-Copy Storage** — Off-heap vector storage using Panama Foreign Function & Memory API
 - **🧵 Virtual Thread Native** — Designed for Project Loom's virtual threads, no `synchronized` blocks
@@ -137,6 +163,13 @@ spector-search/
 ├── [spector-query/](spector-query/)        # Hybrid orchestrator + RRF fusion + LLM re-ranking
 ├── [spector-embed-api/](spector-embed-api/)    # EmbeddingProvider SPI
 ├── [spector-embed-ollama/](spector-embed-ollama/) # Ollama embedding provider implementation
+├── [spector-memory/](spector-memory/)       # 🧠 Cognitive Memory — biologically-inspired AI agent memory
+│   ├── cortex/          # 4-tier stores (Working, Episodic, Semantic, Procedural)
+│   ├── synapse/         # 32-byte synaptic header + 6-phase SIMD scorer
+│   ├── dopamine/        # Surprise detection + flashbulb policy
+│   ├── hippocampus/     # Sleep consolidation + tombstone compaction
+│   ├── hebbian/         # Associative learning (co-activation)
+│   └── pipeline/        # Ingestion + recall pipelines
 ├── [spector-gpu/](spector-gpu/)          # GPU acceleration (Panama FFM + CUDA)
 ├── [spector-engine/](spector-engine/)       # Unified engine facade + lifecycle
 ├── [spector-server/](spector-server/)       # REST API (Javalin + virtual threads)
@@ -162,6 +195,7 @@ cli       → server (HTTP)
 spring    → engine
 rag       → engine
 ingestion → engine
+memory    → core, embed-api          # Cognitive Memory module
 engine    → gpu (optional)
 engine    → commons
 engine    → embed-api
@@ -478,11 +512,12 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Module | Tests | Coverage |
 |--------|-------|----------|
-| spector-core | 117 | SIMD kernels, similarity functions, scalar quantization |
+| spector-core | 276 | SIMD kernels, similarity functions, scalar/VASQ quantization, SIMD Euclidean |
 | spector-commons | 28 | Text chunkers, token chunker, streaming chunker, content extractor |
 | spector-storage | 38 | Off-heap stores, mmap persistence, quantized vector store |
 | spector-index | 79 | HNSW recall, BM25 scoring, IVF-PQ, PQ encode/decode |
 | spector-query | 29 | RRF fusion, hybrid orchestration, LLM re-ranking |
+| spector-memory | 167 | Cognitive scoring, tier stores, mmap persistence, synapse, Bloom filters, reverse index, performance benchmarks + 10 Ollama E2E tests |
 | spector-embed-api | 9 | Embedding SPI contracts |
 | spector-embed-ollama | 7 | Ollama provider, fallback behavior |
 | spector-gpu | 14 | GPU detection, SIMD batch similarity, CUDA launcher |
@@ -490,7 +525,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 | spector-server | 6 | REST API endpoints |
 | spector-cluster | 5 | Shard routing, hash consistency |
 | spector-mcp | 15 | MCP tool registry, tool handlers, schema builder |
-| **Total** | **331+** | **All passing ✅** |
+| **Total** | **685+** | **All passing ✅** |
 
 ---
 
@@ -535,7 +570,18 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## 📄 License
 
-This project is licensed under the Apache License 2.0 — see [LICENSE](LICENSE) for details.
+This repository is licensed under a **split licensing model**:
+
+1. **`spector-memory` Module**: Licensed under the **Business Source License 1.1 (BSL 1.1)**.
+   - Permits free use for non-production purposes.
+   - Permits production use for all purposes **except** offering it as a managed service or embedding/integrating it in a competing AI cognitive memory product or service.
+   - Automatically transitions to the **Apache License 2.0** on **May 27, 2030** (4 years from release).
+   - See [spector-memory/LICENSE](spector-memory/LICENSE) for details.
+
+2. **Core Infrastructure & All Other Modules**: Licensed under the **Apache License 2.0**.
+   - See [LICENSE](LICENSE) for details.
+
+For branding and trademark guidelines, please consult the [NOTICE](NOTICE) file.
 
 ## 🔒 Security
 
