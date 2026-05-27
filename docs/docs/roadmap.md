@@ -269,6 +269,20 @@ Compile the core SIMD kernels and HNSW index to WebAssembly for browser-based or
 
 ---
 
+### 🔬 Project Valhalla Value Classes {#valhalla}
+
+!!! note "Status: Future Research"
+    Exploratory evaluation of JEP 401 (Value Classes and Objects). Requires Project Valhalla Early-Access builds.
+
+Migrate hot-path intermediate records (e.g., `CognitiveResult`, candidate pairs, search options) to `value class` (or `value record`). This will allow the JVM JIT compiler to perform aggressive scalar replacement and store value arrays contiguously in memory, eliminating garbage collection overhead and pointer-chasing latency during HNSW index traversals.
+
+**Benefits:**
+- **Zero-GC Hot Path**: Short-lived search results and option records are stack-allocated, avoiding the JVM heap.
+- **Cache Locality**: Contiguous storage of value structures inside arrays prevents pointer chasing.
+- **Header Elimination**: Removes standard 12-to-16-byte JVM object headers for inline arrays.
+
+---
+
 ### ✅ Structured Concurrency (JEP 505) {#structured-concurrency}
 
 !!! success "Completed"
@@ -312,3 +326,4 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 | 12 | **NPU acceleration** | N/A (compute) | N/A | High | 🔬 Exploratory |
 | 13 | **WASM edge runtime** | N/A (deployment) | N/A | High | 🔬 Exploratory |
 | 14 | **Structured concurrency** | N/A (runtime) | N/A | Low | ✅ Done |
+| 15 | **Project Valhalla Value Classes** | N/A (zero-GC heap layouts) | None | Medium | 🔬 Research |
