@@ -3,9 +3,11 @@ package com.spectrayan.spector.mcp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.spectrayan.spector.core.similarity.SimilarityFunction;
-import com.spectrayan.spector.engine.SpectorConfig;
-import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.commons.config.SpectorProperties;
+import com.spectrayan.spector.commons.config.SpectorConfigFactory;
+import com.spectrayan.spector.embed.EmbeddingProvider;
+import com.spectrayan.spector.ingestion.EmbeddingProviderFactory;
+import com.spectrayan.spector.runtime.SpectorRuntime;
 
 /**
  * CLI entry point for the Spector MCP Server.
@@ -13,100 +15,99 @@ import com.spectrayan.spector.engine.SpectorEngine;
  * <p>Starts an MCP server on stdio transport, allowing AI agents
  * (Claude Desktop, Cursor, etc.) to connect via JSON-RPC 2.0.</p>
  *
+ * <h3>Configuration Hierarchy (highest priority wins)</h3>
+ * <ol>
+ *   <li>CLI arguments ({@code --dims 768})</li>
+ *   <li>System properties ({@code -Dspector.engine.dimensions=768})</li>
+ *   <li>Environment variables ({@code SPECTOR_ENGINE_DIMENSIONS=768})</li>
+ *   <li>Profile config file ({@code spector-{profile}.yml})</li>
+ *   <li>User config file ({@code spector.yml} in working directory)</li>
+ *   <li>{@code --config /path/to/config.yml} (explicit file)</li>
+ *   <li>Classpath defaults ({@code spector-defaults.yml} in JAR)</li>
+ * </ol>
+ *
  * <h3>Usage</h3>
  * <pre>
- *   # Basic (384-dim, in-memory)
+ *   # With config file (all settings from YAML)
+ *   java --add-modules jdk.incubator.vector -jar spector-mcp.jar --config spector.yml
+ *
+ *   # CLI overrides on top of config file
+ *   java --add-modules jdk.incubator.vector -jar spector-mcp.jar --dims 768 --ollama-model qwen3-embedding
+ *
+ *   # Minimal (all defaults from spector-defaults.yml)
  *   java --add-modules jdk.incubator.vector -jar spector-mcp.jar
- *
- *   # Custom dimensions
- *   java --add-modules jdk.incubator.vector -jar spector-mcp.jar --dims 768
- *
- *   # With Ollama embedding provider
- *   java --add-modules jdk.incubator.vector -jar spector-mcp.jar --dims 768 --ollama-url http://localhost:11434 --ollama-model nomic-embed-text
  * </pre>
- *
- * <h3>Claude Desktop Configuration</h3>
- * <pre>{@code
- *   {
- *     "mcpServers": {
- *       "spector-memory": {
- *         "command": "java",
- *         "args": [
- *           "--add-modules", "jdk.incubator.vector",
- *           "--enable-native-access=ALL-UNNAMED",
- *           "--enable-preview",
- *           "-jar", "/path/to/spector-mcp.jar",
- *           "--dims", "768"
- *         ]
- *       }
- *     }
- *   }
- * }</pre>
  */
 public class SpectorMcpMain {
 
     private static final Logger log = LoggerFactory.getLogger(SpectorMcpMain.class);
 
     public static void main(String[] args) {
-        // ── Parse CLI arguments ──
-        int dims = getIntArg(args, "--dims", 384);
-        int capacity = getIntArg(args, "--capacity", 100_000);
-        String ollamaUrl = getStringArg(args, "--ollama-url", null);
-        String ollamaModel = getStringArg(args, "--ollama-model", null);
-
         // ── Handle --help ──
         if (hasFlag(args, "--help") || hasFlag(args, "-h")) {
             printHelp();
             return;
         }
 
-        // ── Build the engine ──
-        SpectorConfig config = SpectorConfig.DEFAULT
-                .withDimensions(dims)
-                .withCapacity(capacity);
+        // ── Load hierarchical configuration ──
+        SpectorProperties.Builder propsBuilder = SpectorProperties.builder();
 
-        final SpectorEngine engine = buildEngine(config, ollamaUrl, ollamaModel);
+        // Explicit config file
+        String configFile = getStringArg(args, "--config", null);
+        if (configFile != null) {
+            propsBuilder.configFile(java.nio.file.Path.of(configFile));
+        }
+
+        // Profile
+        String profile = getStringArg(args, "--profile", null);
+        if (profile != null) {
+            propsBuilder.profile(profile);
+        }
+
+        // CLI args as overrides (highest priority after system props / env vars)
+        String cliDims = getStringArg(args, "--dims", null);
+        if (cliDims != null) propsBuilder.override("spector.engine.dimensions", cliDims);
+
+        String cliCapacity = getStringArg(args, "--capacity", null);
+        if (cliCapacity != null) propsBuilder.override("spector.engine.capacity", cliCapacity);
+
+        String cliOllamaUrl = getStringArg(args, "--ollama-url", null);
+        if (cliOllamaUrl != null) propsBuilder.override("spector.embedding.base-url", cliOllamaUrl);
+
+        String cliOllamaModel = getStringArg(args, "--ollama-model", null);
+        if (cliOllamaModel != null) propsBuilder.override("spector.embedding.model", cliOllamaModel);
+
+        String cliDataDir = getStringArg(args, "--data-dir", null);
+        if (cliDataDir != null) {
+            propsBuilder.override("spector.engine.data-directory", cliDataDir);
+            propsBuilder.override("spector.engine.persistence-mode", "DISK");
+        }
+
+        SpectorProperties props = propsBuilder.build();
+
+        // ── Create embedding provider ──
+        var embedDefaults = SpectorConfigFactory.embeddingDefaults(props);
+        EmbeddingProvider embedder = EmbeddingProviderFactory.create(
+                embedDefaults.baseUrl(), embedDefaults.model());
+        log.info("[Spector MCP] Embedding: {} @ {}", embedDefaults.model(), embedDefaults.baseUrl());
+
+        // ── Create runtime (engine + optional memory) ──
+        SpectorRuntime runtime = SpectorRuntime.from(props, embedder);
 
         // ── Start the MCP server ──
-        SpectorMcpServer server = new SpectorMcpServer(engine);
+        SpectorMcpServer server = new SpectorMcpServer(runtime);
 
         // Graceful shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             server.stop();
-            engine.close();
+            runtime.close();
             log.info("[Spector MCP] Shutdown complete");
         }));
 
         server.start();
     }
 
-    // ─────────────── Engine Builder ───────────────
 
-    private static SpectorEngine buildEngine(SpectorConfig config,
-                                              String ollamaUrl, String ollamaModel) {
-        if (ollamaUrl != null && ollamaModel != null) {
-            try {
-                // Dynamically load the Ollama embedding provider if available
-                var providerClass = Class.forName(
-                        "com.spectrayan.spector.embed.ollama.OllamaEmbeddingProvider");
-                var constructor = providerClass.getConstructor(String.class, String.class);
-                var provider = (com.spectrayan.spector.embed.EmbeddingProvider)
-                        constructor.newInstance(ollamaUrl, ollamaModel);
-                log.info("[Spector MCP] Embedding provider: {} ({})", ollamaModel, ollamaUrl);
-                return new SpectorEngine(config, provider);
-            } catch (ClassNotFoundException e) {
-                log.warn("[Spector MCP] spector-embed-ollama not on classpath. "
-                        + "Starting without embedding provider.");
-            } catch (Exception e) {
-                log.error("[Spector MCP] Failed to initialize embedding provider", e);
-            }
-        } else {
-            log.info("[Spector MCP] No embedding provider configured. "
-                    + "Semantic search will be unavailable. "
-                    + "Use --ollama-url and --ollama-model to enable.");
-        }
-        return new SpectorEngine(config);
-    }
 
     // ─────────────── CLI Parsing Helpers ───────────────
 
@@ -143,12 +144,25 @@ public class SpectorMcpMain {
                 Usage:
                   java --add-modules jdk.incubator.vector -jar spector-mcp.jar [options]
                 
-                Options:
-                  --dims <N>             Vector dimensionality (default: 384)
-                  --capacity <N>         Max document capacity (default: 100000)
-                  --ollama-url <URL>     Ollama server URL (e.g., http://localhost:11434)
-                  --ollama-model <NAME>  Ollama embedding model (e.g., nomic-embed-text)
+                Configuration:
+                  --config <FILE>        Explicit config file (YAML or .properties)
+                  --profile <NAME>       Active profile (loads spector-{profile}.yml)
+                
+                Override Options (highest priority):
+                  --dims <N>             Vector dimensionality
+                  --capacity <N>         Max document capacity
+                  --data-dir <PATH>      Data directory (enables DISK persistence)
+                  --ollama-url <URL>     Ollama server URL
+                  --ollama-model <NAME>  Ollama embedding model
                   --help, -h             Show this help message
+                
+                Config Hierarchy (highest priority wins):
+                  1. CLI arguments (--dims, --capacity, etc.)
+                  2. System properties (-Dspector.engine.dimensions=768)
+                  3. Environment variables (SPECTOR_ENGINE_DIMENSIONS=768)
+                  4. spector-{profile}.yml (profile-specific)
+                  5. spector.yml (working directory)
+                  6. spector-defaults.yml (bundled in JAR)
                 
                 MCP Tools:
                   semantic_search     Semantic similarity search with auto-embedding
@@ -157,21 +171,6 @@ public class SpectorMcpMain {
                   ingest_document     Document ingestion with auto-embedding
                   delete_document     Document deletion by ID
                   engine_status       Engine status and capabilities
-                
-                Claude Desktop config example:
-                  {
-                    "mcpServers": {
-                      "spector-memory": {
-                        "command": "java",
-                        "args": [
-                          "--add-modules", "jdk.incubator.vector",
-                          "--enable-native-access=ALL-UNNAMED",
-                          "--enable-preview",
-                          "-jar", "/path/to/spector-mcp.jar"
-                        ]
-                      }
-                    }
-                  }
                 """);
     }
 }

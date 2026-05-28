@@ -17,6 +17,10 @@
     <dependencies>
         <dependency>
             <groupId>com.spectrayan</groupId>
+            <artifactId>spector-runtime</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
             <artifactId>spector-engine</artifactId>
         </dependency>
         <dependency>
@@ -30,7 +34,7 @@
             <artifactId>javalin</artifactId>
         </dependency>
 
-        <!-- JSON serialization -->
+        <!-- JSON serialization (Jackson 2.x — required by Javalin 6.x) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

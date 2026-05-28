@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 
 import com.spectrayan.spector.core.simd.SimdCapability;
 import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.memory.SpectorMemory;
+import com.spectrayan.spector.runtime.SpectorRuntime;
 import com.spectrayan.spector.mcp.prompts.SpectorPromptProvider;
 import com.spectrayan.spector.mcp.resources.SpectorResourceProvider;
 import com.spectrayan.spector.mcp.tools.SpectorToolRegistry;
@@ -52,15 +54,17 @@ public class SpectorMcpServer {
     static final String SERVER_VERSION = "0.1.0";
 
     private final SpectorEngine engine;
+    private final SpectorMemory memory; // nullable
     private volatile McpSyncServer mcpServer;
 
     /**
-     * Creates an MCP server backed by the given engine.
+     * Creates an MCP server backed by the given runtime.
      *
-     * @param engine the Spector engine instance (must be initialized)
+     * @param runtime the Spector runtime (engine + optional memory)
      */
-    public SpectorMcpServer(SpectorEngine engine) {
-        this.engine = engine;
+    public SpectorMcpServer(SpectorRuntime runtime) {
+        this.engine = runtime.engine();
+        this.memory = runtime.memory();
     }
 
     /**
@@ -79,7 +83,7 @@ public class SpectorMcpServer {
                 SimdCapability.report());
 
         // ── Assemble providers ──
-        var toolSpecs  = SpectorToolRegistry.createAll(engine, SERVER_VERSION);
+        var toolSpecs  = SpectorToolRegistry.createAll(engine, SERVER_VERSION, memory);
         var resources  = SpectorResourceProvider.create(engine, SERVER_VERSION);
         var prompts    = SpectorPromptProvider.create(engine);
 

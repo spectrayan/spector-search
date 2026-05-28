@@ -1,20 +1,30 @@
 # ⚡ Spector MCP Server
 
-**Agent-native search integration for the Spector AI Memory Backbone.**
+**Agent-native search and cognitive memory integration for the Spector AI Memory Backbone.**
 
-Give any AI agent (Claude Desktop, Cursor, autonomous agents) instant access to Spector's SIMD-accelerated vector search engine — with zero network overhead. The MCP server runs in-process, calling `SpectorEngine` directly via virtual threads for 50–200µs query latency.
+Give any AI agent (Claude Desktop, Cursor, autonomous agents) instant access to Spector's SIMD-accelerated vector search engine and cognitive memory — with zero network overhead. The MCP server runs in-process via `SpectorRuntime`, calling the engine and memory directly on virtual threads for 50–200µs query latency.
 
 ## Architecture
 
 ```
 AI Agent ──JSON-RPC (stdio)──► SpectorMcpServer (thin orchestrator)
+                                ├── SpectorRuntime
+                                │   ├── SpectorEngine (search, ingest, RAG)
+                                │   └── SpectorMemory (cognitive — optional)
                                 ├── SpectorToolRegistry
-                                │   ├── SemanticSearchTool  ──► SpectorEngine.search()
-                                │   ├── HybridSearchTool    ──► SpectorEngine.keywordSearch()
-                                │   ├── RagQueryTool        ──► SpectorEngine.search() + formatting
-                                │   ├── IngestDocumentTool  ──► SpectorEngine.ingest()
-                                │   ├── DeleteDocumentTool  ──► SpectorEngine.delete()
-                                │   └── EngineStatusTool    ──► SpectorEngine metadata
+                                │   ├── SemanticSearchTool  ──► engine.search()
+                                │   ├── HybridSearchTool    ──► engine.keywordSearch()
+                                │   ├── RagQueryTool        ──► engine.search() + formatting
+                                │   ├── IngestDocumentTool  ──► engine.ingest()
+                                │   ├── DeleteDocumentTool  ──► engine.delete()
+                                │   ├── EngineStatusTool    ──► engine metadata
+                                │   ├── CoreMemoryAppendTool    ──► memory.remember()
+                                │   ├── RecallContextTool       ──► memory.recall()
+                                │   ├── MemoryStatusTool        ──► memory.introspect()
+                                │   ├── MemoryReinforceTool     ──► memory.reinforce()
+                                │   ├── MemoryForgetTool        ──► memory.forget()
+                                │   ├── MemoryIntrospectTool    ──► memory.introspect()
+                                │   └── WorkingMemoryScratchpadTool ──► memory.remember()
                                 ├── SpectorResourceProvider
                                 └── SpectorPromptProvider
 
@@ -25,7 +35,7 @@ Total overhead: 50-200µs per query (100× faster than Python MCP servers)
 
 ```
 spector-mcp/src/main/java/com/spectrayan/spector/mcp/
-├── SpectorMcpServer.java          ← Thin orchestrator (assembly only)
+├── SpectorMcpServer.java          ← Thin orchestrator (accepts SpectorRuntime)
 ├── SpectorMcpMain.java            ← CLI entry point
 ├── schema/
 │   └── ToolSchemaBuilder.java     ← Type-safe fluent builder for JSON schemas
@@ -37,7 +47,14 @@ spector-mcp/src/main/java/com/spectrayan/spector/mcp/
 │   ├── RagQueryTool.java
 │   ├── IngestDocumentTool.java
 │   ├── DeleteDocumentTool.java
-│   └── EngineStatusTool.java
+│   ├── EngineStatusTool.java
+│   ├── CoreMemoryAppendTool.java
+│   ├── RecallContextTool.java
+│   ├── MemoryStatusTool.java
+│   ├── MemoryReinforceTool.java
+│   ├── MemoryForgetTool.java
+│   ├── MemoryIntrospectTool.java
+│   └── WorkingMemoryScratchpadTool.java
 ├── resources/
 │   └── SpectorResourceProvider.java
 ├── prompts/
@@ -48,6 +65,8 @@ spector-mcp/src/main/java/com/spectrayan/spector/mcp/
 
 ## MCP Tools
 
+### Search Tools (always available)
+
 | Tool | Description |
 |:---|:---|
 | `semantic_search` | Semantic similarity search with auto-embedding |
@@ -57,46 +76,79 @@ spector-mcp/src/main/java/com/spectrayan/spector/mcp/
 | `delete_document` | Document deletion by ID |
 | `engine_status` | Engine metadata, SIMD capabilities, GPU status |
 
+### Cognitive Memory Tools (enabled via `spector.memory.enabled: true`)
+
+| Tool | Description |
+|:---|:---|
+| `core_memory_append` | Store a semantic memory with tags and source |
+| `recall_context` | Cognitive recall with fused scoring across tiers |
+| `memory_status` | Memory tier counts and persistence info |
+| `memory_reinforce` | Report positive/negative outcome for a memory |
+| `memory_forget` | Tombstone a memory by ID |
+| `memory_introspect` | Metamemory self-analysis on a topic |
+| `working_memory_scratchpad` | Quick-write to working memory |
+
 ## Quick Start
 
 ### 1. Build
 
 ```bash
-mvn package -pl spector-mcp -am -DskipTests
+mvn package -pl spector-dist -am -DskipTests
 ```
 
-### 2. Claude Desktop Configuration
+### 2. Configuration
+
+Create a `spector.yml` with your settings:
+
+```yaml
+spector:
+  engine:
+    dimensions: 768
+    persistence-mode: DISK
+    data-directory: .spector-data
+  embedding:
+    model: nomic-embed-text
+    base-url: http://localhost:11434
+  memory:
+    enabled: true                # Enable cognitive memory tools
+    persistence-path: .spector-memory
+```
+
+### 3. Claude Desktop Configuration
 
 Add to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "spector-memory": {
+    "spector-search": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
         "--enable-native-access=ALL-UNNAMED",
         "--enable-preview",
-        "-jar", "/path/to/spector-mcp.jar",
-        "--dims", "768",
-        "--ollama-url", "http://localhost:11434",
-        "--ollama-model", "nomic-embed-text"
+        "-jar", "/path/to/spector-dist/target/spector.jar",
+        "--config", "/path/to/spector.yml"
       ]
     }
   }
 }
 ```
 
-### 3. CLI Options
+### 4. CLI Options
 
 ```
+--config <FILE>        Explicit config file (YAML or .properties)
+--profile <NAME>       Configuration profile (loads spector-{profile}.yml)
 --dims <N>             Vector dimensionality (default: 384)
 --capacity <N>         Max document capacity (default: 100000)
+--data-dir <DIR>       Persistence directory (auto-enables DISK mode)
 --ollama-url <URL>     Ollama embedding server URL
 --ollama-model <NAME>  Ollama embedding model name
 --help, -h             Show help
 ```
+
+> **Recommended:** Use a `spector.yml` config file. CLI flags override config file values.
 
 ## Why Spector MCP is Different
 
@@ -107,6 +159,7 @@ Add to your `claude_desktop_config.json`:
 | GC pauses | Python/JVM heap pressure | **Zero** (100% off-heap Panama) |
 | Concurrent queries | Limited by Python GIL | **10,000+ QPS** (Virtual Threads) |
 | Dependencies | Python framework stack | **Single JAR** (zero Python) |
+| Cognitive memory | External service (Mem0, Zep) | **Built-in** (opt-in via config) |
 
 ## Design Patterns
 
@@ -161,4 +214,4 @@ Tests run: 15, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
-Covers: tool registry, all 6 tool handlers, schema builder, argument validation.
+Covers: tool registry, all tool handlers, schema builder, argument validation.

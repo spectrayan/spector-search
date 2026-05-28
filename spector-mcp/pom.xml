@@ -18,23 +18,23 @@
         Uses the official Anthropic MCP Java SDK for protocol compliance.</description>
 
     <dependencies>
-        <!-- ── Spector Engine (unified facade — search, ingest, RAG, embedding) ── -->
+        <!-- ── Spector Runtime (engine + memory + config) ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>
-            <artifactId>spector-engine</artifactId>
+            <artifactId>spector-runtime</artifactId>
         </dependency>
 
-        <!-- ── Embedding API (for auto-embed capability detection) ── -->
+        <!-- ── Ingestion (EmbeddingProviderFactory) ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>
-            <artifactId>spector-embed-api</artifactId>
+            <artifactId>spector-ingestion</artifactId>
         </dependency>
 
-        <!-- ── Cognitive Memory (16 biological mechanisms) ── -->
+        <!-- ── Ollama Embedding Provider (runtime — loaded via reflection by SpectorMcpMain) ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>
-            <artifactId>spector-memory</artifactId>
-            <optional>true</optional>
+            <artifactId>spector-embed-ollama</artifactId>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- ── Official Anthropic MCP Java SDK ── -->
@@ -46,7 +46,7 @@
 
         <!-- ── JSON serialization (JSON-RPC 2.0 message handling) ── -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
@@ -57,43 +57,5 @@
             <scope>runtime</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <!-- JAR with main class for standalone execution -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>com.spectrayan.spector.mcp.SpectorMcpMain</mainClass>
-                        </manifest>
-                    </archive>
-                </configuration>
-            </plugin>
-
-            <!-- Fat JAR for standalone deployment -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.spectrayan.spector.mcp.SpectorMcpMain</mainClass>
-                                </transformer>
-                            </transformers>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>
