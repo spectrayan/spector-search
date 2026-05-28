@@ -53,6 +53,8 @@ Give any AI agent instant access to Spector's SIMD-accelerated search engine —
 
 ### MCP Tools
 
+**Search Tools (always available):**
+
 | Tool | Description |
 |:---|:---|
 | `semantic_search` | Semantic similarity search with auto-embedding |
@@ -62,6 +64,18 @@ Give any AI agent instant access to Spector's SIMD-accelerated search engine —
 | `delete_document` | Document deletion by ID |
 | `engine_status` | Engine metadata, SIMD capabilities, GPU status |
 
+**Cognitive Memory Tools (enabled via `spector.memory.enabled: true`):**
+
+| Tool | Description |
+|:---|:---|
+| `core_memory_append` | Store a semantic memory with tags and source |
+| `recall_context` | Cognitive recall with fused scoring across tiers |
+| `memory_status` | Memory tier counts and persistence info |
+| `memory_reinforce` | Report positive/negative outcome for a memory |
+| `memory_forget` | Tombstone a memory by ID |
+| `memory_introspect` | Metamemory self-analysis on a topic |
+| `working_memory_scratchpad` | Quick-write to working memory |
+
 ### Claude Desktop Configuration
 
 Add to your `claude_desktop_config.json`:
@@ -69,16 +83,14 @@ Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "spector-memory": {
+    "spector-search": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
         "--enable-native-access=ALL-UNNAMED",
         "--enable-preview",
-        "-jar", "/path/to/spector-mcp.jar",
-        "--dims", "768",
-        "--ollama-url", "http://localhost:11434",
-        "--ollama-model", "nomic-embed-text"
+        "-jar", "/path/to/spector-dist/target/spector.jar",
+        "--config", "/path/to/spector.yml"
       ]
     }
   }
@@ -151,55 +163,59 @@ Spector Memory is a biologically-inspired cognitive memory engine that gives AI 
 
 ```
 spector-search/
-├── [spector-core/](spector-core/)         # SIMD kernels (DotProduct, Cosine, Euclidean, VectorOps)
-├── [spector-commons/](spector-commons/)      # Text chunkers, tokenizer, content extractor
-├── [spector-storage/](spector-storage/)      # Panama MemorySegment stores (InMemory + Mmap + Quantized)
-├── [spector-index/](spector-index/)        # HNSW + IVF-PQ vector indexes + BM25 keyword index
-│   ├── hnsw/             # HNSW graph-based ANN index (standard + quantized INT8/INT4/INT2)
-│   ├── ivf/              # IVF inverted file index + quantized IVF-PQ
-│   ├── pq/               # Product quantizer (K-Means++, ADC)
-│   ├── text/             # BM25 keyword scoring + analyzers
-│   └── fuzz/             # Index fuzz testing framework
-├── [spector-query/](spector-query/)        # Hybrid orchestrator + RRF fusion + LLM re-ranking
-├── [spector-embed-api/](spector-embed-api/)    # EmbeddingProvider SPI
-├── [spector-embed-ollama/](spector-embed-ollama/) # Ollama embedding provider implementation
-├── [spector-memory/](spector-memory/)       # 🧠 Cognitive Memory — biologically-inspired AI agent memory
-│   ├── cortex/          # 4-tier stores (Working, Episodic, Semantic, Procedural)
-│   ├── synapse/         # 32-byte synaptic header + 6-phase SIMD scorer
-│   ├── dopamine/        # Surprise detection + flashbulb policy
-│   ├── hippocampus/     # Sleep consolidation + tombstone compaction
-│   ├── hebbian/         # Associative learning (co-activation)
-│   └── pipeline/        # Ingestion + recall pipelines
-├── [spector-gpu/](spector-gpu/)          # GPU acceleration (Panama FFM + CUDA)
-├── [spector-engine/](spector-engine/)       # Unified engine facade + lifecycle
-├── [spector-server/](spector-server/)       # REST API (Javalin + virtual threads)
-├── [spector-mcp/](spector-mcp/)          # MCP Server — Agent-native search integration
-├── [spector-cluster/](spector-cluster/)      # Distributed gRPC search (coordinator + shards)
-├── [spector-client/](spector-client/)       # Developer-facing Java SDK client
-├── [spector-cli/](spector-cli/)          # Terminal-based admin CLI (spectorctl)
-├── [spector-ingestion/](spector-ingestion/)    # High-throughput streaming document processing pipelines
-├── [spector-rag/](spector-rag/)          # Zero-dependency Retrieval-Augmented Generation pipeline
-├── [spector-spring/](spector-spring/)       # Spring Boot starter and Spring AI integration auto-configurations
-└── [spector-bench/](spector-bench/)        # JMH benchmarks
+├── spector-core/           # SIMD kernels (DotProduct, Cosine, Euclidean, VectorOps)
+├── spector-commons/        # Config system, text chunkers, tokenizer, content extractor
+├── spector-storage/        # Panama MemorySegment stores (InMemory + Mmap + Quantized)
+├── spector-index/          # HNSW + IVF-PQ vector indexes + BM25 keyword index
+│   ├── hnsw/               # HNSW graph-based ANN index (standard + quantized INT8/INT4/INT2)
+│   ├── ivf/                # IVF inverted file index + quantized IVF-PQ
+│   ├── pq/                 # Product quantizer (K-Means++, ADC)
+│   ├── text/               # BM25 keyword scoring + analyzers
+│   └── fuzz/               # Index fuzz testing framework
+├── spector-query/          # Hybrid orchestrator + RRF fusion + LLM re-ranking
+├── spector-embed-api/      # EmbeddingProvider SPI
+├── spector-embed-ollama/   # Ollama embedding provider implementation
+├── spector-memory/         # 🧠 Cognitive Memory — biologically-inspired AI agent memory
+│   ├── cortex/             # 4-tier stores (Working, Episodic, Semantic, Procedural)
+│   ├── synapse/            # 32-byte synaptic header + 6-phase SIMD scorer
+│   ├── dopamine/           # Surprise detection + flashbulb policy
+│   ├── hippocampus/        # Sleep consolidation + tombstone compaction
+│   ├── hebbian/            # Associative learning (co-activation)
+│   └── pipeline/           # Ingestion + recall pipelines
+├── spector-gpu/            # GPU acceleration (Panama FFM + CUDA)
+├── spector-engine/         # Search engine facade + lifecycle
+├── spector-runtime/        # Unified application context (engine + memory + config)
+├── spector-ingestion/      # Generic file ingestion pipeline (CLI + API)
+├── spector-rag/            # Zero-dependency Retrieval-Augmented Generation pipeline
+├── spector-server/         # REST API (Javalin + virtual threads)
+├── spector-mcp/            # MCP Server — Agent-native search + memory integration
+├── spector-cluster/        # Distributed gRPC search (coordinator + shards)
+├── spector-client/         # Developer-facing Java SDK client
+├── spector-cli/            # Terminal-based admin CLI (spectorctl)
+├── spector-spring/         # Spring Boot starter and Spring AI integration
+├── spector-bench/          # JMH benchmarks
+└── spector-dist/           # Single fat JAR distribution (all modules)
 ```
 
 ### Module Dependency Graph
 
 ```
-cluster   → engine    → query   → index → core
-                                → index → storage → core
-server    → engine
-mcp       → engine                  # Agent-native MCP server
+runtime   → engine + memory         # Unified context (the brain)
+cluster   → engine  → query → index → core
+                    → index → storage → core
+server    → runtime                  # REST API
+mcp       → runtime                  # MCP agent server
+ingestion → engine                   # File ingestion pipeline
 client    → server (HTTP)
 cli       → server (HTTP)
 spring    → engine
 rag       → engine
-ingestion → engine
-memory    → core, embed-api          # Cognitive Memory module
+memory    → engine, core, embed-api  # Cognitive Memory module
 engine    → gpu (optional)
 engine    → commons
 engine    → embed-api
 gpu       → core, storage
+dist      → mcp + ingestion + runtime  # Fat JAR
 ```
 
 ---
@@ -220,22 +236,30 @@ gpu       → core, storage
 git clone https://github.com/spectrayan/spector-search.git
 cd spector-search
 
-# Build and run all tests (331+ tests)
+# Build and run all tests
 mvn clean test
 
-# Start the REST server
-mvn exec:java -pl spector-server \
-  -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer"
+# Build the distribution JAR (single JAR, all modules)
+mvn package -pl spector-dist -am -DskipTests
+```
 
+### Run with Configuration
+
+All settings are read from `spector.yml` (see [Configuration Guide](docs/docs/configuration/parameters.md)):
+
+```bash
 # Start the MCP server (for AI agents)
-mvn exec:java -pl spector-mcp \
-  -Dexec.mainClass="com.spectrayan.spector.mcp.SpectorMcpMain" \
-  -Dexec.args="--dims 768 --ollama-url http://localhost:11434 --ollama-model nomic-embed-text"
+java --add-modules jdk.incubator.vector \
+  --enable-native-access=ALL-UNNAMED --enable-preview \
+  -jar spector-dist/target/spector.jar \
+  --config spector.yml
 
-# Start with API key authentication
-mvn exec:java -pl spector-server \
-  -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer" \
-  -Dexec.args="7070 384 my-secret-key"
+# Start the file ingestion pipeline
+java --add-modules jdk.incubator.vector \
+  --enable-native-access=ALL-UNNAMED --enable-preview \
+  -cp spector-dist/target/spector.jar \
+  com.spectrayan.spector.ingestion.FileIngestionMain \
+  --config spector.yml --root .
 ```
 
 ### REST API
@@ -550,7 +574,9 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 - [x] gRPC TLS support
 - [x] VASQ-4 quantization (FWHT-rotated INT4, nibble-packed — 6–8× compression vs float32)
 - [x] Structured concurrency (JEP 505) — `ConcurrentTasks` with dual-mode + feature flag
-- [x] **Native MCP Server** (`spector-mcp` — 6 tools, stdio transport, agent-native search)
+- [x] **Native MCP Server** (`spector-mcp` — 13 tools: 6 search + 7 cognitive memory, stdio transport)
+- [x] **SpectorRuntime** — Unified application context (engine + memory), config-driven via `spector.yml`
+- [x] **Distribution JAR** (`spector-dist` — single fat JAR for all modules)
 - [ ] Streamable HTTP transport (MCP over HTTP for cloud/remote deployments)
 - [ ] Padding-aware storage (skip zero-padded dims — 25% savings for non-pow2 dimensions)
 - [ ] Norm header compression (float32 → float16 — 2 bytes/vector savings)

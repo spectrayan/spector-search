@@ -10,7 +10,7 @@
 graph LR
     subgraph "🔬 Core Layer"
         core["spector-core<br/><i>SIMD kernels</i>"]
-        commons["spector-commons<br/><i>Chunkers, tokenizer, readers</i>"]
+        commons["spector-commons<br/><i>Config, chunkers, tokenizer</i>"]
     end
 
     subgraph "💾 Storage Layer"
@@ -36,8 +36,9 @@ graph LR
         rag["spector-rag<br/><i>RAG pipeline</i>"]
     end
 
-    subgraph "⚡ Engine & Interfaces"
-        engine["spector-engine<br/><i>Unified facade + lifecycle</i>"]
+    subgraph "⚡ Runtime & Interfaces"
+        runtime["spector-runtime<br/><i>Unified context (engine + memory)</i>"]
+        engine["spector-engine<br/><i>Search facade + lifecycle</i>"]
         server["spector-server<br/><i>REST API + SSE streaming</i>"]
         mcp["spector-mcp<br/><i>MCP Server — Agent-native</i>"]
         cluster["spector-cluster<br/><i>Distributed gRPC search</i>"]
@@ -46,8 +47,13 @@ graph LR
         spring["spector-spring<br/><i>Spring AI VectorStore</i>"]
     end
 
-    subgraph "📈 Testing"
+    subgraph "🧠 Cognitive Memory"
+        memory["spector-memory<br/><i>Biologically-inspired agent memory</i>"]
+    end
+
+    subgraph "📈 Distribution"
         bench["spector-bench<br/><i>JMH benchmarks</i>"]
+        dist["spector-dist<br/><i>Single fat JAR</i>"]
     end
 ```
 
@@ -60,17 +66,23 @@ graph LR
 
 ```mermaid
 graph TD
-    server["🖥️ server"] --> cluster["🌐 cluster"]
-    server --> engine["⚡ engine"]
-    mcp["🤖 mcp"] --> engine
+    server["🖥️ server"] --> runtime["🧠 runtime"]
+    mcp["🤖 mcp"] --> runtime
 
-    cluster --> engine
+    runtime --> engine["⚡ engine"]
+    runtime --> memory["🧠 memory"]
+
+    cluster["🌐 cluster"] --> engine
     engine --> query["🔍 query"]
     engine --> ingestion["📥 ingestion"]
     engine --> rag["🤖 rag"]
     engine --> commons["📄 commons"]
     engine --> embedapi["🧬 embed-api"]
     engine --> gpu["🎮 gpu"]
+
+    memory --> core["🔬 core"]
+    memory --> engine
+    memory --> embedapi
 
     ingestion --> commons
     ingestion --> embedapi
@@ -84,27 +96,31 @@ graph TD
 
     query --> index["📊 index"]
     index --> storage["💾 storage"]
-    storage --> core["🔬 core"]
+    storage --> core
 
     gpu --> core
     gpu --> storage
+
+    dist["📦 dist"] --> mcp
+    dist --> runtime
+    dist --> ingestion
 ```
 
 **Dependency rules:**
 
 | Path | Description |
 |------|-------------|
+| `runtime → engine + memory` | Unified application context |
 | `cluster → engine → query → index → storage → core` | Main data path |
-| `server → engine` | REST API entry point |
-| `mcp → engine` | MCP agent entry point (in-process, zero network) |
+| `server → runtime` | REST API entry point |
+| `mcp → runtime` | MCP agent entry point (in-process, zero network) |
 | `engine → ingestion` | Document ingestion pipeline |
 | `engine → rag` | RAG context assembly pipeline |
 | `engine → gpu` | Optional GPU acceleration |
 | `engine → commons` | Document processing |
 | `engine → embed-api` | Embedding generation |
-| `ingestion → commons, embed-api, storage, index` | Ingestion dependencies |
-| `rag → query, embed-api, storage, commons` | RAG dependencies |
-| `gpu → core, storage` | GPU operates on vectors and storage |
+| `memory → engine, core, embed-api` | Cognitive memory module |
+| `dist → mcp + runtime + ingestion` | Fat JAR distribution |
 
 > [!IMPORTANT]
 > No circular dependencies. Each module defines clear interfaces at its boundary. You can depend on any module independently.
@@ -201,7 +217,7 @@ sequenceDiagram
     MCP-->>Agent: JSON-RPC response with search results
 ```
 
-The MCP path is identical to the programmatic API path — the MCP server simply wraps `SpectorEngine` method calls with JSON-RPC transport. There is **zero network overhead** because everything runs in the same JVM process.
+The MCP path routes through `SpectorRuntime` — which holds both the search engine and optional cognitive memory. The MCP server simply wraps runtime method calls with JSON-RPC transport. There is **zero network overhead** because everything runs in the same JVM process.
 
 > [!TIP]
 > For full MCP architecture details, tool schemas, and design patterns, see the dedicated [MCP Integration](mcp-integration.md) page.

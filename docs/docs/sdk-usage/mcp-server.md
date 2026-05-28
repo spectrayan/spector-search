@@ -8,14 +8,14 @@ This guide covers practical setup for Claude Desktop, Cursor IDE, and custom MCP
 
 ## Quick Start (3 Steps)
 
-### 1. Build the MCP Server JAR
+### 1. Build the Distribution JAR
 
 ```bash
 cd spector-search
-mvn package -pl spector-mcp -am -DskipTests
+mvn package -pl spector-dist -am -DskipTests
 ```
 
-The fat JAR is produced at `spector-mcp/target/spector-mcp-0.1.0-SNAPSHOT.jar`.
+The fat JAR is produced at `spector-dist/target/spector.jar`.
 
 ### 2. Configure Your AI Agent
 
@@ -24,16 +24,14 @@ Add the following to your agent's MCP configuration (see per-agent sections belo
 ```json
 {
   "mcpServers": {
-    "spector-memory": {
+    "spector-search": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
         "--enable-native-access=ALL-UNNAMED",
         "--enable-preview",
-        "-jar", "/path/to/spector-mcp-0.1.0-SNAPSHOT.jar",
-        "--dims", "768",
-        "--ollama-url", "http://localhost:11434",
-        "--ollama-model", "nomic-embed-text"
+        "-jar", "/path/to/spector-dist/target/spector.jar",
+        "--config", "/path/to/spector.yml"
       ]
     }
   }
@@ -42,12 +40,14 @@ Add the following to your agent's MCP configuration (see per-agent sections belo
 
 ### 3. Start Using
 
-Your AI agent now has 6 search tools available. Ask it natural questions and it will autonomously call the appropriate tool:
+Your AI agent now has access to up to 13 tools. With cognitive memory enabled (`spector.memory.enabled: true`), all 13 tools are registered. Otherwise, the 6 search tools are available:
 
 - *"Search for documents about SIMD acceleration"* → `semantic_search`
 - *"Find articles mentioning 'Panama' and related to memory management"* → `hybrid_search`
 - *"What does the codebase say about quantization?"* → `rag_query`
 - *"Add this document to the index: ..."* → `ingest_document`
+- *"Remember that the user prefers dark mode"* → `core_memory_append`
+- *"What do you remember about the user's preferences?"* → `recall_context`
 
 ---
 
@@ -55,14 +55,38 @@ Your AI agent now has 6 search tools available. Ask it natural questions and it 
 
 | Flag | Default | Description |
 |:---|:---|:---|
+| `--config <FILE>` | *(none)* | Explicit config file (YAML or .properties) |
+| `--profile <NAME>` | *(none)* | Configuration profile (loads `spector-{profile}.yml`) |
 | `--dims <N>` | 384 | Vector dimensionality (must match your embedding model) |
 | `--capacity <N>` | 100,000 | Maximum document capacity |
+| `--data-dir <DIR>` | *(none)* | Persistence directory (auto-enables DISK mode) |
 | `--ollama-url <URL>` | *(none)* | Ollama embedding server URL (e.g., `http://localhost:11434`) |
 | `--ollama-model <NAME>` | *(none)* | Ollama embedding model name (e.g., `nomic-embed-text`) |
 | `--help`, `-h` | — | Show help message |
 
-> [!IMPORTANT]
-> **Embedding provider is required for semantic search.** Without `--ollama-url` and `--ollama-model`, only keyword search (`hybrid_search` in `keyword` mode) and document management tools will work.
+> [!TIP]
+> **Recommended approach:** Use a `spector.yml` config file rather than CLI flags. CLI flags override values from the config file.
+
+### Configuration File
+
+All settings can be specified in a `spector.yml` file:
+
+```yaml
+spector:
+  engine:
+    dimensions: 768
+    capacity: 100000
+    persistence-mode: DISK
+    data-directory: .spector-data
+  embedding:
+    model: nomic-embed-text
+    base-url: http://localhost:11434
+  memory:
+    enabled: true              # Enable cognitive memory tools
+    persistence-path: .spector-memory
+```
+
+See the [Configuration Guide](../configuration/parameters.md) for the complete list of settings.
 
 ### Choosing Dimensions
 
@@ -106,16 +130,14 @@ Edit your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "spector-memory": {
+    "spector-search": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
         "--enable-native-access=ALL-UNNAMED",
         "--enable-preview",
-        "-jar", "/absolute/path/to/spector-mcp-0.1.0-SNAPSHOT.jar",
-        "--dims", "768",
-        "--ollama-url", "http://localhost:11434",
-        "--ollama-model", "nomic-embed-text"
+        "-jar", "/absolute/path/to/spector.jar",
+        "--config", "/absolute/path/to/spector.yml"
       ]
     }
   }
@@ -132,16 +154,14 @@ Add to your Cursor MCP settings (`.cursor/mcp.json` in your project, or global s
 ```json
 {
   "mcpServers": {
-    "spector-memory": {
+    "spector-search": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
         "--enable-native-access=ALL-UNNAMED",
         "--enable-preview",
-        "-jar", "/absolute/path/to/spector-mcp-0.1.0-SNAPSHOT.jar",
-        "--dims", "768",
-        "--ollama-url", "http://localhost:11434",
-        "--ollama-model", "nomic-embed-text"
+        "-jar", "/absolute/path/to/spector.jar",
+        "--config", "/absolute/path/to/spector.yml"
       ]
     }
   }
@@ -178,6 +198,8 @@ Any application implementing the [MCP client specification](https://modelcontext
 
 Once connected, your agent has access to these tools:
 
+### Search Tools (always available)
+
 | Tool | Description | Requires Embedding |
 |:---|:---|:---|
 | `semantic_search` | Vector similarity search | ✅ |
@@ -186,6 +208,18 @@ Once connected, your agent has access to these tools:
 | `ingest_document` | Add documents to the index | ✅ (for auto-embedding) |
 | `delete_document` | Remove documents by ID | ❌ |
 | `engine_status` | Engine capabilities and stats | ❌ |
+
+### Cognitive Memory Tools (enabled via `spector.memory.enabled: true`)
+
+| Tool | Description |
+|:---|:---|
+| `core_memory_append` | Store a semantic memory with tags and source |
+| `recall_context` | Cognitive recall with fused scoring across tiers |
+| `memory_status` | Memory tier counts and persistence info |
+| `memory_reinforce` | Report positive/negative outcome for a memory |
+| `memory_forget` | Tombstone a memory by ID |
+| `memory_introspect` | Metamemory self-analysis on a topic |
+| `working_memory_scratchpad` | Quick-write to working memory |
 
 > [!NOTE]
 > For full tool schemas and parameter details, see the [MCP Integration Architecture](../architecture/mcp-integration.md#tool-reference) page.

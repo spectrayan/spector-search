@@ -182,26 +182,40 @@ var stats = memory.introspect();
 
 ## Claude Desktop / MCP Integration
 
-Add cognitive memory to your AI agent via the built-in MCP server:
+Add cognitive memory to your AI agent via the built-in MCP server. Enable memory in your `spector.yml`:
+
+```yaml
+spector:
+  engine:
+    dimensions: 4096
+  embedding:
+    model: qwen3-embedding
+    base-url: http://localhost:11434
+  memory:
+    enabled: true
+    persistence-path: .spector-memory
+```
+
+Then configure your agent:
 
 ```json
 {
   "mcpServers": {
-    "spector-memory": {
+    "spector-search": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
         "--enable-native-access=ALL-UNNAMED",
         "--enable-preview",
-        "-jar", "/path/to/spector-mcp.jar",
-        "--dims", "4096",
-        "--ollama-url", "http://localhost:11434",
-        "--ollama-model", "qwen3-embedding"
+        "-jar", "/path/to/spector.jar",
+        "--config", "/path/to/spector.yml"
       ]
     }
   }
 }
 ```
+
+With `memory.enabled: true`, the MCP server registers all 13 tools (6 search + 7 cognitive memory).
 
 ---
 

@@ -1,11 +1,11 @@
 ---
 title: "Performance & SIMD"
-description: "Benchmark results, SIMD kernel throughput, optimization techniques, and virtual thread scaling for Spector Memory."
+description: "Benchmark results, SIMD kernel throughput, and architecture decisions that enable microsecond-scale latency in Spector Memory."
 ---
 
 # ⚡ Performance & SIMD
 
-Spector Memory is engineered for microsecond-scale latency. This page documents the benchmark results and the 12 performance optimizations (P1-P12) that make it possible.
+Spector Memory is engineered for microsecond-scale latency. This page documents the benchmark results and the key performance techniques that make it possible.
 
 ---
 
@@ -19,22 +19,20 @@ Measured on **Intel Core Ultra 9 285K**, Java 25, AVX2 256-bit (8 float lanes), 
 | **SIMD L2 Distance (384-dim)** | 1.5 µs/vector | 2.6M vectors/sec |
 | **SIMD L2 Distance (768-dim)** | 2.2 µs/vector | 1.4M vectors/sec |
 | **SIMD L2 Distance (1024-dim)** | 3.0 µs/vector | 1.0M vectors/sec |
-| **Reverse Index Lookup** | 180 ns/lookup | O(1) ConcurrentHashMap |
+| **Reverse Index Lookup** | 180 ns/lookup | O(1) packed-key ConcurrentHashMap |
 | **CognitiveScorer (10K × 128-dim)** | 2.9 ms total | Full 6-phase pipeline |
-| **Batch Habituation (1K IDs)** | 101 µs total | 100ns per penalty computation |
+| **Batch Habituation (1K IDs)** | 101 µs total | 100 ns per penalty computation |
 | **TierRouter.totalCount()** | 17 ms / 100K calls | 170 ns per call |
 | **Full Pipeline (1K ingest + 100 recall)** | < 50 ms/query | End-to-end latency |
 | **Real Embedding (qwen3-embedding 4096-dim)** | 31 ms/embed | Via Ollama (network bound) |
 
 ---
 
-## The 12 Optimizations
+## Key Techniques
 
-### P1: O(1) Reverse Index
+### O(1) Reverse Index
 
-**Before**: `findIdByOffset()` performed O(n) linear scan over the location map.
-
-**After**: Dedicated `ConcurrentHashMap<Long, String>` reverse index using packed keys:
+Memory IDs are resolved in constant time using a packed-key `ConcurrentHashMap<Long, String>`:
 
 ```java
 // Pack (type, offset) into a single long — zero String concatenation
@@ -43,11 +41,11 @@ private static long reverseKey(MemoryType type, long offset) {
 }
 ```
 
-**Impact**: Lookup drops from O(n) to O(1) — **180 ns** at 50K entries.
+This yields **180 ns** lookups at 50K entries.
 
 ---
 
-### P3: SIMD Euclidean Distance
+### SIMD Euclidean Distance
 
 Quantized INT8 Euclidean distance uses the Java Vector API for hardware acceleration:
 
@@ -61,49 +59,25 @@ FloatVector vDiff = vQuery.sub(vDequant);
 vSum = vDiff.fma(vDiff, vSum);                          // Fused multiply-add
 ```
 
-**Impact**: 2.2 µs/vector at 768 dimensions (1.4M vectors/sec).
+This achieves **2.2 µs/vector** at 768 dimensions (1.4M vectors/sec).
 
 ---
 
-### P7: Batch Habituation
+### Batch Habituation
 
-**Before**: Individual `ConcurrentHashMap.get()` + `put()` per ID.
-
-**After**: `batchPenalty(String[])` computes all penalties in a single method call with amortized map access.
-
-**Impact**: 1K penalties in **101 µs** total.
+The habituation penalty module computes all penalties in a single batch call with amortized map access, processing 1K penalties in **101 µs** total.
 
 ---
 
-### P8: Header Capture During Scoring
+### Inline Header Capture
 
-**Before**: `CognitiveScorer` returned only offsets; `RecallPipeline` re-read headers from off-heap.
-
-**After**: `ScoredRecord` captures the `CognitiveHeader` inline during scoring — zero re-reads.
-
-```java
-// P8: Header already captured during scoring — no off-heap re-read
-results.add(headerToResult(sr, sr.header(), type));
-```
-
-**Impact**: Eliminates N×8 off-heap reads per recall query.
+`ScoredRecord` captures the `CognitiveHeader` inline during scoring, eliminating N×8 off-heap re-reads per recall query.
 
 ---
 
-### P12: TierRouter.totalCount()
+### Direct TierRouter Access
 
-**Before**: Iterable loop over all stores.
-
-**After**: Direct field access via typed store references:
-
-```java
-public int totalCount() {
-    return workingStore.size() + episodicStore.size()
-            + semanticStore.size() + proceduralStore.size();
-}
-```
-
-**Impact**: 100K calls in **17 ms** (170 ns/call).
+`totalCount()` uses direct field access to typed store references rather than iteration, completing 100K calls in **17 ms** (170 ns/call).
 
 ---
 
