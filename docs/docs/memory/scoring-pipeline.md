@@ -218,18 +218,22 @@ Results are tracked in a **min-heap** of size K — only the top-K scored record
 
 ## The Math: Gating Efficiency
 
-```
-1,000,000 episodic memories
-├── Phase 1 (tombstone):  -50,000  → 950,000 remain
-├── Phase 2 (tag gating): -940,000 → 10,000 remain     ← 1 cycle each
-├── Phase 3 (valence):    -2,000   → 8,000 remain
-├── Phase 4 (importance): -3,000   → 5,000 remain
-├── Phase 5 (SIMD L2):     5,000 × 200 cycles           ← expensive
-└── Phase 6 (fused score):  5,000 × 7 cycles
+```mermaid
+graph TD
+    A["1,000,000 episodic memories"] --> B["Phase 1: Tombstone check<br/>−50,000 → 950,000 remain<br/><i>~1 cycle each</i>"]
+    B --> C["Phase 2: Synaptic tag gating<br/>−940,000 → 10,000 remain<br/><i>~1 cycle each</i>"]
+    C --> D["Phase 3: Valence filter<br/>−2,000 → 8,000 remain<br/><i>~2 cycles each</i>"]
+    D --> E["Phase 4: Importance pre-screen<br/>−3,000 → 5,000 remain<br/><i>~5 cycles each</i>"]
+    E --> F["Phase 5: SIMD L2 distance<br/>5,000 × 200 cycles<br/><i>expensive</i>"]
+    F --> G["Phase 6: Fused score<br/>5,000 × 7 cycles"]
+    G --> H["✅ ~2ms total"]
 
-Total: ~1ms for phases 1-4 + ~1ms for phase 5 = ~2ms
-Without gating: 1,000,000 × 200 cycles = ~200ms → 100× improvement
+    style A fill:#e74c3c,color:white
+    style C fill:#f39c12,color:white
+    style H fill:#00b894,color:white
 ```
+
+> **Without gating**: 1,000,000 × 200 cycles = ~200ms → **100× improvement** from early elimination.
 
 ---
 

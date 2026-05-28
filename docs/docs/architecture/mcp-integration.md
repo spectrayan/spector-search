@@ -244,22 +244,40 @@ List.of(
 
 Python MCP servers introduce multiple layers of overhead:
 
-```
-Agent → JSON-RPC → Python process → deserialize → call vector DB API
-     → HTTP/gRPC round-trip → vector DB → serialize response
-     → Python process → serialize → JSON-RPC → Agent
+```mermaid
+graph LR
+    A1["🤖 Agent"] --> B1["JSON-RPC"]
+    B1 --> C1["🐍 Python process"]
+    C1 --> D1["Deserialize"]
+    D1 --> E1["HTTP/gRPC round-trip"]
+    E1 --> F1["Vector DB"]
+    F1 --> G1["Serialize response"]
+    G1 --> H1["JSON-RPC"]
+    H1 --> I1["🤖 Agent"]
 
-Total: 2–10ms per query (network + GIL + serialization)
+    style C1 fill:#e74c3c,color:white
+    style E1 fill:#e74c3c,color:white
 ```
+
+> **Total: 2–10ms per query** (network + GIL + serialization)
 
 ### Spector's Zero-Copy Path
 
-```
-Agent → JSON-RPC → Java Virtual Thread → direct method call
-     → SpectorEngine.search() → off-heap MemorySegment → SIMD registers
+```mermaid
+graph LR
+    A2["🤖 Agent"] --> B2["JSON-RPC"]
+    B2 --> C2["☕ Virtual Thread"]
+    C2 --> D2["SpectorEngine.search()"]
+    D2 --> E2["Off-heap MemorySegment"]
+    E2 --> F2["SIMD registers"]
+    F2 --> G2["✅ Results"]
 
-Total: 50–200µs per query (100× faster)
+    style C2 fill:#00b894,color:white
+    style E2 fill:#00b894,color:white
+    style G2 fill:#00b894,color:white
 ```
+
+> **Total: 50–200µs per query** (100× faster)
 
 | Bottleneck | Python MCP | Spector MCP |
 |:---|:---|:---|

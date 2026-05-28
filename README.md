@@ -15,15 +15,19 @@
 
 Includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server. Plug Claude Desktop, Cursor, or autonomous agents directly into Spector for native RAG memory. **Zero Python glue-code required.**
 
-```
-AI Agent ──JSON-RPC (stdio)──► SpectorMcpServer
-                                ↕ Virtual Thread (no blocking)
-                                ↕ Direct method call (in-process)
-                                ↕ SpectorEngine.search()
-                                ↕ Off-heap MemorySegment + SIMD
+```mermaid
+graph LR
+    A["🤖 AI Agent"] -->|"JSON-RPC (stdio)"| B["⚡ SpectorMcpServer"]
+    B -->|"Virtual Thread"| C["SpectorEngine.search()"]
+    C -->|"Direct method call"| D["Off-heap MemorySegment + SIMD"]
+    D -->|"50–200µs"| E["✅ Results"]
 
-Total overhead: 50-200µs per query (100× faster than Python MCP servers)
+    style A fill:#6c5ce7,color:white
+    style B fill:#00b894,color:white
+    style E fill:#00b894,color:white
 ```
+
+> **100× faster** than Python MCP servers — zero network overhead, zero GC pressure.
 
 ### 2. ⚡ SpectorQuant (IVHNSW-VASQ)
 

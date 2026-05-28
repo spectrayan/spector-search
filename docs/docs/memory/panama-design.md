@@ -212,14 +212,18 @@ Offset   Size   Field            Description
 
 ## Zero-Copy Data Path
 
-```
-Disk → mmap → MemorySegment → SIMD Registers → Score
+```mermaid
+graph LR
+    A["💾 Disk"] -->|mmap| B["MemorySegment"]
+    B -->|"direct read"| C["SIMD Registers"]
+    C --> D["✅ Score"]
 
-   No Java objects created.
-   No serialization.
-   No deserialization.
-   No GC pressure.
+    style A fill:#3498db,color:white
+    style B fill:#2ecc71,color:white
+    style D fill:#00b894,color:white
 ```
+
+> **No Java objects created. No serialization. No deserialization. No GC pressure.**
 
 The entire data path from persistent storage to CPU computation operates on **raw bytes**. The JVM heap is used only for the top-K result set (`List<CognitiveResult>`) — typically 5-20 small Java records.
 
