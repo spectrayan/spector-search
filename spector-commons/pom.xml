@@ -12,8 +12,40 @@
 
     <artifactId>spector-commons</artifactId>
     <name>Spector Commons</name>
-    <description>Shared utilities: content extraction, text chunking, and normalization.</description>
+    <description>Shared utilities: content extraction, text chunking, normalization, and configuration.</description>
 
-    <!-- No external dependencies for document readers — uses built-in Java APIs -->
+    <dependencies>
+        <!-- Hierarchical configuration (YAML + properties + env override) -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-configuration2</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>commons-beanutils</groupId>
+            <artifactId>commons-beanutils</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
 </project>
