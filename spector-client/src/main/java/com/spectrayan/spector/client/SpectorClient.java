@@ -1,8 +1,9 @@
 package com.spectrayan.spector.client;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.spectrayan.spector.client.model.*;
 
 import org.slf4j.Logger;
@@ -55,9 +56,11 @@ public class SpectorClient implements AutoCloseable {
                 .connectTimeout(builder.connectTimeout)
                 .build();
 
-        this.objectMapper = new ObjectMapper()
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        this.objectMapper = JsonMapper.builder()
+                .changeDefaultPropertyInclusion(incl -> incl
+                        .withValueInclusion(JsonInclude.Include.NON_NULL))
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .build();
     }
 
     /**
@@ -173,7 +176,7 @@ public class SpectorClient implements AutoCloseable {
             try {
                 byte[] jsonBytes = objectMapper.writeValueAsBytes(body);
                 builder.method(method, HttpRequest.BodyPublishers.ofByteArray(jsonBytes));
-            } catch (IOException e) {
+            } catch (Exception e) {
                 throw new SpectorClientException("Failed to serialize request body: " + e.getMessage(), e);
             }
         } else {

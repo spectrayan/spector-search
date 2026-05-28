@@ -17,7 +17,7 @@
     <dependencies>
         <!-- Jackson for JSON serialization/deserialization -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
     </dependencies>

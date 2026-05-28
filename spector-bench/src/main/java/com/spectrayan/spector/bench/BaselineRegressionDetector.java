@@ -8,8 +8,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Detects performance regressions by comparing JMH JSON results against a baseline.
@@ -95,9 +95,7 @@ public class BaselineRegressionDetector {
             JsonNode paramsNode = node.get("params");
             if (paramsNode != null && paramsNode.isObject()) {
                 StringBuilder sb = new StringBuilder();
-                var fields = paramsNode.fields();
-                while (fields.hasNext()) {
-                    var field = fields.next();
+                for (var field : paramsNode.properties()) {
                     if (!sb.isEmpty()) sb.append(",");
                     sb.append(field.getKey()).append("=").append(field.getValue().asText());
                 }

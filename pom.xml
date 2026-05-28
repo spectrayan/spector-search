@@ -30,10 +30,11 @@
         <module>spector-embed-api</module>
         <module>spector-embed-ollama</module>
         <module>spector-gpu</module>
-        <module>spector-ingestion</module>
         <module>spector-rag</module>
         <module>spector-engine</module>
+        <module>spector-ingestion</module>
         <module>spector-memory</module>
+        <module>spector-runtime</module>
         <module>spector-server</module>
         <module>spector-cluster</module>
         <module>spector-bench</module>
@@ -41,6 +42,7 @@
         <module>spector-client</module>
         <module>spector-spring</module>
         <module>spector-mcp</module>
+        <module>spector-dist</module>
     </modules>
 
     <!-- ───────────────────────── Properties ───────────────────────── -->
@@ -57,11 +59,15 @@
 
         <!-- Dependency versions -->
         <javalin.version>6.6.0</javalin.version>
-        <jackson.version>2.18.3</jackson.version>
+        <jackson.version>3.1.3</jackson.version>
+        <jackson2.version>2.21.3</jackson2.version>
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.18</logback.version>
         <jmh.version>1.37</jmh.version>
         <mcp-sdk.version>2.0.0-M3</mcp-sdk.version>
+        <commons-configuration2.version>2.11.0</commons-configuration2.version>
+        <commons-beanutils.version>1.9.4</commons-beanutils.version>
+        <snakeyaml.version>2.3</snakeyaml.version>
 
         <!-- Test dependency versions -->
         <junit.version>5.11.4</junit.version>
@@ -162,6 +168,11 @@
                 <artifactId>spector-memory</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-runtime</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- ── MCP SDK (official Anthropic Java SDK) ── -->
             <dependency>
@@ -170,11 +181,35 @@
                 <version>${mcp-sdk.version}</version>
             </dependency>
 
-            <!-- ── Jackson (JSON) ── -->
+            <!-- ── Jackson (JSON) — Jackson 3.x (tools.jackson) ── -->
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+
+            <!-- ── Jackson 2.x (required by Javalin 6.x which uses com.fasterxml.jackson) ── -->
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
-                <version>${jackson.version}</version>
+                <version>${jackson2.version}</version>
+            </dependency>
+
+            <!-- ── Apache Commons Configuration (hierarchical config) ── -->
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-configuration2</artifactId>
+                <version>${commons-configuration2.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-beanutils</groupId>
+                <artifactId>commons-beanutils</artifactId>
+                <version>${commons-beanutils.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.yaml</groupId>
+                <artifactId>snakeyaml</artifactId>
+                <version>${snakeyaml.version}</version>
             </dependency>
 
             <!-- ── Logging ── -->
