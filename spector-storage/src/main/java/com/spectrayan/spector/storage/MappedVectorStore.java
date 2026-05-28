@@ -213,4 +213,126 @@ public class MappedVectorStore implements VectorStore {
             throw new IndexOutOfBoundsException("index=" + index + ", size=" + count.get());
         }
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // ID MAPPING PERSISTENCE
+    // ══════════════════════════════════════════════════════════════
+
+    /** File magic: "VIDS" in ASCII. */
+    private static final int VIDS_MAGIC = 0x56494453;
+
+    /** File format version. */
+    private static final int VIDS_VERSION = 1;
+
+    /** File header: 4B magic + 4B version + 4B count + 4B reserved = 16 bytes. */
+    private static final int VIDS_HEADER_BYTES = 16;
+
+    /**
+     * Saves the id→index mapping to a binary file.
+     *
+     * @param mappingPath path to write the ID mapping file
+     */
+    public void saveIdMappings(Path mappingPath) {
+        Path parent = mappingPath.getParent();
+        if (parent != null) {
+            try {
+                Files.createDirectories(parent);
+            } catch (IOException e) {
+                log.warn("Cannot create id-mappings directory: {}", e.getMessage());
+                return;
+            }
+        }
+
+        try (var ch = FileChannel.open(mappingPath,
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.WRITE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING)) {
+
+            java.nio.ByteBuffer header = java.nio.ByteBuffer.allocate(VIDS_HEADER_BYTES);
+            header.putInt(VIDS_MAGIC);
+            header.putInt(VIDS_VERSION);
+            header.putInt(idToIndex.size());
+            header.putInt(0);
+            header.flip();
+            ch.write(header);
+
+            for (var entry : idToIndex.entrySet()) {
+                byte[] idBytes = entry.getKey().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(4 + idBytes.length + 4);
+                buf.putInt(idBytes.length);
+                buf.put(idBytes);
+                buf.putInt(entry.getValue());
+                buf.flip();
+                ch.write(buf);
+            }
+
+            ch.force(true);
+            log.info("MappedVectorStore ID mappings saved: {} entries → {}", idToIndex.size(), mappingPath);
+
+        } catch (IOException e) {
+            log.error("Failed to save ID mappings: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Loads id→index mappings from a binary file.
+     *
+     * @param mappingPath path to read the ID mapping file
+     */
+    public void loadIdMappings(Path mappingPath) {
+        if (mappingPath == null || !Files.exists(mappingPath)) {
+            log.info("ID mappings file not found: {}", mappingPath);
+            return;
+        }
+
+        try (var ch = FileChannel.open(mappingPath, java.nio.file.StandardOpenOption.READ)) {
+            if (ch.size() < VIDS_HEADER_BYTES) return;
+
+            java.nio.ByteBuffer header = java.nio.ByteBuffer.allocate(VIDS_HEADER_BYTES);
+            ch.read(header);
+            header.flip();
+
+            int magic = header.getInt();
+            int version = header.getInt();
+            int entryCount = header.getInt();
+            header.getInt();
+
+            if (magic != VIDS_MAGIC || version != VIDS_VERSION) {
+                log.warn("Invalid ID mappings file header, skipping");
+                return;
+            }
+
+            int maxIdx = -1;
+            for (int i = 0; i < entryCount; i++) {
+                java.nio.ByteBuffer lenBuf = java.nio.ByteBuffer.allocate(4);
+                ch.read(lenBuf);
+                lenBuf.flip();
+                int idLen = lenBuf.getInt();
+
+                java.nio.ByteBuffer idBuf = java.nio.ByteBuffer.allocate(idLen);
+                ch.read(idBuf);
+                idBuf.flip();
+                String id = new String(idBuf.array(), 0, idLen, java.nio.charset.StandardCharsets.UTF_8);
+
+                java.nio.ByteBuffer idxBuf = java.nio.ByteBuffer.allocate(4);
+                ch.read(idxBuf);
+                idxBuf.flip();
+                int idx = idxBuf.getInt();
+
+                idToIndex.put(id, idx);
+                if (idx > maxIdx) maxIdx = idx;
+            }
+
+            // Restore the count to one past the highest loaded index
+            if (maxIdx >= 0) {
+                count.set(maxIdx + 1);
+            }
+
+            log.info("MappedVectorStore ID mappings loaded: {} entries from {}", idToIndex.size(), mappingPath);
+
+        } catch (IOException e) {
+            log.error("Failed to load ID mappings: {}", e.getMessage());
+        }
+    }
 }
+
