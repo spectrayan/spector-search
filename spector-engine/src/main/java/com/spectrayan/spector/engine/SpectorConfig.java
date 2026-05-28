@@ -6,6 +6,8 @@ import com.spectrayan.spector.core.quantization.QuantizationType;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.index.HnswParams;
 import com.spectrayan.spector.storage.PersistenceMode;
+import com.spectrayan.spector.commons.config.SpectorProperties;
+import com.spectrayan.spector.commons.config.SpectorConfigFactory;
 
 /**
  * Immutable configuration for a Spector Search engine instance.
@@ -60,6 +62,46 @@ public record SpectorConfig(
                     IndexType.HNSW, 0, 0, 0,
                     false, false, null, null, 20, 0,
                     0, 0, 0);
+
+    /**
+     * Creates a {@link SpectorConfig} from hierarchical properties.
+     *
+     * <p>Reads all configuration values from the given {@link SpectorProperties},
+     * falling back to defaults defined in {@code spector-defaults.yml}.</p>
+     *
+     * @param props the hierarchical properties
+     * @return a fully configured SpectorConfig
+     */
+    public static SpectorConfig from(SpectorProperties props) {
+        var engine = SpectorConfigFactory.engineDefaults(props);
+        var hnsw = SpectorConfigFactory.hnswDefaults(props);
+        var ivf = SpectorConfigFactory.ivfDefaults(props);
+        var spectrum = SpectorConfigFactory.spectrumDefaults(props);
+        var reranker = SpectorConfigFactory.rerankerDefaults(props);
+
+        return new SpectorConfig(
+                engine.dimensions(),
+                engine.capacity(),
+                SimilarityFunction.valueOf(engine.similarity()),
+                new HnswParams(hnsw.m(), hnsw.efConstruction(), hnsw.efSearch()),
+                QuantizationType.valueOf(engine.quantization()),
+                PersistenceMode.valueOf(engine.persistenceMode()),
+                "IN_MEMORY".equals(engine.persistenceMode()) ? null : engine.dataDirectory(),
+                IndexType.valueOf(engine.indexType()),
+                ivf.nlist(),
+                ivf.nprobe(),
+                ivf.pqSubspaces(),
+                engine.gpuEnabled(),
+                reranker.enabled(),
+                reranker.ollamaUrl(),
+                reranker.model(),
+                reranker.maxCandidates(),
+                engine.oversamplingFactor(),
+                spectrum.nCentroids(),
+                spectrum.nProbe(),
+                spectrum.shardThreshold()
+        );
+    }
 
     /** Backward-compatible constructor (HNSW, no quantization, in-memory). */
     public SpectorConfig(int dimensions, int capacity,

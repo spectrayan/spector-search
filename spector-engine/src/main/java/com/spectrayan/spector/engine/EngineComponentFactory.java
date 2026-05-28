@@ -12,6 +12,7 @@ import com.spectrayan.spector.storage.DocumentStore;
 import com.spectrayan.spector.storage.InMemoryVectorStore;
 import com.spectrayan.spector.storage.PersistenceMode;
 import com.spectrayan.spector.storage.VectorStore;
+import com.spectrayan.spector.commons.config.PersistenceFiles;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,15 +46,23 @@ public class EngineComponentFactory {
 
     private final VectorIndexFactory indexFactory;
     private final VectorStoreFactory storeFactory;
+    private final PersistenceFiles persistenceFiles;
 
     public EngineComponentFactory() {
-        this(new VectorIndexFactory(), new VectorStoreFactory());
+        this(new VectorIndexFactory(), new VectorStoreFactory(), PersistenceFiles.DEFAULTS);
     }
 
     /** Allows injecting custom factories (for testing). */
     public EngineComponentFactory(VectorIndexFactory indexFactory, VectorStoreFactory storeFactory) {
+        this(indexFactory, storeFactory, PersistenceFiles.DEFAULTS);
+    }
+
+    /** Full constructor with custom persistence file names. */
+    public EngineComponentFactory(VectorIndexFactory indexFactory, VectorStoreFactory storeFactory,
+                                   PersistenceFiles persistenceFiles) {
         this.indexFactory = indexFactory;
         this.storeFactory = storeFactory;
+        this.persistenceFiles = persistenceFiles;
     }
 
     /**
@@ -71,15 +80,31 @@ public class EngineComponentFactory {
 
         // ── Try loading from disk ──
         if (config.persistenceMode() == PersistenceMode.DISK) {
-            Path indexFile = config.dataDirectory().resolve("index.spct");
+            Path indexFile = persistenceFiles.resolveIndex(config.dataDirectory());
             if (Files.exists(indexFile)) {
                 try {
                     log.info("Loading existing disk index from {}", indexFile);
                     var diskIndex = DiskHnswIndex.open(indexFile);
                     vs = new InMemoryVectorStore(config.dimensions(), config.capacity());
-                    ds = new DocumentStore(config.capacity());
+
+                    // Load DocumentStore from disk (not a fresh empty one!)
+                    Path docsFile = persistenceFiles.resolveDocuments(config.dataDirectory());
+                    if (java.nio.file.Files.exists(docsFile)) {
+                        ds = DocumentStore.load(docsFile);
+                        log.info("Loaded DocumentStore from disk: {} documents", ds.size());
+                    } else {
+                        ds = new DocumentStore(config.capacity());
+                    }
+
                     vi = diskIndex;
                     ki = new BM25Index();
+
+                    // Load ID mappings for MappedVectorStore
+                    if (vs instanceof com.spectrayan.spector.storage.MappedVectorStore mvs) {
+                        Path idMappingsFile = persistenceFiles.resolveIdMappings(config.dataDirectory());
+                        mvs.loadIdMappings(idMappingsFile);
+                    }
+
                     loadedFromDisk = true;
                     log.info("Loaded disk index: {} vectors", diskIndex.size());
                 } catch (IOException e) {
@@ -96,9 +121,27 @@ public class EngineComponentFactory {
         // ── Build fresh components if not loaded from disk ──
         if (!loadedFromDisk) {
             vs = storeFactory.create(config);
-            ds = new DocumentStore(config.capacity());
             vi = indexFactory.create(config);
             ki = new BM25Index();
+
+            // DocumentStore: load from disk if DISK mode and file exists
+            if (config.persistenceMode() == PersistenceMode.DISK) {
+                Path docsFile = persistenceFiles.resolveDocuments(config.dataDirectory());
+                if (java.nio.file.Files.exists(docsFile)) {
+                    ds = DocumentStore.load(docsFile);
+                    log.info("Loaded DocumentStore from disk: {} documents", ds.size());
+                } else {
+                    ds = new DocumentStore(config.capacity());
+                }
+
+                // Load ID mappings for MappedVectorStore
+                if (vs instanceof com.spectrayan.spector.storage.MappedVectorStore mvs) {
+                    Path idMappingsFile = persistenceFiles.resolveIdMappings(config.dataDirectory());
+                    mvs.loadIdMappings(idMappingsFile);
+                }
+            } else {
+                ds = new DocumentStore(config.capacity());
+            }
         }
 
         // ── GPU acceleration (optional, graceful fallback) ──

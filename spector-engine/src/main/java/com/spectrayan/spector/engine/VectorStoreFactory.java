@@ -4,6 +4,7 @@ import com.spectrayan.spector.storage.InMemoryVectorStore;
 import com.spectrayan.spector.storage.MappedVectorStore;
 import com.spectrayan.spector.storage.PersistenceMode;
 import com.spectrayan.spector.storage.VectorStore;
+import com.spectrayan.spector.commons.config.PersistenceFiles;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,15 @@ import java.nio.file.Path;
 public class VectorStoreFactory {
 
     private static final Logger log = LoggerFactory.getLogger(VectorStoreFactory.class);
+    private final PersistenceFiles persistenceFiles;
+
+    public VectorStoreFactory() {
+        this(PersistenceFiles.DEFAULTS);
+    }
+
+    public VectorStoreFactory(PersistenceFiles persistenceFiles) {
+        this.persistenceFiles = persistenceFiles;
+    }
 
     /**
      * Creates a {@link VectorStore} based on the engine configuration.
@@ -49,7 +59,7 @@ public class VectorStoreFactory {
     }
 
     private VectorStore createMapped(SpectorConfig config) {
-        Path file = config.dataDirectory().resolve("vectors.mmap");
+        Path file = persistenceFiles.resolveVectors(config.dataDirectory());
         log.info("Creating MappedVectorStore: dims={}, capacity={}, path={}",
                 config.dimensions(), config.capacity(), file);
         try {

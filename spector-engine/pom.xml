@@ -39,10 +39,7 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-embed-api</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-ingestion</artifactId>
-        </dependency>
+
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-rag</artifactId>

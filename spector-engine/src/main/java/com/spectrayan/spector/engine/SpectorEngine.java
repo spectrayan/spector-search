@@ -82,6 +82,7 @@ public class SpectorEngine implements AutoCloseable {
     private final EmbeddingProvider embeddingProvider; // nullable
     private final GpuBatchSimilarity gpuBatchSimilarity; // nullable
     private final Reranker reranker; // nullable
+    private final com.spectrayan.spector.commons.config.PersistenceFiles persistenceFiles;
     private volatile boolean closed;
 
     // IVF-PQ training state — buffers vectors until enough for training
@@ -132,6 +133,7 @@ public class SpectorEngine implements AutoCloseable {
                          EngineComponentFactory factory) {
         this.config = config;
         this.embeddingProvider = provider;
+        this.persistenceFiles = com.spectrayan.spector.commons.config.PersistenceFiles.DEFAULTS;
         this.closed = false;
         this.ivfTrained = false;
 
@@ -594,15 +596,36 @@ public class SpectorEngine implements AutoCloseable {
             closed = true;
             try {
                 // Persist to disk if configured
-                if (config.persistenceMode() == PersistenceMode.DISK
-                        && vectorIndex instanceof HnswIndex hnswIdx
-                        && hnswIdx.size() > 0) {
+                if (config.persistenceMode() == PersistenceMode.DISK) {
+                    // HNSW index
+                    if (vectorIndex instanceof HnswIndex hnswIdx && hnswIdx.size() > 0) {
+                        try {
+                            Path indexFile = persistenceFiles.resolveIndex(config.dataDirectory());
+                            DiskHnswWriter.write(hnswIdx, indexFile);
+                            log.info("HNSW index persisted to {}", indexFile);
+                        } catch (IOException e) {
+                            log.error("Failed to persist HNSW index to disk", e);
+                        }
+                    }
+
+                    // Document store
                     try {
-                        Path indexFile = config.dataDirectory().resolve("index.spct");
-                        DiskHnswWriter.write(hnswIdx, indexFile);
-                        log.info("HNSW index persisted to {}", indexFile);
-                    } catch (IOException e) {
-                        log.error("Failed to persist HNSW index to disk", e);
+                        Path docsFile = persistenceFiles.resolveDocuments(config.dataDirectory());
+                        documentStore.save(docsFile);
+                        log.info("DocumentStore persisted to {} ({} docs)", docsFile, documentStore.size());
+                    } catch (Exception e) {
+                        log.error("Failed to persist DocumentStore to disk", e);
+                    }
+
+                    // Vector store ID mappings
+                    if (vectorStore instanceof com.spectrayan.spector.storage.MappedVectorStore mvs) {
+                        try {
+                            Path idFile = persistenceFiles.resolveIdMappings(config.dataDirectory());
+                            mvs.saveIdMappings(idFile);
+                            log.info("Vector store ID mappings persisted to {}", idFile);
+                        } catch (Exception e) {
+                            log.error("Failed to persist vector store ID mappings", e);
+                        }
                     }
                 }
 
