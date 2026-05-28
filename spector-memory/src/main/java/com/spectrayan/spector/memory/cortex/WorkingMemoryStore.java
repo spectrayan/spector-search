@@ -8,14 +8,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.file.Path;
 
 /**
- * Volatile, RAM-only scratchpad for short-term Working Memory.
+ * Volatile or persistent scratchpad for short-term Working Memory.
  *
  * <h3>Biological Analog: Prefrontal Cortex</h3>
  * <p>The prefrontal cortex holds a small number of items in active consciousness
  * (~7 ± 2 according to Miller's Law). Working memory is volatile — it exists
  * only while the session is active and is discarded when the session ends.</p>
+ *
+ * <h3>Persistence</h3>
+ * <p>When file-backed ({@code filePath} constructor), the circular buffer and
+ * its {@code writeIndex} are persisted via mmap. The {@code writeIndex} is
+ * stored in the metadata header's {@code extra1} field (offset 24). On restart,
+ * the agent resumes with its previous "train of thought."</p>
  *
  * <h3>Design</h3>
  * <ul>
@@ -36,7 +44,7 @@ public final class WorkingMemoryStore extends AbstractTierStore {
     private int writeIndex = 0;  // circular buffer index
 
     /**
-     * Creates a new Working Memory store.
+     * Creates a volatile Working Memory store (in-memory only).
      *
      * @param quantizedVecBytes bytes per quantized vector
      * @param capacity          maximum number of records (default: 100)
@@ -45,12 +53,38 @@ public final class WorkingMemoryStore extends AbstractTierStore {
         super(quantizedVecBytes, capacity,
                 (long) new com.spectrayan.spector.memory.synapse.CognitiveRecordLayout(quantizedVecBytes).stride() * capacity);
 
-        log.info("WorkingMemoryStore initialized: capacity={}, stride={}B, total={}KB",
+        log.info("WorkingMemoryStore initialized: capacity={}, stride={}B, total={}KB, persistent=false",
                 capacity, layout.stride(), (long) layout.stride() * capacity / 1024);
     }
 
     /**
-     * Creates a Working Memory store with default capacity (100).
+     * Creates a persistent Working Memory store backed by an mmap file.
+     *
+     * <p>On restart, {@code count} and {@code writeIndex} are restored from
+     * the metadata header, allowing the circular buffer to resume exactly
+     * where it left off.</p>
+     *
+     * @param quantizedVecBytes bytes per quantized vector
+     * @param capacity          maximum number of records
+     * @param filePath          path to the backing mmap file
+     */
+    public WorkingMemoryStore(int quantizedVecBytes, int capacity, Path filePath) {
+        super(quantizedVecBytes, capacity,
+                (long) new com.spectrayan.spector.memory.synapse.CognitiveRecordLayout(quantizedVecBytes).stride() * capacity,
+                filePath);
+
+        // Restore writeIndex from metadata header extra1 field
+        if (persistent && count > 0) {
+            this.writeIndex = segment.get(ValueLayout.JAVA_INT, META_EXTRA1);
+            log.info("WorkingMemoryStore restored: writeIndex={}, count={}", writeIndex, count);
+        }
+
+        log.info("WorkingMemoryStore initialized: capacity={}, stride={}B, persistent=true",
+                capacity, layout.stride());
+    }
+
+    /**
+     * Creates a volatile Working Memory store with default capacity (100).
      */
     public WorkingMemoryStore(int quantizedVecBytes) {
         this(quantizedVecBytes, 100);
@@ -63,7 +97,7 @@ public final class WorkingMemoryStore extends AbstractTierStore {
 
     @Override
     public long write(CognitiveHeader header, byte[] quantizedVec) {
-        long offset = (long) writeIndex * layout.stride();
+        long offset = dataOffset() + (long) writeIndex * layout.stride();
         put(header, quantizedVec);
         return offset;
     }
@@ -78,7 +112,7 @@ public final class WorkingMemoryStore extends AbstractTierStore {
      * @param quantizedVec the quantized vector bytes
      */
     public synchronized void put(CognitiveHeader header, byte[] quantizedVec) {
-        long offset = (long) writeIndex * layout.stride();
+        long offset = dataOffset() + (long) writeIndex * layout.stride();
 
         // If we're overwriting an existing record, mark it as evicted
         if (count >= capacity) {
@@ -98,6 +132,12 @@ public final class WorkingMemoryStore extends AbstractTierStore {
         // Advance circular buffer
         writeIndex = (writeIndex + 1) % capacity;
         count = Math.min(count + 1, capacity);
+
+        // Persist count and writeIndex to metadata header
+        persistCount();
+        if (persistent) {
+            segment.set(ValueLayout.JAVA_INT, META_EXTRA1, writeIndex);
+        }
     }
 
     /**
@@ -114,7 +154,7 @@ public final class WorkingMemoryStore extends AbstractTierStore {
         int matchCount = 0;
 
         for (int i = 0; i < count; i++) {
-            long offset = (long) i * layout.stride();
+            long offset = dataOffset() + (long) i * layout.stride();
 
             // Phase 1: Skip tombstones
             byte flags = layout.readFlags(segment, offset);
@@ -135,3 +175,4 @@ public final class WorkingMemoryStore extends AbstractTierStore {
         return result;
     }
 }
+

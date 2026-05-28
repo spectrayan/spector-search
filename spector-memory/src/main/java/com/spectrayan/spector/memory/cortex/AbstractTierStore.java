@@ -6,8 +6,16 @@ import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 /**
  * Abstract base class for single-segment tier stores.
@@ -23,6 +31,27 @@ import java.lang.foreign.MemorySegment;
  *   <li>Close/cleanup lifecycle</li>
  * </ul>
  *
+ * <h3>Dual Mode: Volatile vs. File-Backed</h3>
+ * <ul>
+ *   <li><b>Volatile</b> (in-memory): {@code Arena.ofShared()} allocates off-heap RAM.
+ *       Data is lost on JVM shutdown.</li>
+ *   <li><b>File-backed</b> (persistent): {@code FileChannel.map()} creates a persistent
+ *       mmap'd file with a 64-byte metadata header. Data survives JVM restarts.</li>
+ * </ul>
+ *
+ * <h3>Metadata Header Layout (64 bytes)</h3>
+ * <pre>
+ *   [4B magic]     Offset 0  — 0x54494552 ("TIER")
+ *   [4B version]   Offset 4  — format version (1)
+ *   [4B count]     Offset 8  — number of live records
+ *   [4B capacity]  Offset 12 — max records
+ *   [4B stride]    Offset 16 — record stride in bytes
+ *   [4B tierOrd]   Offset 20 — MemoryType ordinal
+ *   [4B extra1]    Offset 24 — subclass-specific (e.g., writeIndex for Working)
+ *   [4B extra2]    Offset 28 — reserved for subclass use
+ *   [32B reserved] Offset 32 — future use
+ * </pre>
+ *
  * <p>{@link EpisodicMemoryStore} implements {@link TierStore} directly because
  * it uses mmap-backed partitions rather than a single Arena-allocated segment.</p>
  *
@@ -32,14 +61,42 @@ public abstract class AbstractTierStore implements TierStore {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractTierStore.class);
 
+    /** Metadata header magic: "TIER" in ASCII. */
+    static final int TIER_MAGIC = 0x54494552;
+
+    /** Metadata header format version. */
+    static final int TIER_VERSION = 1;
+
+    /** Size of the metadata header in bytes. */
+    public static final int METADATA_HEADER_BYTES = 64;
+
+    // Metadata field offsets
+    static final int META_MAGIC    = 0;
+    static final int META_VERSION  = 4;
+    static final int META_COUNT    = 8;
+    static final int META_CAPACITY = 12;
+    static final int META_STRIDE   = 16;
+    static final int META_TIER_ORD = 20;
+    static final int META_EXTRA1   = 24;
+    static final int META_EXTRA2   = 28;
+
     protected final CognitiveRecordLayout layout;
     protected final int capacity;
     protected final Arena arena;
     protected final MemorySegment segment;
     protected int count = 0;
 
+    /** True if this store is backed by a file (persistent). */
+    protected final boolean persistent;
+
+    /** File channel for persistent stores (null for volatile). */
+    private FileChannel fileChannel;
+
+    /** File path for persistent stores (null for volatile). */
+    private final Path filePath;
+
     /**
-     * Allocates a single contiguous off-heap segment for the store.
+     * Volatile constructor — allocates a single contiguous off-heap segment (no file).
      *
      * @param quantizedVecBytes bytes per quantized vector
      * @param capacity          maximum number of records
@@ -50,6 +107,117 @@ public abstract class AbstractTierStore implements TierStore {
         this.capacity = capacity;
         this.arena = Arena.ofShared();
         this.segment = arena.allocate(segmentBytes, SynapticHeaderConstants.HEADER_BYTES);
+        this.persistent = false;
+        this.filePath = null;
+    }
+
+    /**
+     * File-backed constructor — creates or opens a persistent mmap'd file.
+     *
+     * <p>If the file already exists and contains a valid metadata header, the
+     * store's state ({@code count}) is restored from it. Otherwise, a new
+     * file is created with a fresh metadata header.</p>
+     *
+     * @param quantizedVecBytes bytes per quantized vector
+     * @param capacity          maximum number of records
+     * @param segmentBytes      total data bytes (excluding metadata header)
+     * @param filePath          path to the backing file
+     */
+    protected AbstractTierStore(int quantizedVecBytes, int capacity, long segmentBytes, Path filePath) {
+        this.layout = new CognitiveRecordLayout(quantizedVecBytes);
+        this.capacity = capacity;
+        this.persistent = true;
+        this.filePath = filePath;
+        this.arena = Arena.ofShared();
+
+        try {
+            // Ensure parent directories exist
+            Path parent = filePath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+
+            long totalBytes = METADATA_HEADER_BYTES + segmentBytes;
+            boolean isNew = !Files.exists(filePath) || Files.size(filePath) < METADATA_HEADER_BYTES;
+
+            fileChannel = FileChannel.open(filePath,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.READ,
+                    StandardOpenOption.WRITE);
+
+            if (isNew) {
+                // Extend file to full size
+                fileChannel.position(totalBytes - 1);
+                fileChannel.write(ByteBuffer.wrap(new byte[]{0}));
+            }
+
+            // Map the entire file
+            long mapSize = Math.max(totalBytes, fileChannel.size());
+            this.segment = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, mapSize, arena);
+
+            if (isNew) {
+                // Write fresh metadata header
+                this.count = 0;
+                writeMetadata();
+                log.info("{} created new persistent file: {} ({}KB)",
+                        getClass().getSimpleName(), filePath, totalBytes / 1024);
+            } else {
+                // Restore state from existing file
+                readMetadata();
+                log.info("{} loaded from persistent file: {} ({} records)",
+                        getClass().getSimpleName(), filePath, count);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Cannot create/open persistent tier store: " + filePath, e);
+        }
+    }
+
+    /**
+     * Writes the metadata header to the mapped segment.
+     * Called on creation and after count changes.
+     */
+    protected void writeMetadata() {
+        if (!persistent) return;
+        segment.set(ValueLayout.JAVA_INT, META_MAGIC, TIER_MAGIC);
+        segment.set(ValueLayout.JAVA_INT, META_VERSION, TIER_VERSION);
+        segment.set(ValueLayout.JAVA_INT, META_COUNT, count);
+        segment.set(ValueLayout.JAVA_INT, META_CAPACITY, capacity);
+        segment.set(ValueLayout.JAVA_INT, META_STRIDE, layout.stride());
+        segment.set(ValueLayout.JAVA_INT, META_TIER_ORD, type().ordinal());
+    }
+
+    /**
+     * Reads the metadata header from the mapped segment.
+     * Called when loading from an existing file.
+     */
+    protected void readMetadata() {
+        int magic = segment.get(ValueLayout.JAVA_INT, META_MAGIC);
+        if (magic != TIER_MAGIC) {
+            log.warn("Invalid tier magic in {}: 0x{} (expected 0x{})",
+                    filePath, Integer.toHexString(magic), Integer.toHexString(TIER_MAGIC));
+            this.count = 0;
+            return;
+        }
+        this.count = segment.get(ValueLayout.JAVA_INT, META_COUNT);
+    }
+
+    /**
+     * Persists the current count to the metadata header.
+     * Subclasses should call this after modifying {@code count}.
+     */
+    protected void persistCount() {
+        if (persistent) {
+            segment.set(ValueLayout.JAVA_INT, META_COUNT, count);
+        }
+    }
+
+    /**
+     * Returns the byte offset where data records begin.
+     * For persistent stores, records start after the metadata header.
+     * For volatile stores, records start at offset 0.
+     */
+    protected long dataOffset() {
+        return persistent ? METADATA_HEADER_BYTES : 0;
     }
 
     @Override
@@ -81,9 +249,42 @@ public abstract class AbstractTierStore implements TierStore {
         return segment;
     }
 
+    /**
+     * Returns whether this store is file-backed (persistent).
+     */
+    public boolean isPersistent() {
+        return persistent;
+    }
+
+    /**
+     * Forces the mapped segment to be written to the underlying file (persistent only).
+     */
+    public void force() {
+        if (persistent && segment != null) {
+            segment.force();
+        }
+    }
+
     @Override
     public void close() {
-        log.info("{} closing ({} records)", getClass().getSimpleName(), count);
+        log.info("{} closing ({} records, persistent={})", getClass().getSimpleName(), count, persistent);
+        if (persistent) {
+            try {
+                if (segment != null) {
+                    segment.force();
+                }
+            } catch (Exception e) {
+                log.debug("Error forcing segment: {}", e.getMessage());
+            }
+        }
         arena.close();
+        if (fileChannel != null) {
+            try {
+                fileChannel.close();
+            } catch (IOException e) {
+                log.debug("Error closing file channel: {}", e.getMessage());
+            }
+        }
     }
 }
+

@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
+import java.nio.file.Path;
 
 /**
  * Permanent factual knowledge store delegating to existing HNSW/VASQ index infrastructure.
@@ -16,9 +17,14 @@ import java.lang.foreign.MemorySegment;
  * <p>The neocortex stores permanent, deduplicated facts — consolidated from episodic
  * memories during sleep. It's the "long-term" memory that survives across sessions.</p>
  *
+ * <h3>Persistence</h3>
+ * <p>When file-backed ({@code filePath} constructor), the header-only slab is
+ * stored in a persistent mmap file. On restart, the {@code count} is restored
+ * from the metadata header and all existing headers are immediately accessible.</p>
+ *
  * <h3>Design</h3>
  * <ul>
- *   <li>Extends {@link AbstractTierStore} for common Arena/segment/close lifecycle</li>
+ *   <li>Extends {@link AbstractTierStore} for common Arena/layout/segment lifecycle</li>
  *   <li>Header-only store — vectors go through SpectorIndex's HNSW/VASQ pipeline</li>
  *   <li>Maintains a parallel off-heap slab for 32-byte synaptic headers</li>
  *   <li>On search: reads header for scoring, delegates vector distance to VASQ kernel</li>
@@ -30,7 +36,7 @@ public final class SemanticMemoryStore extends AbstractTierStore {
     private static final Logger log = LoggerFactory.getLogger(SemanticMemoryStore.class);
 
     /**
-     * Creates a new Semantic Memory store.
+     * Creates a volatile Semantic Memory store (in-memory only).
      *
      * <p>Allocates a header-only slab (no vector payload) since vectors are stored
      * in SpectorIndex.</p>
@@ -42,8 +48,24 @@ public final class SemanticMemoryStore extends AbstractTierStore {
         super(quantizedVecBytes, capacity,
                 (long) SynapticHeaderConstants.HEADER_BYTES * capacity);
 
-        log.info("SemanticMemoryStore initialized: capacity={}, headerSlab={}KB",
+        log.info("SemanticMemoryStore initialized: capacity={}, headerSlab={}KB, persistent=false",
                 capacity, (long) SynapticHeaderConstants.HEADER_BYTES * capacity / 1024);
+    }
+
+    /**
+     * Creates a persistent Semantic Memory store backed by an mmap file.
+     *
+     * @param quantizedVecBytes bytes per quantized vector (for layout calculation)
+     * @param capacity          maximum number of semantic memories
+     * @param filePath          path to the backing mmap file
+     */
+    public SemanticMemoryStore(int quantizedVecBytes, int capacity, Path filePath) {
+        super(quantizedVecBytes, capacity,
+                (long) SynapticHeaderConstants.HEADER_BYTES * capacity,
+                filePath);
+
+        log.info("SemanticMemoryStore initialized: capacity={}, headerSlab={}KB, persistent=true, count={}",
+                capacity, (long) SynapticHeaderConstants.HEADER_BYTES * capacity / 1024, count);
     }
 
     @Override
@@ -55,7 +77,7 @@ public final class SemanticMemoryStore extends AbstractTierStore {
     public long write(CognitiveHeader header, byte[] quantizedVec) {
         // Semantic store is header-only — quantizedVec is ignored
         int index = store(header);
-        return (long) index * SynapticHeaderConstants.HEADER_BYTES;
+        return dataOffset() + (long) index * SynapticHeaderConstants.HEADER_BYTES;
     }
 
     /**
@@ -72,16 +94,18 @@ public final class SemanticMemoryStore extends AbstractTierStore {
             throw new IllegalStateException("SemanticMemoryStore full (capacity=" + capacity + ")");
         }
 
-        long offset = (long) count * SynapticHeaderConstants.HEADER_BYTES;
+        long offset = dataOffset() + (long) count * SynapticHeaderConstants.HEADER_BYTES;
         layout.writeHeader(segment, offset, header);
-        return count++;
+        int index = count++;
+        persistCount();
+        return index;
     }
 
     /**
      * Reads the cognitive header at the given index.
      */
     public CognitiveHeader readHeader(int index) {
-        long offset = (long) index * SynapticHeaderConstants.HEADER_BYTES;
+        long offset = dataOffset() + (long) index * SynapticHeaderConstants.HEADER_BYTES;
         return layout.readHeader(segment, offset);
     }
 

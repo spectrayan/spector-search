@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
+import java.nio.file.Path;
 
 /**
  * Small persistent store for procedural memory — prompt templates and tool-usage rules.
@@ -15,6 +16,11 @@ import java.lang.foreign.MemorySegment;
  * <p>The basal ganglia stores procedural / motor memory — "how to do things" rather
  * than "what happened." These are habits, skills, and automatic routines that
  * don't require conscious recall.</p>
+ *
+ * <h3>Persistence</h3>
+ * <p>When file-backed ({@code filePath} constructor), records are stored in a
+ * persistent mmap file. On restart, the {@code count} is restored and all
+ * records are immediately accessible for microsecond lookups.</p>
  *
  * <h3>Design</h3>
  * <ul>
@@ -30,7 +36,7 @@ public final class ProceduralMemoryStore extends AbstractTierStore {
     private static final Logger log = LoggerFactory.getLogger(ProceduralMemoryStore.class);
 
     /**
-     * Creates a new Procedural Memory store.
+     * Creates a volatile Procedural Memory store (in-memory only).
      *
      * @param quantizedVecBytes bytes per quantized vector
      * @param capacity          maximum number of procedural memories (default: 1000)
@@ -39,12 +45,28 @@ public final class ProceduralMemoryStore extends AbstractTierStore {
         super(quantizedVecBytes, capacity,
                 (long) new com.spectrayan.spector.memory.synapse.CognitiveRecordLayout(quantizedVecBytes).stride() * capacity);
 
-        log.info("ProceduralMemoryStore initialized: capacity={}, stride={}B",
+        log.info("ProceduralMemoryStore initialized: capacity={}, stride={}B, persistent=false",
                 capacity, layout.stride());
     }
 
     /**
-     * Creates a Procedural Memory store with default capacity (1000).
+     * Creates a persistent Procedural Memory store backed by an mmap file.
+     *
+     * @param quantizedVecBytes bytes per quantized vector
+     * @param capacity          maximum number of procedural memories
+     * @param filePath          path to the backing mmap file
+     */
+    public ProceduralMemoryStore(int quantizedVecBytes, int capacity, Path filePath) {
+        super(quantizedVecBytes, capacity,
+                (long) new com.spectrayan.spector.memory.synapse.CognitiveRecordLayout(quantizedVecBytes).stride() * capacity,
+                filePath);
+
+        log.info("ProceduralMemoryStore initialized: capacity={}, stride={}B, persistent=true, count={}",
+                capacity, layout.stride(), count);
+    }
+
+    /**
+     * Creates a volatile Procedural Memory store with default capacity (1000).
      */
     public ProceduralMemoryStore(int quantizedVecBytes) {
         this(quantizedVecBytes, 1000);
@@ -57,7 +79,7 @@ public final class ProceduralMemoryStore extends AbstractTierStore {
 
     @Override
     public long write(CognitiveHeader header, byte[] quantizedVec) {
-        long offset = (long) count * layout.stride();
+        long offset = dataOffset() + (long) count * layout.stride();
         append(header, quantizedVec);
         return offset;
     }
@@ -73,7 +95,7 @@ public final class ProceduralMemoryStore extends AbstractTierStore {
             throw new IllegalStateException("ProceduralMemoryStore full (capacity=" + capacity + ")");
         }
 
-        long offset = (long) count * layout.stride();
+        long offset = dataOffset() + (long) count * layout.stride();
         layout.writeHeader(segment, offset, header);
         MemorySegment.copy(
                 MemorySegment.ofArray(quantizedVec), 0,
@@ -81,5 +103,7 @@ public final class ProceduralMemoryStore extends AbstractTierStore {
                 quantizedVec.length
         );
         count++;
+        persistCount();
     }
 }
+
