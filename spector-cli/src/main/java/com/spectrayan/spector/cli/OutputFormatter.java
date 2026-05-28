@@ -3,17 +3,19 @@ package com.spectrayan.spector.cli;
 import java.io.PrintWriter;
 import java.util.List;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Utility for formatting CLI output as either a table or JSON.
  */
 final class OutputFormatter {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .enable(SerializationFeature.INDENT_OUTPUT);
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .enable(SerializationFeature.INDENT_OUTPUT)
+            .build();
 
     private OutputFormatter() {}
 
@@ -68,7 +70,7 @@ final class OutputFormatter {
     static void printJson(PrintWriter out, Object value) {
         try {
             out.println(MAPPER.writeValueAsString(value));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             out.println("{\"error\": \"Failed to serialize output: " + e.getMessage() + "\"}");
         }
     }
