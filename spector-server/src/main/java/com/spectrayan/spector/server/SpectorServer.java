@@ -15,8 +15,10 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.spectrayan.spector.core.simd.SimdCapability;
 import com.spectrayan.spector.engine.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.memory.SpectorMemory;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
+import com.spectrayan.spector.runtime.SpectorRuntime;
 
 import io.javalin.Javalin;
 import io.javalin.http.Context;
@@ -50,6 +52,7 @@ public class SpectorServer {
             .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
 
     private final SpectorEngine engine;
+    private final SpectorMemory memory; // nullable
     private final Javalin app;
     private final int port;
     private final String apiKey; // nullable — when set, requires X-API-Key header
@@ -66,8 +69,9 @@ public class SpectorServer {
     /**
      * Creates a server with the given engine, port, and optional API key.
      */
-    public SpectorServer(SpectorEngine engine, int port, String apiKey) {
+    public SpectorServer(SpectorEngine engine, SpectorMemory memory, int port, String apiKey) {
         this.engine = engine;
+        this.memory = memory;
         this.port = port;
         this.apiKey = apiKey;
         this.ragHandler = new RagHandler(engine);
@@ -90,15 +94,22 @@ public class SpectorServer {
     }
 
     /**
-     * Creates a server with the given engine and port (no API key).
+     * Creates a server with the given engine and port (no API key, no memory).
      */
     public SpectorServer(SpectorEngine engine, int port) {
-        this(engine, port, null);
+        this(engine, null, port, null);
     }
 
     /** Creates a server with default config on port 7070. */
     public SpectorServer() {
-        this(new SpectorEngine(), 7070, null);
+        this(new SpectorEngine(), null, 7070, null);
+    }
+
+    /**
+     * Creates a server from a SpectorRuntime.
+     */
+    public SpectorServer(SpectorRuntime runtime, int port, String apiKey) {
+        this(runtime.engine(), runtime.memory(), port, apiKey);
     }
 
     /**
@@ -429,7 +440,7 @@ public class SpectorServer {
 
         var config = SpectorConfig.DEFAULT.withDimensions(dims);
         var engine = new SpectorEngine(config);
-        var server = new SpectorServer(engine, port, apiKey);
+        var server = new SpectorServer(engine, null, port, apiKey);
 
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
         server.start();
