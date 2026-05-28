@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.spectrayan</groupId>
+        <artifactId>spector-search</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>spector-runtime</artifactId>
+    <name>Spector Runtime</name>
+    <description>
+        Unified application context that composes SpectorEngine (search) and
+        SpectorMemory (cognitive) into a single configurable runtime.
+        All consumers (MCP, API, CLI) depend on this module.
+    </description>
+
+    <dependencies>
+        <!-- ── Configuration ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
+
+        <!-- ── Search Engine ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-engine</artifactId>
+        </dependency>
+
+        <!-- ── Cognitive Memory ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-memory</artifactId>
+        </dependency>
+
+        <!-- ── Embedding API ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-embed-api</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>
