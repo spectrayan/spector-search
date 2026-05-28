@@ -110,7 +110,7 @@ class PerformanceBenchmarkTest {
 
     @Test
     @Order(3)
-    @DisplayName("P3: SIMD Euclidean distance — 768-dim × 10K vectors under 50ms")
+    @DisplayName("P3: SIMD Euclidean distance — 768-dim × 10K vectors under 150ms")
     void p3_simdEuclideanDistance768Dim() {
         int dims = 768;
         int count = 10_000;
@@ -308,6 +308,7 @@ class PerformanceBenchmarkTest {
         try (SpectorMemory memory = SpectorMemory.builder()
                 .dimensions(dims)
                 .embeddingProvider(embedder)
+                .persistenceMode(MemoryPersistenceMode.IN_MEMORY)
                 .workingCapacity(50)
                 .episodicPartitionCapacity(2000)
                 .semanticCapacity(500)

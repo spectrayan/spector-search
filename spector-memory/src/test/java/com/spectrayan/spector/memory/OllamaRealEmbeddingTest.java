@@ -60,6 +60,7 @@ class OllamaRealEmbeddingTest {
         memory = SpectorMemory.builder()
                 .dimensions(detectedDimensions)
                 .embeddingProvider(embeddingProvider)
+                .persistenceMode(MemoryPersistenceMode.IN_MEMORY)
                 .workingCapacity(50)
                 .episodicPartitionCapacity(500)
                 .semanticCapacity(200)

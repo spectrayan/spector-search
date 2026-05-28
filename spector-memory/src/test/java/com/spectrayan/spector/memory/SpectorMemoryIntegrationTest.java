@@ -33,6 +33,7 @@ class SpectorMemoryIntegrationTest {
         memory = SpectorMemory.builder()
                 .dimensions(DIMENSIONS)
                 .embeddingProvider(new MockEmbeddingProvider(DIMENSIONS))
+                .persistenceMode(MemoryPersistenceMode.IN_MEMORY)
                 .workingCapacity(20)
                 .episodicPartitionCapacity(100)
                 .semanticCapacity(100)

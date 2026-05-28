@@ -114,16 +114,34 @@ public final class SpectorMemory implements AutoCloseable {
 
     // ── Configuration ──
     private final int dimensions;
+    private final MemoryPersistenceMode persistenceMode;
+    private final Path persistencePath;
     private final CircadianPolicy circadianPolicy;
     private final ExecutorService virtualExecutor;
     private final AtomicInteger episodicIngestCount = new AtomicInteger(0);
 
     private SpectorMemory(Builder builder) {
         this.dimensions = builder.dimensions;
+        this.persistenceMode = builder.persistenceMode;
+        this.persistencePath = builder.persistencePath;
         EmbeddingProvider embeddingProvider = Objects.requireNonNull(builder.embeddingProvider,
                 "embeddingProvider is required");
         this.circadianPolicy = builder.circadianPolicy;
         this.virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
+
+        boolean isDisk = persistenceMode == MemoryPersistenceMode.DISK;
+
+        // Resolve persistence path for DISK mode
+        Path basePath;
+        if (isDisk && builder.persistencePath != null) {
+            basePath = builder.persistencePath;
+        } else if (isDisk) {
+            basePath = Path.of(System.getProperty("java.io.tmpdir"),
+                    "spector-memory-" + ProcessHandle.current().pid());
+            log.warn("DISK persistence mode with no explicit path — using temp directory: {}", basePath);
+        } else {
+            basePath = null;
+        }
 
         // ── Quantization calibration ──
         if (builder.quantizer != null) {
@@ -138,10 +156,20 @@ public final class SpectorMemory implements AutoCloseable {
 
         // ── Tier Stores → TierRouter ──
         int quantizedVecBytes = dimensions;
-        WorkingMemoryStore workingStore = new WorkingMemoryStore(quantizedVecBytes, builder.workingCapacity);
+
+        // Working memory: configurable persistence (default: volatile)
+        WorkingMemoryStore workingStore;
+        if (isDisk && builder.persistWorkingMemory && basePath != null) {
+            workingStore = new WorkingMemoryStore(quantizedVecBytes, builder.workingCapacity,
+                    basePath.resolve("working.mem"));
+        } else {
+            workingStore = new WorkingMemoryStore(quantizedVecBytes, builder.workingCapacity);
+        }
+
+        // Episodic: always uses its own directory (already file-backed)
         Path episodicPath;
-        if (builder.persistencePath != null) {
-            episodicPath = builder.persistencePath.resolve("episodic");
+        if (basePath != null) {
+            episodicPath = basePath.resolve("episodic");
         } else {
             episodicPath = Path.of(System.getProperty("java.io.tmpdir"),
                     "spector-memory-" + ProcessHandle.current().pid() + "-" + System.nanoTime(),
@@ -149,12 +177,40 @@ public final class SpectorMemory implements AutoCloseable {
         }
         EpisodicMemoryStore episodicStore = new EpisodicMemoryStore(
                 episodicPath, quantizedVecBytes, builder.episodicPartitionCapacity);
-        SemanticMemoryStore semanticStore = new SemanticMemoryStore(quantizedVecBytes, builder.semanticCapacity);
-        ProceduralMemoryStore proceduralStore = new ProceduralMemoryStore(quantizedVecBytes, builder.proceduralCapacity);
+
+        // Semantic: file-backed in DISK mode
+        SemanticMemoryStore semanticStore;
+        if (isDisk && basePath != null) {
+            semanticStore = new SemanticMemoryStore(quantizedVecBytes, builder.semanticCapacity,
+                    basePath.resolve("semantic.mem"));
+        } else {
+            semanticStore = new SemanticMemoryStore(quantizedVecBytes, builder.semanticCapacity);
+        }
+
+        // Procedural: file-backed in DISK mode
+        ProceduralMemoryStore proceduralStore;
+        if (isDisk && basePath != null) {
+            proceduralStore = new ProceduralMemoryStore(quantizedVecBytes, builder.proceduralCapacity,
+                    basePath.resolve("procedural.mem"));
+        } else {
+            proceduralStore = new ProceduralMemoryStore(quantizedVecBytes, builder.proceduralCapacity);
+        }
+
         this.tierRouter = new TierRouter(workingStore, episodicStore, semanticStore, proceduralStore);
 
-        // ── Memory Index ──
-        this.index = new MemoryIndex();
+        // ── Memory Index (load from disk if DISK mode and file exists) ──
+        if (isDisk && basePath != null) {
+            this.index = MemoryIndex.load(basePath.resolve("memory-index.mem"));
+        } else {
+            this.index = new MemoryIndex();
+        }
+
+        // ── WAL (file-backed in DISK mode) ──
+        if (isDisk && basePath != null) {
+            this.wal = new MemoryWal(basePath.resolve("wal"));
+        } else {
+            this.wal = new MemoryWal();
+        }
 
         // ── Biological Subsystems ──
         SurpriseDetector surpriseDetector = new SurpriseDetector(builder.surpriseWarmup);
@@ -165,7 +221,6 @@ public final class SpectorMemory implements AutoCloseable {
         this.habituationPenalty = new HabituationPenalty();
         this.prospectiveScheduler = new ProspectiveScheduler();
         this.introspector = new MemoryIntrospector(coActivationTracker);
-        this.wal = new MemoryWal();
         this.reflectDaemon = new ReflectDaemon(
                 circadianPolicy,
                 builder.dimensions > 0 ? new CentroidRouter(builder.dimensions) : null,
@@ -186,9 +241,10 @@ public final class SpectorMemory implements AutoCloseable {
         recallPipeline.addListener(new LtpReconsolidationListener(index, tierRouter, wal));
         recallPipeline.addListener(new HebbianCoActivationListener(coActivationTracker));
 
-        log.info("SpectorMemory initialized: dimensions={}, model={}, persistence={}, quantizer={}",
+        log.info("SpectorMemory initialized: dimensions={}, model={}, persistence={}, mode={}, quantizer={}",
                 dimensions, embeddingProvider.modelName(),
-                builder.persistencePath != null ? builder.persistencePath : "in-memory",
+                basePath != null ? basePath : "in-memory",
+                persistenceMode,
                 builder.quantizer != null ? "user-provided" : "identity-default");
     }
 
@@ -413,7 +469,17 @@ public final class SpectorMemory implements AutoCloseable {
 
     @Override
     public void close() {
-        log.info("SpectorMemory closing ({} total memories)", totalMemories());
+        log.info("SpectorMemory closing ({} total memories, mode={})", totalMemories(), persistenceMode);
+
+        // Save MemoryIndex to disk if DISK mode
+        if (persistenceMode == MemoryPersistenceMode.DISK && persistencePath != null) {
+            try {
+                index.save(persistencePath.resolve("memory-index.mem"));
+            } catch (Exception e) {
+                log.error("Failed to save MemoryIndex on close: {}", e.getMessage(), e);
+            }
+        }
+
         virtualExecutor.close();
         tierRouter.close();
         wal.close();
@@ -429,6 +495,8 @@ public final class SpectorMemory implements AutoCloseable {
         private int dimensions;
         private EmbeddingProvider embeddingProvider;
         private Path persistencePath;
+        private MemoryPersistenceMode persistenceMode = MemoryPersistenceMode.DISK;
+        private boolean persistWorkingMemory = false;
         private CircadianPolicy circadianPolicy = CircadianPolicy.DEFAULT;
         private int workingCapacity = 100;
         private int episodicPartitionCapacity = 10_000;
@@ -444,6 +512,10 @@ public final class SpectorMemory implements AutoCloseable {
         public Builder dimensions(int dimensions) { this.dimensions = dimensions; return this; }
         public Builder embeddingProvider(EmbeddingProvider p) { this.embeddingProvider = p; return this; }
         public Builder persistence(Path p) { this.persistencePath = p; return this; }
+        /** Sets the persistence mode (default: {@link MemoryPersistenceMode#DISK}). */
+        public Builder persistenceMode(MemoryPersistenceMode mode) { this.persistenceMode = mode; return this; }
+        /** If true, Working memory is also persisted to disk in DISK mode (default: false). */
+        public Builder persistWorkingMemory(boolean persist) { this.persistWorkingMemory = persist; return this; }
         public Builder reflectPolicy(CircadianPolicy p) { this.circadianPolicy = p; return this; }
         public Builder workingCapacity(int c) { this.workingCapacity = c; return this; }
         public Builder episodicPartitionCapacity(int c) { this.episodicPartitionCapacity = c; return this; }
