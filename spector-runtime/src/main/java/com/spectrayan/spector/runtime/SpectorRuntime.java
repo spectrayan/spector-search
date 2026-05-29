@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import com.spectrayan.spector.config.SpectorConfigFactory;
 import com.spectrayan.spector.config.SpectorMode;
 import com.spectrayan.spector.config.SpectorProperties;
+import com.spectrayan.spector.config.PersistenceMode;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
@@ -86,20 +87,36 @@ public final class SpectorRuntime implements AutoCloseable {
                                        boolean forceWritable) {
         SpectorMode mode = SpectorConfigFactory.mode(props);
 
+        // ── Read memory config early (needed to configure engine in MEMORY mode) ──
+        var memoryConfig = SpectorConfigFactory.memoryDefaults(props);
+        boolean memoryEnabled = memoryConfig.enabled() || mode == SpectorMode.MEMORY;
+
         // ── Engine ──
         SpectorConfig engineConfig = SpectorConfig.from(props);
         if (forceWritable) {
             engineConfig = engineConfig.withForceWritable(true);
         }
+        // In MEMORY mode the engine provides the shared HNSW index for semantic
+        // recall. Use DISK persistence so the HNSW graph + VectorStore survive
+        // restarts. Point engine data to .spector/index (sibling of memory path).
+        // Use the memory config's capacity so the HNSW can hold all semantic vectors.
+        // force-writable must be set in spector.yml (or via CLI) so the HNSW is
+        // writable at runtime — DiskHnswIndex is read-only.
+        if (mode == SpectorMode.MEMORY && memoryEnabled) {
+            java.nio.file.Path indexDir = memoryConfig.persistencePath()
+                    .resolveSibling("index");
+            engineConfig = engineConfig
+                    .withPersistence(PersistenceMode.DISK, indexDir)
+                    .withCapacity(memoryConfig.capacity());
+        }
         SpectorEngine engine = new SpectorEngine(engineConfig, embedder);
-        log.info("[Runtime] Engine: dims={}, index={}, persistence={}, mode={}, writable={}",
+        log.info("[Runtime] Engine: dims={}, index={}, persistence={}, dataDir={}, mode={}, writable={}",
                 engineConfig.dimensions(), engineConfig.indexType(),
-                engineConfig.persistenceMode(), mode, forceWritable);
+                engineConfig.persistenceMode(), engineConfig.dataDirectory(),
+                mode, engineConfig.forceWritable());
 
         // ── Memory (opt-in or auto-enabled in MEMORY mode) ──
         SpectorMemory memory = null;
-        var memoryConfig = SpectorConfigFactory.memoryDefaults(props);
-        boolean memoryEnabled = memoryConfig.enabled() || mode == SpectorMode.MEMORY;
 
         if (memoryEnabled) {
             var memoryBuilder = SpectorMemory.builder()
@@ -111,6 +128,7 @@ public final class SpectorRuntime implements AutoCloseable {
 
             if (mode == SpectorMode.MEMORY) {
                 memoryBuilder.semanticIndex(engine.index());
+                memoryBuilder.vectorStore(engine.vectorStore());
             }
 
             memory = memoryBuilder.build();
@@ -141,7 +159,24 @@ public final class SpectorRuntime implements AutoCloseable {
     /** Returns the mode-aware ingestion service. */
     public IngestionHandler ingestion() {
         if (ingestionService == null) {
-            ingestionService = new IngestionHandler(engine, memory, mode);
+            var ingestionConfig = SpectorConfigFactory.ingestionDefaults(properties);
+
+            // Select target based on mode
+            com.spectrayan.spector.ingestion.IngestionTarget target =
+                    (mode == SpectorMode.MEMORY && memory != null)
+                    ? memory.target()
+                    : engine.target();
+
+            // Build unified pipeline from config
+            var pipeline = com.spectrayan.spector.ingestion.IngestionPipeline.builder()
+                    .target(target)
+                    .embeddingProvider(engine.embeddingProvider())
+                    .chunking(new com.spectrayan.spector.commons.TextChunker(
+                            ingestionConfig.chunkSize(), ingestionConfig.chunkOverlap()))
+                    .chunkThreshold(ingestionConfig.chunkSize())
+                    .build();
+
+            ingestionService = new IngestionHandler(pipeline, engine, memory, mode);
         }
         return ingestionService;
     }
