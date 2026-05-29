@@ -21,6 +21,7 @@ import org.openjdk.jmh.infra.Blackhole;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.config.SpectorConfig;
+import com.spectrayan.spector.engine.DefaultSpectorEngine;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.config.HnswParams;
 
@@ -73,7 +74,7 @@ public class IngestionBenchmark {
         var hnswParams = new HnswParams(16, 200, 64);
         var config = new SpectorConfig(dimensions, MAX_CAPACITY,
                 SimilarityFunction.COSINE, hnswParams);
-        engine = new SpectorEngine(config);
+        engine = new DefaultSpectorEngine(config);
         docCounter = 0;
         rng = new Random(42);
     }

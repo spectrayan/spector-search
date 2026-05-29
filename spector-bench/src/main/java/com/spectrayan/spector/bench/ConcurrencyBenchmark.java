@@ -2,6 +2,7 @@ package com.spectrayan.spector.bench;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.config.SpectorConfig;
+import com.spectrayan.spector.engine.DefaultSpectorEngine;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.config.HnswParams;
 import com.spectrayan.spector.query.SearchQuery;
@@ -53,7 +54,7 @@ public class ConcurrencyBenchmark {
         var hnswParams = new HnswParams(16, 200, 64);
         var config = new SpectorConfig(DIMENSIONS, DATASET_SIZE + 1000,
                 SimilarityFunction.COSINE, hnswParams);
-        engine = new SpectorEngine(config);
+        engine = new DefaultSpectorEngine(config);
 
         Random rng = new Random(42);
         for (int i = 0; i < DATASET_SIZE; i++) {

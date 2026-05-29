@@ -5,6 +5,7 @@ import com.spectrayan.spector.core.similarity.DotProduct;
 import com.spectrayan.spector.core.simd.SimdCapability;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.config.SpectorConfig;
+import com.spectrayan.spector.engine.DefaultSpectorEngine;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.config.HnswParams;
 
@@ -139,7 +140,7 @@ public class PerformanceTestRunner {
         long memBefore = usedMemoryMB();
         Instant ingestStart = Instant.now();
 
-        SpectorEngine engine = new SpectorEngine(config);
+        SpectorEngine engine = new DefaultSpectorEngine(config);
         Random rng = new Random(42);
 
         // Ingestion
@@ -214,7 +215,7 @@ public class PerformanceTestRunner {
         var config = new SpectorConfig(DIMENSIONS, 51_000,
                 SimilarityFunction.COSINE, hnswParams);
 
-        SpectorEngine engine = new SpectorEngine(config);
+        SpectorEngine engine = new DefaultSpectorEngine(config);
         Random rng = new Random(42);
         for (int i = 0; i < 50_000; i++) {
             engine.ingest("doc-" + i, generateText(30, rng), randomVector(DIMENSIONS, rng));

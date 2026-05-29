@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.spectrayan.spector.core.simd.SimdCapability;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.config.SpectorConfig;
+import com.spectrayan.spector.engine.DefaultSpectorEngine;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.config.HnswParams;
 
@@ -133,7 +134,7 @@ public class IndustryBenchmark {
         var config = new SpectorConfig(dims, datasetSize + 1000,
                 SimilarityFunction.COSINE, hnswParams);
 
-        SpectorEngine engine = new SpectorEngine(config);
+        SpectorEngine engine = new DefaultSpectorEngine(config);
         Random rng = new Random(42);
 
         // Generate clustered vectors (realistic: embeddings form clusters in practice)
@@ -251,7 +252,7 @@ public class IndustryBenchmark {
         for (int t = 0; t < docWordCounts.length; t++) {
             var hnswParams = new HnswParams(16, 200, 64);
             var config = new SpectorConfig(dims, size + 1000, SimilarityFunction.COSINE, hnswParams);
-            SpectorEngine engine = new SpectorEngine(config);
+            SpectorEngine engine = new DefaultSpectorEngine(config);
 
             int minWords = docWordCounts[t][0];
             int maxWords = docWordCounts[t][1];
@@ -295,7 +296,7 @@ public class IndustryBenchmark {
         var hnswParams = new HnswParams(16, 200, 64);
         var config = new SpectorConfig(dims, datasetSize + 1000,
                 SimilarityFunction.COSINE, hnswParams);
-        SpectorEngine engine = new SpectorEngine(config);
+        SpectorEngine engine = new DefaultSpectorEngine(config);
         Random rng = new Random(42);
 
         float[][] vectors = generateClusteredVectors(datasetSize, dims, rng);
