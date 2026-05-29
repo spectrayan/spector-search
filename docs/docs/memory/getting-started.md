@@ -193,7 +193,7 @@ spector:
     base-url: http://localhost:11434
   memory:
     enabled: true
-    persistence-path: .spector-memory
+    persistence-path: .spector/memory
 ```
 
 Then configure your agent:

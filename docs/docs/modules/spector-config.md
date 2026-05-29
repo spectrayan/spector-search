@@ -1,0 +1,1 @@
+--8<-- "spector-config/README.md"

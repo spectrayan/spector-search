@@ -4,78 +4,117 @@ Spector Search is organized as a multi-module Maven project. Each module has a f
 
 ---
 
+## Architecture
+
+```mermaid
+graph LR
+    subgraph "🔬 Foundation"
+        core["spector-core<br/><i>SIMD kernels</i>"]
+        commons["spector-commons<br/><i>Chunkers, tokenizer</i>"]
+        config["spector-config<br/><i>SpectorConfig + YAML</i>"]
+        storage["spector-storage<br/><i>Panama MemorySegment</i>"]
+    end
+
+    subgraph "🧠 Intelligence"
+        embedApi["spector-embed-api<br/><i>Embedding SPI</i>"]
+        embedOllama["spector-embed-ollama<br/><i>Ollama provider</i>"]
+        index["spector-index<br/><i>HNSW + IVF-PQ + BM25</i>"]
+        query["spector-query<br/><i>Hybrid + RRF + rerank</i>"]
+        gpu["spector-gpu<br/><i>CUDA via Panama FFM</i>"]
+    end
+
+    subgraph "⚡ Engine"
+        rag["spector-rag<br/><i>RAG pipeline</i>"]
+        engine["spector-engine<br/><i>Search facade</i>"]
+        ingestion["spector-ingestion<br/><i>File ingest pipeline</i>"]
+        memory["spector-memory<br/><i>Cognitive memory 🧠</i>"]
+    end
+
+    subgraph "🌐 Runtime & Interfaces"
+        runtime["spector-runtime<br/><i>Composition root</i>"]
+        node["spector-node<br/><i>Armeria: REST + gRPC + SSE</i>"]
+        mcp["spector-mcp<br/><i>MCP Server (stdio)</i>"]
+        cli["spector-cli<br/><i>spectorctl</i>"]
+        client["spector-client<br/><i>Java SDK</i>"]
+        spring["spector-spring<br/><i>Spring AI</i>"]
+    end
+
+    subgraph "📦 Distribution"
+        metrics["spector-metrics<br/><i>Prometheus + JVM</i>"]
+        bench["spector-bench<br/><i>JMH benchmarks</i>"]
+        dist["spector-dist<br/><i>Fat JAR</i>"]
+    end
+```
+
+---
+
 ## Module Dependency Graph
 
 ```mermaid
 graph TD
-    commons["spector-commons"]
-    core["spector-core"]
-    config["spector-config"]
-    storage["spector-storage"]
-    embedApi["spector-embed-api"]
-    embedOllama["spector-embed-ollama"]
-    idx["spector-index"]
-    query["spector-query"]
-    gpu["spector-gpu"]
-    rag["spector-rag"]
-    engine["spector-engine"]
-    ingestion["spector-ingestion"]
-    memory["spector-memory"]
-    runtime["spector-runtime"]
-    mcp["spector-mcp"]
-    server["spector-server"]
-    cli["spector-cli"]
-    client["spector-client"]
-    spring["spector-spring"]
-    cluster["spector-cluster"]
-    bench["spector-bench"]
-    dist["spector-dist"]
-
-    core --> commons
-    config --> commons
-    storage --> core
-    embedOllama --> embedApi
-    idx --> core
-    query --> idx
-    gpu --> core
-    rag --> query
-    rag --> embedApi
-    engine --> rag
-    engine --> storage
-    engine --> embedOllama
-    engine --> config
-
-    ingestion --> config
-    ingestion --> embedApi
-
-    engine --> ingestion
-    memory --> ingestion
-    memory --> core
-    memory --> embedApi
-    memory --> idx
-
-    runtime --> engine
-    runtime --> memory
-    runtime --> ingestion
-    runtime --> config
-
+    node["🌐 node"] --> runtime["⚡ runtime"]
+    node --> mcp["🤖 mcp"]
+    node --> metrics["📈 metrics"]
     mcp --> runtime
-    server --> runtime
-    cli --> runtime
-    cli --> client
+    mcp --> ingestion["📥 ingestion"]
+    cli["🖥️ cli"] --> runtime
+    cli --> client["📦 client"]
 
-    client --> commons
-    spring --> engine
-    cluster --> runtime
-    bench --> engine
+    runtime --> engine["⚡ engine"]
+    runtime --> memory["🧠 memory"]
+    runtime --> ingestion
 
-    dist --> mcp
+    engine --> query["🔍 query"]
+    engine --> rag["🤖 rag"]
+    engine --> ingestion
+    engine --> index["📊 index"]
+    engine --> storage["💾 storage"]
+    engine --> embedapi["🧬 embed-api"]
+    engine -.-> gpu["🎮 gpu"]
+
+    memory --> index
+    memory --> storage
+    memory --> ingestion
+    memory --> embedapi
+    memory --> core["🔬 core"]
+
+    metrics --> engine
+    metrics --> memory
+
+    ingestion --> config["⚙️ config"]
+    ingestion --> embedapi
+
+    rag --> query
+    rag --> index
+    rag --> storage
+    rag --> embedapi
+
+    query --> index
+    index --> storage
+    index --> config
+    storage --> config
+    storage --> core
+    config --> core
+
+    embedapi --> commons["📄 commons"]
+    gpu --> core
+    gpu --> storage
+
+    dist["📦 dist"] --> mcp
     dist --> cli
     dist --> runtime
+
+    spring["🌱 spring"] --> engine
+    spring --> memory
+    spring --> metrics
+    bench["🧪 bench"] --> engine
+    bench --> memory
 ```
 
-> [!IMPORTANT]
-> **Architecture:** `spector-ingestion` defines the `IngestionPipeline` and `IngestionTarget` interface. Both `spector-engine` and `spector-memory` depend on it to implement their `IngestionTarget`. `SpectorRuntime` is the composition root that wires everything together.
+> **Legend:** Solid arrows = compile dependency. Dotted arrow (`gpu`) = optional dependency.
+
+!!! important "Architecture"
+    `spector-ingestion` defines the `IngestionPipeline` and `IngestionTarget` interface. Both `spector-engine` and `spector-memory` depend on it to implement their `IngestionTarget`. `spector-memory` is fully independent of `spector-engine` — they are peers, wired together only at the `SpectorRuntime` composition root.
 
 ---
 
@@ -87,11 +126,11 @@ All entry points (MCP, CLI, Server) route through `SpectorRuntime`:
 graph TD
     cli["🖥️ spector-cli<br/><i>SpectorCtl</i>"]
     mcp["🤖 spector-mcp<br/><i>SpectorMcpMain</i>"]
-    server["🌐 spector-server<br/><i>SpectorServer</i>"]
+    node["🌐 spector-node<br/><i>SpectorNode (Armeria)</i>"]
 
     cli --> runtime
     mcp --> runtime
-    server --> runtime
+    node --> runtime
 
     runtime["⚡ SpectorRuntime<br/><i>Composition Root</i>"]
 
@@ -155,7 +194,7 @@ graph TD
 |:---|:---|
 | [spector-runtime](spector-runtime.md) | Composition root — wires engine + memory + ingestion pipeline, exposes `SearchHandler` and `IngestionHandler` |
 | [spector-mcp](spector-mcp.md) | MCP server — Model Context Protocol integration via stdio |
-| [spector-server](spector-server.md) | HTTP server — REST API endpoints + SSE streaming |
+| [spector-node](spector-node.md) | Unified node — Armeria HTTP REST + gRPC + SSE events + cluster coordination |
 
 ### Client Layer
 
@@ -169,6 +208,6 @@ graph TD
 
 | Module | Description |
 |:---|:---|
-| [spector-cluster](spector-cluster.md) | Distributed mode — cluster coordination |
+| [spector-metrics](spector-metrics.md) | Metrics — Prometheus + JVM instrumentation |
 | [spector-bench](spector-bench.md) | Benchmarks — JMH performance testing |
 | [spector-dist](spector-dist.md) | Distribution — single fat JAR packaging |

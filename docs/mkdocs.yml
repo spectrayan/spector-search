@@ -92,6 +92,8 @@ markdown_extensions:
       permalink: true
       toc_depth: 3
 
+
+
 nav:
   - Home: index.md
   - About: about.md
@@ -144,11 +146,13 @@ nav:
       - Deep Dives:
           - "Performance & SIMD": memory/performance.md
           - "Off-Heap Panama Design": memory/panama-design.md
+          - "WAL Design": memory/wal-design.md
       - API Reference: memory/api-reference.md
   - Modules:
       - Overview: modules/index.md
       - spector-core: modules/spector-core.md
       - spector-commons: modules/spector-commons.md
+      - spector-config: modules/spector-config.md
       - spector-storage: modules/spector-storage.md
       - spector-embed-api: modules/spector-embed-api.md
       - spector-embed-ollama: modules/spector-embed-ollama.md
@@ -160,13 +164,14 @@ nav:
       - spector-ingestion: modules/spector-ingestion.md
       - spector-memory: modules/spector-memory.md
       - spector-runtime: modules/spector-runtime.md
+      - spector-node: modules/spector-node.md
       - spector-mcp: modules/spector-mcp.md
-      - spector-server: modules/spector-server.md
       - spector-cli: modules/spector-cli.md
       - spector-client: modules/spector-client.md
       - spector-spring: modules/spector-spring.md
-      - spector-cluster: modules/spector-cluster.md
+      - spector-metrics: modules/spector-metrics.md
       - spector-bench: modules/spector-bench.md
+      - spector-dist: modules/spector-dist.md
   - Reference:
       - REST API: api-reference/rest-endpoints.md
       - MCP Server: sdk-usage/mcp-server.md

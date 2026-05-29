@@ -125,31 +125,33 @@ MemorySegment headerSlab = arena.allocate(slabBytes, HEADER_BYTES);
 
 ### Memory Layout
 
-Each cognitive record is a fixed-size binary structure:
+Each cognitive record is a fixed-size binary structure — a **32-byte synaptic header** followed by an INT8 quantized vector:
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│  Offset 0                                                   │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ 32-Byte Synaptic Header                              │   │
-│  │ ┌─────────┬────────┬────────┬────────┬────────────┐ │   │
-│  │ │timestamp│synaptc │exactNrm│importnc│ centroidId │ │   │
-│  │ │  8 B    │tags 8B │  4 B   │  4 B   │   4 B      │ │   │
-│  │ ├─────────┴────────┴────────┴────────┼────┬───┬───┤ │   │
-│  │ │            (offsets 0-23)           │rcl │val│flg│ │   │
-│  │ │                                    │cnt │enc│s  │ │   │
-│  │ │                                    │2 B │1B │1B │ │   │
-│  │ └────────────────────────────────────┴────┴───┴───┘ │   │
-│  └──────────────────────────────────────────────────────┘   │
-│  Offset 32                                                  │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ Quantized Vector (N bytes)                           │   │
-│  │ INT8 values: byte[0] byte[1] ... byte[N-1]          │   │
-│  │ Dequantize: float = byte * scale + min               │   │
-│  └──────────────────────────────────────────────────────┘   │
-│  Offset 32 + N                                              │
-│  Next record begins (stride = 32 + N)                       │
-└────────────────────────────────────────────────────────────┘
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      timestamp (8B)                           +  ← Offset 0
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                    synapticTags (8B)                           +  ← Offset 8
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    exactNorm (4B)                              |  ← Offset 16
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    importance (4B)                             |  ← Offset 20
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    centroidId (4B)                             |  ← Offset 24
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|       recallCount (2B)        | valence (1B)  |   flags (1B)  |  ← Offset 28
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++              Quantized Vector — INT8[N]                       +  ← Offset 32
+|              (dequantize: float = byte × scale + min)         |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+                  stride = 32 + N bytes per record
 ```
 
 ### Field Access Patterns

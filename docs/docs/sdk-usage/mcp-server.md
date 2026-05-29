@@ -77,13 +77,13 @@ spector:
     dimensions: 768
     capacity: 100000
     persistence-mode: DISK
-    data-directory: .spector-data
+    data-directory: .spector/index
   embedding:
     model: nomic-embed-text
     base-url: http://localhost:11434
   memory:
     enabled: true              # Enable cognitive memory tools
-    persistence-path: .spector-memory
+    persistence-path: .spector/memory
 ```
 
 See the [Configuration Guide](../configuration/parameters.md) for the complete list of settings.
