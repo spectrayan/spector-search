@@ -20,9 +20,9 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
-import com.spectrayan.spector.engine.SpectorConfig;
+import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
-import com.spectrayan.spector.index.HnswParams;
+import com.spectrayan.spector.config.HnswParams;
 
 /**
  * Benchmarks measuring ingestion throughput for SpectorEngine.

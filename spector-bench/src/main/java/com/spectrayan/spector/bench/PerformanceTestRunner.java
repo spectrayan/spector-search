@@ -4,9 +4,9 @@ import com.spectrayan.spector.core.similarity.CosineSimilarity;
 import com.spectrayan.spector.core.similarity.DotProduct;
 import com.spectrayan.spector.core.simd.SimdCapability;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
-import com.spectrayan.spector.engine.SpectorConfig;
+import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
-import com.spectrayan.spector.index.HnswParams;
+import com.spectrayan.spector.config.HnswParams;
 
 import java.io.IOException;
 import java.io.PrintWriter;
