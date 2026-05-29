@@ -9,7 +9,9 @@ import com.spectrayan.spector.config.SpectorProperties;
 import com.spectrayan.spector.config.PersistenceMode;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.config.SpectorConfig;
+import com.spectrayan.spector.engine.DefaultSpectorEngine;
 import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.memory.DefaultSpectorMemory;
 import com.spectrayan.spector.memory.MemoryPersistenceMode;
 import com.spectrayan.spector.memory.SpectorMemory;
 
@@ -91,7 +93,7 @@ public final class SpectorRuntime implements AutoCloseable {
                     .withPersistence(PersistenceMode.DISK, indexDir)
                     .withCapacity(memoryConfig.capacity());
         }
-        SpectorEngine engine = new SpectorEngine(engineConfig, embedder);
+        SpectorEngine engine = new DefaultSpectorEngine(engineConfig, embedder);
         log.info("[Runtime] Engine: dims={}, index={}, persistence={}, dataDir={}, mode={}",
                 engineConfig.dimensions(), engineConfig.indexType(),
                 engineConfig.persistenceMode(), engineConfig.dataDirectory(),
@@ -101,7 +103,7 @@ public final class SpectorRuntime implements AutoCloseable {
         SpectorMemory memory = null;
 
         if (memoryEnabled) {
-            var memoryBuilder = SpectorMemory.builder()
+            var memoryBuilder = DefaultSpectorMemory.builder()
                     .dimensions(engineConfig.dimensions())
                     .embeddingProvider(embedder)
                     .persistenceMode(MemoryPersistenceMode.valueOf(memoryConfig.persistenceMode()))
