@@ -18,6 +18,7 @@ if not exist "%JAR%" (
 )
 
 java ^
+    -Xmx4g ^
     --add-modules jdk.incubator.vector ^
     --enable-native-access=ALL-UNNAMED ^
     --enable-preview ^

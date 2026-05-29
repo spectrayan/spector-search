@@ -6,6 +6,7 @@ import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.core.quantization.QuantizationType;
 import com.spectrayan.spector.index.ivf.IvfPqIndex;
 import com.spectrayan.spector.index.spectrum.SpectorIndex;
+import com.spectrayan.spector.storage.VectorStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,9 +40,24 @@ public class VectorIndexFactory {
      * @return a new, empty vector index
      */
     public VectorIndex create(SpectorConfig config) {
+        return create(config, null);
+    }
+
+    /**
+     * Creates a {@link VectorIndex} with an optional {@link VectorStore} backing.
+     *
+     * <p>When a VectorStore is provided, HNSW indexes will read vectors from it
+     * during graph traversal instead of keeping heap-resident copies. This
+     * eliminates O(capacity × dims × 4) bytes of heap overhead.</p>
+     *
+     * @param config      the engine configuration
+     * @param vectorStore optional off-heap vector store (null = inline mode)
+     * @return a new, empty vector index
+     */
+    public VectorIndex create(SpectorConfig config, VectorStore vectorStore) {
         SpectorConfig effectiveConfig = applyGpuFallbackIfNeeded(config);
         return switch (effectiveConfig.indexType()) {
-            case HNSW -> createHnsw(effectiveConfig);
+            case HNSW -> createHnsw(effectiveConfig, vectorStore);
             case IVF_PQ -> createIvfPq(effectiveConfig);
             case SPECTRUM -> createSpectrum(effectiveConfig);
         };
@@ -80,7 +96,7 @@ public class VectorIndexFactory {
     /**
      * Creates an HNSW-based index, optionally with scalar quantization.
      */
-    private VectorIndex createHnsw(SpectorConfig config) {
+    private VectorIndex createHnsw(SpectorConfig config, VectorStore vectorStore) {
         QuantizationType qt = config.quantization();
 
         if (qt == QuantizationType.VASQ) {
@@ -117,6 +133,14 @@ public class VectorIndexFactory {
                     config.dimensions(), config.capacity(),
                     config.similarityFunction(), config.hnswParams(),
                     null, qt, null, effectiveOversampling);
+        }
+
+        if (vectorStore != null) {
+            log.info("Creating HnswIndex (store-backed): dims={}, capacity={}",
+                    config.dimensions(), config.capacity());
+            return new HnswIndex(
+                    config.dimensions(), config.capacity(),
+                    config.similarityFunction(), config.hnswParams(), vectorStore);
         }
 
         log.info("Creating HnswIndex: dims={}, capacity={}", config.dimensions(), config.capacity());

@@ -8,15 +8,17 @@
 
 ```
 spector-runtime (Composition Root)
-├── SpectorRuntime          — lifecycle, wiring, factory methods
+├── SpectorRuntime          — lifecycle, wiring, pipeline factory
 ├── SearchHandler           — mode-aware search routing
-├── IngestionHandler        — mode-aware ingestion routing
-├── spector-engine          (vector search, RAG)
-├── spector-memory          (cognitive memory, opt-in)
-├── spector-ingestion       (file discovery, chunking utility)
+├── IngestionHandler        — thin layer over unified IngestionPipeline
+├── spector-engine          (vector search, RAG, EngineIngestionTarget)
+├── spector-memory          (cognitive memory, CognitiveIngestionTarget)
+├── spector-ingestion       (IngestionPipeline, IngestionTarget, FileDiscoveryService)
 ├── spector-config          (configuration)
 └── spector-embed-api       (embedding)
 ```
+
+`SpectorRuntime.ingestion()` builds the `IngestionPipeline` with the correct `IngestionTarget` (engine or cognitive) and reads chunking configuration from `spector.yml`.
 
 ## Service Accessors
 
@@ -37,14 +39,14 @@ try (var runtime = SpectorRuntime.from(props, embedder, true)) {
     // Search — mode-aware (routes to engine or memory)
     var results = runtime.search().query("query text", 10);
     
-    // Ingest text — mode-aware
+    // Ingest text — pipeline auto-chunks if content > threshold
     runtime.ingestion().ingest("doc-1", "content text");
     
-    // Ingest directory — discovers files, chunks, and ingests
+    // Ingest directory — discovers files, chunks, embeds, and stores
     runtime.ingestion().ingest(Path.of("/docs"), "**/*.md", 800, 100, ".git");
     
-    // Ingest with title
-    runtime.ingestion().ingestWithTitle("doc-2", "My Title", "content text");
+    // Chunked ingestion — returns IngestionResult with chunk count
+    var result = runtime.ingestion().ingestChunked("doc-2", longContent);
 }
 ```
 

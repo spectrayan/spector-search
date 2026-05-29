@@ -154,8 +154,8 @@ class IngestCommand extends BaseCommand {
                     ingestionConfig.skipDirs(),
                     new IngestionHandler.IngestionProgress() {
                         @Override
-                        public void onFileStart(String relativePath, int totalFiles) {
-                            out().printf("  [../%d] > %s ...%n", totalFiles, relativePath);
+                        public void onFileStart(int fileIndex, int totalFiles, String relativePath) {
+                            out().printf("  [%d/%d] > %s ...%n", fileIndex, totalFiles, relativePath);
                             out().flush();
                         }
 

@@ -17,21 +17,21 @@ import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 
 import com.spectrayan.spector.config.SpectorMode;
 import com.spectrayan.spector.engine.SpectorEngine;
-import com.spectrayan.spector.ingestion.FileIngestionService;
+import com.spectrayan.spector.ingestion.FileDiscoveryService;
+import com.spectrayan.spector.ingestion.IngestionPipeline;
 import com.spectrayan.spector.ingestion.IngestionResult;
-import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.SpectorMemory;
 
 /**
- * Mode-aware ingestion service.
+ * Mode-aware ingestion service — thin routing layer over the unified {@link IngestionPipeline}.
  *
  * <p>Handles all ingestion variants — raw text, single file, directory scan —
- * and routes to the engine or cognitive memory based on the global
- * {@link SpectorMode}.</p>
+ * by delegating to a pre-configured {@link IngestionPipeline} that knows
+ * how to chunk, embed, and store data for the active mode (search or memory).</p>
  *
- * <p>Uses {@link FileIngestionService} (from spector-ingestion) for file
- * discovery and chunking. That module stays a pure utility with no
- * dependency on the runtime.</p>
+ * <p>The pipeline is built by {@link SpectorRuntime} with the appropriate
+ * {@link com.spectrayan.spector.ingestion.IngestionTarget} (engine or cognitive)
+ * and chunking configuration from {@code spector.yml}.</p>
  *
  * <p>Obtained via {@code runtime.ingestion()}. Not instantiated directly.</p>
  */
@@ -39,11 +39,14 @@ public final class IngestionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(IngestionHandler.class);
 
-    private final SpectorEngine engine;
-    private final SpectorMemory memory;  // nullable
+    private final IngestionPipeline pipeline;
+    private final SpectorEngine engine;   // for count() and backward-compat
+    private final SpectorMemory memory;   // for count() (nullable)
     private final SpectorMode mode;
 
-    IngestionHandler(SpectorEngine engine, SpectorMemory memory, SpectorMode mode) {
+    IngestionHandler(IngestionPipeline pipeline, SpectorEngine engine,
+                     SpectorMemory memory, SpectorMode mode) {
+        this.pipeline = pipeline;
         this.engine = engine;
         this.memory = memory;
         this.mode = mode;
@@ -52,62 +55,39 @@ public final class IngestionHandler {
     // ─────────────── Text Ingestion ───────────────
 
     /**
-     * Ingests raw text content. Mode-aware.
+     * Ingests raw text content. The pipeline handles chunking and embedding.
      *
      * @param id   document/memory ID
      * @param text content text
-     * @param tags optional tags (used in memory mode)
      */
-    public void ingest(String id, String text, String... tags) {
-        if (mode == SpectorMode.MEMORY && memory != null) {
-            memory.remember(id, text, MemoryType.SEMANTIC, tags).join();
-        } else {
-            engine.ingest(id, text);
-        }
+    public void ingest(String id, String text) {
+        pipeline.ingest(id, text);
     }
 
     /**
-     * Ingests text with title metadata. Mode-aware.
+     * Ingests a long text by auto-chunking via the pipeline.
      *
-     * @param id    document/memory ID
-     * @param title document title
-     * @param text  content text
-     * @param tags  optional tags (used in memory mode)
-     */
-    public void ingestWithTitle(String id, String title, String text, String... tags) {
-        if (mode == SpectorMode.MEMORY && memory != null) {
-            String enriched = title + "\n\n" + text;
-            memory.remember(id, enriched, MemoryType.SEMANTIC, tags).join();
-        } else {
-            engine.ingest(id, title, text);
-        }
-    }
-
-    /**
-     * Ingests a long text by auto-chunking. Mode-aware.
+     * <p>The pipeline decides whether to chunk based on content length
+     * and its configured chunk threshold.</p>
      *
      * @param id      document ID
      * @param content full document content
-     * @return number of chunks ingested
+     * @return ingestion result
      */
-    public int ingestChunked(String id, String content) {
-        if (mode == SpectorMode.MEMORY && memory != null) {
-            return ingestChunkedMemory(id, content);
-        }
-        return engine.ingestChunkedAuto(id, content);
+    public IngestionResult ingestChunked(String id, String content) {
+        return pipeline.ingest(id, content);
     }
 
     // ─────────────── File Ingestion ───────────────
 
     /**
-     * Ingests a single file. Reads, extracts title, chunks if needed. Mode-aware.
+     * Ingests a single file. Reads content and delegates to the pipeline.
      *
      * @param file      path to the file
-     * @param chunkSize chunk size in characters
+     * @param chunkSize chunk size in characters (used for title extraction threshold)
      * @return ingestion result
      */
     public IngestionResult ingest(Path file, int chunkSize) {
-        long start = System.currentTimeMillis();
         try {
             String content = Files.readString(file);
             if (content.isBlank()) {
@@ -115,27 +95,16 @@ public final class IngestionHandler {
             }
 
             String id = file.getFileName().toString();
-            String title = FileIngestionService.extractTitle(content, id);
-
-            int chunks;
-            if (content.length() <= chunkSize) {
-                ingestWithTitle(id, title, content);
-                chunks = 1;
-            } else {
-                chunks = ingestChunked(id, content);
-            }
-
-            return IngestionResult.chunked(id, chunks, List.of(),
-                    System.currentTimeMillis() - start);
+            return pipeline.ingest(id, content);
         } catch (Exception e) {
             log.error("Failed to ingest file '{}': {}", file, e.getMessage());
             return IngestionResult.chunked(file.toString(), 0,
-                    List.of(file.toString()), System.currentTimeMillis() - start);
+                    List.of(file.toString()), 0);
         }
     }
 
     /**
-     * Discovers and ingests files from a directory. Mode-aware.
+     * Discovers and ingests files from a directory.
      *
      * @param rootDir     root directory to scan
      * @param filePattern glob pattern (e.g., {@code "**\/*.md"})
@@ -150,15 +119,7 @@ public final class IngestionHandler {
     }
 
     /**
-     * Discovers and ingests files from a directory. Mode-aware. With progress reporting.
-     *
-     * @param rootDir     root directory to scan
-     * @param filePattern glob pattern (e.g., {@code "**\/*.md"})
-     * @param chunkSize   chunk size in characters
-     * @param chunkOverlap overlap between chunks
-     * @param skipDirs    directories to skip (e.g., {@code ".git,.idea"})
-     * @param progress    optional callback (fileIndex, totalFiles, relativePath, chunks, elapsedMs)
-     * @return list of ingestion results (one per file)
+     * Discovers and ingests files from a directory with progress reporting.
      */
     public List<IngestionResult> ingest(Path rootDir, String filePattern,
                                          int chunkSize, int chunkOverlap, String skipDirs,
@@ -168,25 +129,14 @@ public final class IngestionHandler {
     }
 
     /**
-     * Discovers and ingests files from a directory. Mode-aware.
+     * Discovers and ingests files from a directory with full configuration.
      * Uses virtual threads for parallelism and retry with exponential backoff.
-     *
-     * @param rootDir      root directory to scan
-     * @param filePattern  glob pattern
-     * @param chunkSize    chunk size in characters
-     * @param chunkOverlap overlap between chunks
-     * @param skipDirs     directories to skip
-     * @param progress     optional progress callback
-     * @param parallelism  max concurrent file ingestions (bounded by Semaphore)
-     * @param maxRetries   max retry attempts per file
-     * @param retryDelayMs base delay in ms for exponential backoff
-     * @return list of ingestion results (one per file)
      */
     public List<IngestionResult> ingest(Path rootDir, String filePattern,
                                          int chunkSize, int chunkOverlap, String skipDirs,
                                          IngestionProgress progress,
                                          int parallelism, int maxRetries, int retryDelayMs) {
-        var service = FileIngestionService.builder()
+        var discovery = FileDiscoveryService.builder()
                 .rootDirectory(rootDir)
                 .filePattern(filePattern)
                 .chunkSize(chunkSize)
@@ -195,7 +145,7 @@ public final class IngestionHandler {
                 .build();
         List<Path> files;
         try {
-            files = service.discover();
+            files = discovery.discover();
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to discover files in " + rootDir, e);
         }
@@ -209,21 +159,22 @@ public final class IngestionHandler {
         var semaphore = new Semaphore(parallelism);
         var completedCount = new AtomicInteger(0);
         List<ConcurrentTasks.LabeledTask<IngestionResult>> tasks = new ArrayList<>(totalFiles);
-        for (Path file : files) {
+        for (int fi = 0; fi < files.size(); fi++) {
+            Path file = files.get(fi);
+            final int fileIndex = fi + 1; // 1-based for display
             String relativePath = rootDir.relativize(file).toString().replace('\\', '/');
             tasks.add(new ConcurrentTasks.LabeledTask<>(relativePath, () -> {
                 semaphore.acquire();
                 try {
                     return ingestFileWithRetry(file, rootDir, chunkSize, maxRetries, retryDelayMs,
-                            completedCount, totalFiles, progress);
+                            completedCount, totalFiles, progress, fileIndex);
                 } finally {
                     semaphore.release();
                 }
             }));
         }
 
-        // Execute via ConcurrentTasks — uses StructuredTaskScope or ExecutorService
-        // with configurable timeout per batch
+        // Execute via ConcurrentTasks
         Duration timeout = Duration.ofMinutes(Math.max(totalFiles * 2L, 30));
         ConcurrentTasks.PartialResult<IngestionResult> partial;
         try {
@@ -234,7 +185,7 @@ public final class IngestionHandler {
             return List.of();
         }
 
-        // Collect results — successes + synthetic failures for timed-out/failed tasks
+        // Collect results
         var results = new ArrayList<IngestionResult>(totalFiles);
         for (var entry : partial.successes()) {
             results.add(entry.result());
@@ -266,42 +217,47 @@ public final class IngestionHandler {
     private IngestionResult ingestFileWithRetry(Path file, Path rootDir, int chunkSize,
                                                  int maxRetries, int retryDelayMs,
                                                  AtomicInteger completedCount, int totalFiles,
-                                                 IngestionProgress progress) {
+                                                 IngestionProgress progress, int fileIndex) {
         String relativePath = rootDir.relativize(file).toString().replace('\\', '/');
         long fileStart = System.currentTimeMillis();
 
         if (progress != null) {
-            progress.onFileStart(relativePath, totalFiles);
+            progress.onFileStart(fileIndex, totalFiles, relativePath);
         }
 
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                String content = Files.readString(file);
-                if (content.isBlank()) {
-                    int idx = completedCount.incrementAndGet();
-                    if (progress != null) {
-                        progress.onFile(idx, totalFiles, relativePath, 0,
-                                System.currentTimeMillis() - fileStart, null);
-                    }
-                    return IngestionResult.single(relativePath, 0);
-                }
+                // Check file size to decide strategy:
+                // - Small files (≤ 2× chunkSize bytes): read into memory
+                // - Large files: use streaming pipeline to avoid heap exhaustion
+                long fileSize = Files.size(file);
+                IngestionResult result;
 
-                String title = FileIngestionService.extractTitle(content, relativePath);
-                int chunks;
-                if (content.length() <= chunkSize) {
-                    ingestWithTitle(relativePath, title, content);
-                    chunks = 1;
+                if (fileSize <= chunkSize * 2L) {
+                    // Small file — safe to read fully into memory
+                    String content = Files.readString(file);
+                    if (content.isBlank()) {
+                        int idx = completedCount.incrementAndGet();
+                        if (progress != null) {
+                            progress.onFile(idx, totalFiles, relativePath, 0,
+                                    System.currentTimeMillis() - fileStart, null);
+                        }
+                        return IngestionResult.single(relativePath, 0);
+                    }
+                    result = pipeline.ingest(relativePath, content);
                 } else {
-                    chunks = ingestChunked(relativePath, content);
+                    // Large file — stream chunk-by-chunk (bounded memory)
+                    result = pipeline.ingest(file, relativePath);
                 }
 
                 long elapsed = System.currentTimeMillis() - fileStart;
                 int idx = completedCount.incrementAndGet();
-                log.info("  [{}] {} chunks, {}ms", relativePath, chunks, elapsed);
+                log.info("  [{}] {} chunks, {}ms", relativePath, result.chunksStored(), elapsed);
                 if (progress != null) {
-                    progress.onFile(idx, totalFiles, relativePath, chunks, elapsed, null);
+                    progress.onFile(idx, totalFiles, relativePath,
+                            result.chunksStored(), elapsed, null);
                 }
-                return IngestionResult.chunked(relativePath, chunks, List.of(), elapsed);
+                return result;
 
             } catch (Exception e) {
                 if (attempt < maxRetries) {
@@ -328,7 +284,7 @@ public final class IngestionHandler {
             }
         }
 
-        // Shouldn't reach here, but safety net
+        // Safety net
         long elapsed = System.currentTimeMillis() - fileStart;
         return IngestionResult.chunked(relativePath, 0,
                 List.of(relativePath), elapsed);
@@ -340,7 +296,7 @@ public final class IngestionHandler {
     public interface IngestionProgress {
 
         /** Called when a file starts processing (before embedding). */
-        default void onFileStart(String relativePath, int totalFiles) {}
+        default void onFileStart(int fileIndex, int totalFiles, String relativePath) {}
 
         /** Called when a file finishes processing (success or failure). */
         void onFile(int fileIndex, int totalFiles, String relativePath,
@@ -357,38 +313,5 @@ public final class IngestionHandler {
             return memory.totalMemories();
         }
         return engine.documentCount();
-    }
-
-    private static final int CHUNK_BATCH_SIZE = 1;
-
-    private int ingestChunkedMemory(String id, String content) {
-        int chunkSize = 800;
-        int overlap = 100;
-        int count = 0;
-        int start = 0;
-
-        // Collect all chunks first
-        var chunks = new ArrayList<String[]>(); // [chunkId, chunkText]
-        while (start < content.length()) {
-            int end = Math.min(start + chunkSize, content.length());
-            chunks.add(new String[]{id + "#chunk-" + count, content.substring(start, end)});
-            count++;
-            start = end - overlap;
-            if (start >= content.length()) break;
-        }
-
-        // Process in batches to avoid socket exhaustion
-        for (int i = 0; i < chunks.size(); i += CHUNK_BATCH_SIZE) {
-            int batchEnd = Math.min(i + CHUNK_BATCH_SIZE, chunks.size());
-            var batch = chunks.subList(i, batchEnd);
-
-            var futures = batch.stream()
-                    .map(c -> memory.remember(c[0], c[1], MemoryType.SEMANTIC))
-                    .toArray(java.util.concurrent.CompletableFuture[]::new);
-
-            java.util.concurrent.CompletableFuture.allOf(futures).join();
-        }
-
-        return count;
     }
 }

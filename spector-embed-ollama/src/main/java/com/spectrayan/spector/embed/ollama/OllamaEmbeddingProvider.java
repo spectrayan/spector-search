@@ -1,7 +1,6 @@
 package com.spectrayan.spector.embed.ollama;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
+
 import tools.jackson.databind.ObjectMapper;
 import com.spectrayan.spector.embed.EmbeddingConfig;
 import com.spectrayan.spector.embed.EmbeddingException;
@@ -177,20 +176,15 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
         return config;
     }
 
-    // ─────────────── Response parsing ───────────────
+    // ─────────────── Response parsing (streaming — avoids DOM tree overhead) ───────────────
 
     private EmbeddingResult parseEmbedResponse(String json) {
-        try {
-            JsonNode root = MAPPER.readTree(json);
-            JsonNode embeddings = root.get("embeddings");
-
-            if (embeddings == null || !embeddings.isArray() || embeddings.isEmpty()) {
+        try (var parser = MAPPER.createParser(json)) {
+            float[] vector = parseFirstEmbedding(parser);
+            if (vector == null) {
                 throw new EmbeddingException("No embeddings in Ollama response: " + json);
             }
-
-            float[] vector = parseVector(embeddings.get(0));
             cachedDimensions = vector.length;
-
             return new EmbeddingResult(vector, -1, config.model());
         } catch (EmbeddingException e) {
             throw e;
@@ -200,20 +194,17 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
     }
 
     private List<EmbeddingResult> parseBatchResponse(String json) {
-        try {
-            JsonNode root = MAPPER.readTree(json);
-            JsonNode embeddings = root.get("embeddings");
-
-            if (embeddings == null || !embeddings.isArray()) {
+        try (var parser = MAPPER.createParser(json)) {
+            List<EmbeddingResult> results = new ArrayList<>();
+            // Navigate to "embeddings" array
+            if (!advanceToEmbeddingsArray(parser)) {
                 throw new EmbeddingException("No embeddings array in Ollama batch response");
             }
-
-            List<EmbeddingResult> results = new ArrayList<>();
-            for (JsonNode node : embeddings) {
-                float[] vector = parseVector(node);
+            // Each element in the "embeddings" array is itself an array of floats
+            while (parser.nextToken() == tools.jackson.core.JsonToken.START_ARRAY) {
+                float[] vector = parseFloatArray(parser);
                 results.add(new EmbeddingResult(vector, -1, config.model()));
             }
-
             if (!results.isEmpty()) {
                 cachedDimensions = results.getFirst().dimensions();
             }
@@ -225,11 +216,51 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
         }
     }
 
-    private static float[] parseVector(JsonNode arrayNode) {
-        float[] vector = new float[arrayNode.size()];
-        for (int i = 0; i < vector.length; i++) {
-            vector[i] = (float) arrayNode.get(i).asDouble();
+    /**
+     * Streaming parse: navigates to the first embedding vector and reads it as float[].
+     * Avoids building a full JsonNode tree — O(dims) heap instead of O(dims × node_overhead).
+     */
+    private float[] parseFirstEmbedding(tools.jackson.core.JsonParser parser) throws java.io.IOException {
+        if (!advanceToEmbeddingsArray(parser)) return null;
+        // First element in "embeddings" array should be an array of floats
+        if (parser.nextToken() != tools.jackson.core.JsonToken.START_ARRAY) return null;
+        return parseFloatArray(parser);
+    }
+
+    /**
+     * Advances the parser to the start of the "embeddings" array.
+     * Returns true if found, false otherwise.
+     */
+    private boolean advanceToEmbeddingsArray(tools.jackson.core.JsonParser parser) throws java.io.IOException {
+        while (parser.nextToken() != null) {
+            if (parser.currentToken() == tools.jackson.core.JsonToken.PROPERTY_NAME
+                    && "embeddings".equals(parser.currentName())) {
+                // Next token should be START_ARRAY
+                return parser.nextToken() == tools.jackson.core.JsonToken.START_ARRAY;
+            }
         }
-        return vector;
+        return false;
+    }
+
+    /**
+     * Reads a JSON array of numbers into a float[].
+     * Assumes the parser is positioned right after START_ARRAY.
+     * Uses a growable list to handle unknown dimensions, then converts to float[].
+     */
+    private float[] parseFloatArray(tools.jackson.core.JsonParser parser) throws java.io.IOException {
+        // Use cached dimensions as initial capacity hint if known
+        int hint = cachedDimensions > 0 ? cachedDimensions : 768;
+        float[] buf = new float[hint];
+        int idx = 0;
+
+        while (parser.nextToken() != tools.jackson.core.JsonToken.END_ARRAY) {
+            if (idx >= buf.length) {
+                buf = java.util.Arrays.copyOf(buf, buf.length * 2);
+            }
+            buf[idx++] = parser.getFloatValue();
+        }
+
+        // Trim to exact size
+        return idx == buf.length ? buf : java.util.Arrays.copyOf(buf, idx);
     }
 }
