@@ -1,61 +1,73 @@
 # ⚡ Spector Runtime
 
-**Unified application context for a running Spector instance.**
+**Composition root — the single entry point for all Spector consumers.**
 
-`SpectorRuntime` composes the two core subsystems into a single, config-driven entry point that all consumers (MCP server, REST API, CLI) depend on:
+`SpectorRuntime` creates, wires, and exposes all subsystem services. It is a thin composition root with no business logic — each handler owns its domain.
 
-- **`SpectorEngine`** — vector search, ingestion, RAG (always created)
-- **`SpectorMemory`** — cognitive memory with biologically-inspired mechanisms (opt-in via `spector.memory.enabled: true`)
-
-## Why a Separate Module?
-
-`spector-memory` already depends on `spector-engine`. Placing `SpectorRuntime` in either would create a circular dependency. This thin module resolves that by depending on both.
+## Architecture
 
 ```
-spector-runtime
-├── spector-engine   (search)
-├── spector-memory   (cognitive memory)
-├── spector-commons  (config)
-└── spector-embed-api (embedding)
+spector-runtime (Composition Root)
+├── SpectorRuntime          — lifecycle, wiring, factory methods
+├── SearchHandler           — mode-aware search routing
+├── IngestionHandler        — mode-aware ingestion routing
+├── spector-engine          (vector search, RAG)
+├── spector-memory          (cognitive memory, opt-in)
+├── spector-ingestion       (file discovery, chunking utility)
+├── spector-config          (configuration)
+└── spector-embed-api       (embedding)
 ```
+
+## Service Accessors
+
+| Accessor | Returns | Description |
+|----------|---------|-------------|
+| `runtime.search()` | `SearchHandler` | Mode-aware search (engine or memory) |
+| `runtime.ingestion()` | `IngestionHandler` | Mode-aware ingestion (text, file, directory) |
+| `runtime.engine()` | `SpectorEngine` | Direct engine access (always available) |
+| `runtime.memory()` | `SpectorMemory` | Direct memory access (null if disabled) |
+| `runtime.mode()` | `SpectorMode` | Current mode (SEARCH or MEMORY) |
 
 ## Usage
 
-### With Configuration File
+### Search & Ingest via Handlers
 
 ```java
-SpectorProperties props = SpectorProperties.builder()
-    .configFile(Path.of("spector.yml"))
-    .build();
-
-EmbeddingProvider embedder = createEmbedder(props);
-
-try (SpectorRuntime runtime = SpectorRuntime.from(props, embedder)) {
-    // Search
-    runtime.engine().ingest("doc1", "title", "content");
-    var results = runtime.engine().search("query", 10);
-
-    // Cognitive memory (if enabled)
-    if (runtime.hasMemory()) {
-        runtime.memory().remember("pref", "User likes dark mode",
-            MemoryType.SEMANTIC, "preferences").join();
-    }
+try (var runtime = SpectorRuntime.from(props, embedder, true)) {
+    // Search — mode-aware (routes to engine or memory)
+    var results = runtime.search().query("query text", 10);
+    
+    // Ingest text — mode-aware
+    runtime.ingestion().ingest("doc-1", "content text");
+    
+    // Ingest directory — discovers files, chunks, and ingests
+    runtime.ingestion().ingest(Path.of("/docs"), "**/*.md", 800, 100, ".git");
+    
+    // Ingest with title
+    runtime.ingestion().ingestWithTitle("doc-2", "My Title", "content text");
 }
 ```
 
-### Engine-Only (No Memory)
+### Factory Methods
 
 ```java
-SpectorEngine engine = new SpectorEngine(config, embedder);
-SpectorRuntime runtime = SpectorRuntime.engineOnly(engine, props);
+// Standard — creates engine + optional memory from config
+SpectorRuntime.from(props, embedder);
+
+// With writable index (for ingestion)
+SpectorRuntime.from(props, embedder, true);
+
+// Engine-only (no memory)
+SpectorRuntime.engineOnly(engine, props);
 ```
 
 ## Configuration
 
-Memory is opt-in via `spector.yml`:
+Runtime behavior is driven by `spector.yml`:
 
 ```yaml
 spector:
+  mode: search              # search or memory
   engine:
     dimensions: 768
     persistence-mode: DISK
@@ -64,34 +76,23 @@ spector:
     model: nomic-embed-text
     base-url: http://localhost:11434
   memory:
-    enabled: true                      # ← Enable cognitive memory
+    enabled: true
     persistence-mode: DISK
     persistence-path: .spector-memory
-    capacity: 100000
-    decay-enabled: true
-    consolidation-interval: 60s
+  ingestion:
+    root-directory: /path/to/docs
+    file-pattern: "**/*.md"
+    chunk-size: 800
+    chunk-overlap: 100
 ```
-
-When `memory.enabled` is `false` (default), `SpectorRuntime` only creates the engine. When `true`, it creates both — sharing the same `EmbeddingProvider` for consistent vector dimensions.
-
-## API
-
-| Method | Description |
-|--------|-------------|
-| `SpectorRuntime.from(props, embedder)` | Factory — creates engine + optional memory from config |
-| `SpectorRuntime.engineOnly(engine, props)` | Wrap an existing engine (no memory) |
-| `runtime.engine()` | Returns the `SpectorEngine` (never null) |
-| `runtime.memory()` | Returns `SpectorMemory` or `null` if not enabled |
-| `runtime.hasMemory()` | `true` if cognitive memory is available |
-| `runtime.properties()` | The configuration properties used |
-| `runtime.close()` | Closes engine and memory (implements `AutoCloseable`) |
 
 ## Consumers
 
 | Module | How it uses SpectorRuntime |
 |--------|---------------------------|
-| `spector-mcp` | `SpectorMcpServer(runtime)` — registers 6 search + 7 memory tools |
-| `spector-server` | `SpectorServer(runtime, port, apiKey)` — REST API |
+| `spector-cli` | `SpectorCtl` — CLI commands call `runtime.search()` / `runtime.ingestion()` |
+| `spector-mcp` | `SpectorMcpServer(runtime)` — MCP tools call runtime handlers |
+| `spector-server` | `SpectorServer(runtime)` — REST API endpoints |
 | `spector-dist` | Fat JAR bundles runtime + all modules |
 
 ## Dependencies
