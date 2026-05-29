@@ -10,11 +10,14 @@ import com.spectrayan.spector.gpu.GpuBatchSimilarity;
 import com.spectrayan.spector.gpu.GpuCapability;
 import com.spectrayan.spector.index.BM25Index;
 import com.spectrayan.spector.index.DiskHnswIndex;
+import com.spectrayan.spector.index.ShardedDiskHnswIndex;
 import com.spectrayan.spector.index.KeywordIndex;
 import com.spectrayan.spector.index.VectorIndex;
 import com.spectrayan.spector.query.ranking.LlmReranker;
 import com.spectrayan.spector.query.ranking.Reranker;
 import com.spectrayan.spector.storage.DocumentStore;
+import com.spectrayan.spector.storage.ShardedIndexFormat;
+import com.spectrayan.spector.storage.ShardedMappedVectorStore;
 import com.spectrayan.spector.config.PersistenceMode;
 import com.spectrayan.spector.storage.VectorStore;
 import com.spectrayan.spector.config.PersistenceFiles;
@@ -90,21 +93,22 @@ public class EngineComponentFactory {
         // ── Load persisted data from disk (if available) ──
         if (config.persistenceMode() == PersistenceMode.DISK) {
             // 1. Load VectorStore ID mappings (restores id→index map + count)
-            if (vs instanceof com.spectrayan.spector.storage.MappedVectorStore mvs) {
+            if (vs instanceof ShardedMappedVectorStore smvs) {
                 Path idMappingsFile = persistenceFiles.resolveIdMappings(config.dataDirectory());
                 if (Files.exists(idMappingsFile)) {
-                    mvs.loadIdMappings(idMappingsFile);
-                    log.info("Loaded VectorStore ID mappings: {} entries", mvs.size());
+                    smvs.loadIdMappings(idMappingsFile);
+                    log.info("Loaded VectorStore ID mappings: {} entries", smvs.size());
                 }
             }
 
-            // 2. Load HNSW graph structure into the writable index
-            Path indexFile = persistenceFiles.resolveIndex(config.dataDirectory());
-            if (Files.exists(indexFile) && vi instanceof com.spectrayan.spector.index.HnswIndex writable) {
+            // 2. Load HNSW graph structure from sharded index
+            Path shardDir = persistenceFiles.resolveShardDir(config.dataDirectory());
+            Path manifestFile = ShardedIndexFormat.resolveManifest(shardDir);
+            if (Files.exists(manifestFile) && vi instanceof com.spectrayan.spector.index.AbstractHnswIndex writable) {
                 try {
-                    var diskIndex = DiskHnswIndex.open(indexFile);
+                    var diskIndex = ShardedDiskHnswIndex.open(shardDir);
                     int nodeCount = diskIndex.size();
-                    log.info("Loading {} nodes from disk index into writable HNSW...", nodeCount);
+                    log.info("Loading {} nodes from sharded disk index into writable HNSW...", nodeCount);
 
                     for (int i = 0; i < nodeCount; i++) {
                         String id = diskIndex.getId(i);
@@ -137,9 +141,23 @@ public class EngineComponentFactory {
                     }
 
                     diskIndex.close();
-                    log.info("Loaded {} nodes into writable HNSW index", nodeCount);
+                    log.info("Loaded {} nodes into writable HNSW index from {} shards",
+                            nodeCount, diskIndex.shardCount());
                 } catch (IOException e) {
-                    log.warn("Failed to load disk index, starting fresh: {}", e.getMessage());
+                    log.warn("Failed to load sharded disk index, starting fresh: {}", e.getMessage());
+                }
+            }
+
+            // 2b. Load SpectorIndex structure
+            Path specIndexDir = config.dataDirectory().resolve("index_spectrum");
+            if (Files.exists(specIndexDir.resolve("meta.properties")) && vi instanceof com.spectrayan.spector.index.spectrum.SpectorIndex) {
+                try {
+                    vi = com.spectrayan.spector.index.spectrum.SpectorIndex.load(
+                            specIndexDir, config.dimensions(),
+                            ((com.spectrayan.spector.index.spectrum.SpectorIndex) vi).config(), vs);
+                    log.info("Loaded SpectorIndex from disk: {} nodes", vi.size());
+                } catch (IOException e) {
+                    log.warn("Failed to load SpectorIndex from disk, starting fresh: {}", e.getMessage());
                 }
             }
 

@@ -68,8 +68,8 @@ final class EngineIngestion {
         this.vectorIndex = vectorIndex;
         this.keywordIndex = keywordIndex;
         this.embeddingProvider = embeddingProvider;
-        this.ivfTrained = false;
-        this.spectrumTrained = false;
+        this.ivfTrained = (vectorIndex instanceof IvfPqIndex ivfPq) && ivfPq.isTrained();
+        this.spectrumTrained = (vectorIndex instanceof SpectorIndex spec) && spec.isTrained();
 
         // IVF-PQ training buffer initialization
         if (config.indexType() == IndexType.IVF_PQ) {
