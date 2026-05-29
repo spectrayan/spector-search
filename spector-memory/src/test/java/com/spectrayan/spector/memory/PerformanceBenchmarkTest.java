@@ -305,7 +305,7 @@ class PerformanceBenchmarkTest {
         int dims = 64;
         MockEmbeddingProvider embedder = new MockEmbeddingProvider(dims);
 
-        try (SpectorMemory memory = SpectorMemory.builder()
+        try (SpectorMemory memory = DefaultSpectorMemory.builder()
                 .dimensions(dims)
                 .embeddingProvider(embedder)
                 .persistenceMode(MemoryPersistenceMode.IN_MEMORY)

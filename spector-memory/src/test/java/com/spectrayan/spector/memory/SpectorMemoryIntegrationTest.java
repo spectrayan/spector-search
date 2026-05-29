@@ -30,7 +30,7 @@ class SpectorMemoryIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        memory = SpectorMemory.builder()
+        memory = DefaultSpectorMemory.builder()
                 .dimensions(DIMENSIONS)
                 .embeddingProvider(new MockEmbeddingProvider(DIMENSIONS))
                 .persistenceMode(MemoryPersistenceMode.IN_MEMORY)

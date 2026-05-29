@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.embed.EmbeddingResult;
 import com.spectrayan.spector.config.SpectorConfig;
+import com.spectrayan.spector.engine.DefaultSpectorEngine;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.mcp.schema.ToolSchemaBuilder;
 
@@ -39,7 +40,7 @@ class SpectorToolRegistryTest {
     @BeforeAll
     static void setUp() {
         SpectorConfig config = SpectorConfig.DEFAULT.withDimensions(4);
-        engine = new SpectorEngine(config, new MockEmbeddingProvider());
+        engine = new DefaultSpectorEngine(config, new MockEmbeddingProvider());
 
         engine.ingest("doc-1", "Java Panama SIMD vector search engine");
         engine.ingest("doc-2", "Machine learning and artificial intelligence");

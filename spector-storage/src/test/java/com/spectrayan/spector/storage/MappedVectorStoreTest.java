@@ -122,6 +122,24 @@ class MappedVectorStoreTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void unloadIdleGracePeriod() throws IOException, InterruptedException {
+        Path file = tempDir.resolve("vectors.bin");
+        try (var store = new MappedVectorStore(file, 3, 100)) {
+            store.put("doc-1", new float[]{1f, 2f, 3f});
+
+            // 1. Should NOT evict if checked immediately (gracePeriod = 10 seconds)
+            boolean evicted = store.unloadIdle(10_000);
+            assertThat(evicted).isFalse();
+
+            // 2. Sleep for 15 milliseconds, then request eviction with a 5 ms grace period.
+            // This should trigger eviction.
+            Thread.sleep(15);
+            boolean evictedAfterIdle = store.unloadIdle(5);
+            assertThat(evictedAfterIdle).isTrue();
+        }
+    }
+
     private static float[] randomVector(int dim, long seed) {
         java.util.Random rng = new java.util.Random(seed);
         float[] v = new float[dim];

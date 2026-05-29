@@ -239,4 +239,128 @@ class MemoryWalPersistenceTest {
             assertThat(events.getFirst().memoryId()).isEqualTo("日本語テスト-🧠");
         }
     }
+
+    // ── V2 Upgrades: Compression, Checksums, Auto-Repair & Compaction ──
+
+    @Test
+    void payloadCompressionRoundTrips() {
+        int threshold = 100;
+        try (MemoryWal wal = new MemoryWal(walDir, 8L * 1024 * 1024, true, threshold, false)) {
+            byte[] smallPayload = "small".getBytes();
+            byte[] largePayload = "large-payload-string-that-definitely-exceeds-the-hundred-bytes-threshold-for-compression-testing".repeat(3).getBytes();
+
+            wal.appendRemember("small-id", smallPayload);
+            wal.appendRemember("large-id", largePayload);
+        }
+
+        try (MemoryWal wal2 = new MemoryWal(walDir, 8L * 1024 * 1024, true, threshold, false)) {
+            List<WalEvent> recovered = wal2.replay(0);
+            assertThat(recovered).hasSize(2);
+            
+            WalEvent smallEvent = recovered.get(0);
+            assertThat(smallEvent.memoryId()).isEqualTo("small-id");
+            assertThat(smallEvent.payload()).isEqualTo("small".getBytes());
+
+            WalEvent largeEvent = recovered.get(1);
+            assertThat(largeEvent.memoryId()).isEqualTo("large-id");
+            assertThat(largeEvent.payload()).isEqualTo("large-payload-string-that-definitely-exceeds-the-hundred-bytes-threshold-for-compression-testing".repeat(3).getBytes());
+        }
+    }
+
+    @Test
+    void fsyncConfigurationRespected() {
+        try (MemoryWal wal = new MemoryWal(walDir, 8L * 1024 * 1024, false, 1024, true)) {
+            wal.appendRemember("id-fsync", new byte[]{1, 2, 3});
+        }
+        try (MemoryWal wal2 = new MemoryWal(walDir)) {
+            List<WalEvent> events = wal2.replay(0);
+            assertThat(events).hasSize(1);
+            assertThat(events.getFirst().memoryId()).isEqualTo("id-fsync");
+        }
+    }
+
+    @Test
+    void tornWriteAutoRepair() throws IOException {
+        try (MemoryWal wal = new MemoryWal(walDir)) {
+            wal.appendRemember("m1", new byte[]{10});
+            wal.appendRemember("m2", new byte[]{20});
+            wal.appendRemember("m3", new byte[]{30});
+        }
+
+        Path activeChunk = walDir.resolve(MemoryWal.chunkFileName(0));
+        long fileSize = Files.size(activeChunk);
+        
+        try (var out = Files.newOutputStream(activeChunk, java.nio.file.StandardOpenOption.APPEND)) {
+            out.write(new byte[]{0x57, 0x41, 0, 0, 1, 0, 0, 0, 9, 9, 9, 9, 9, 9, 9});
+        }
+
+        try (MemoryWal wal2 = new MemoryWal(walDir)) {
+            assertThat(wal2.size()).isEqualTo(3);
+            List<WalEvent> events = wal2.replay(0);
+            assertThat(events.get(0).memoryId()).isEqualTo("m1");
+            assertThat(events.get(1).memoryId()).isEqualTo("m2");
+            assertThat(events.get(2).memoryId()).isEqualTo("m3");
+            
+            assertThat(Files.size(activeChunk)).isEqualTo(fileSize);
+            
+            wal2.appendRemember("m4", new byte[]{40});
+            assertThat(wal2.size()).isEqualTo(4);
+        }
+    }
+
+    @Test
+    void middleOfLogCorruptionQuarantine() throws IOException {
+        try (MemoryWal wal = new MemoryWal(walDir)) {
+            wal.appendRemember("m1", new byte[]{10});
+            wal.appendRemember("m2", new byte[]{20});
+            wal.appendRemember("m3", new byte[]{30});
+            wal.appendRemember("m4", new byte[]{40});
+            wal.appendRemember("m5", new byte[]{50});
+        }
+
+        Path activeChunk = walDir.resolve(MemoryWal.chunkFileName(0));
+        byte[] bytes = Files.readAllBytes(activeChunk);
+        
+        bytes[60] ^= (byte) 0xFF;
+        Files.write(activeChunk, bytes);
+
+        org.junit.jupiter.api.Assertions.assertThrows(java.io.UncheckedIOException.class, () -> {
+            new MemoryWal(walDir);
+        });
+
+        Path quarantinedPath = walDir.resolve(".quarantine").resolve(activeChunk.getFileName());
+        assertThat(Files.exists(quarantinedPath)).isTrue();
+        assertThat(Files.exists(activeChunk)).isFalse();
+    }
+
+    @Test
+    void snapshotDrivenLogTruncation() throws IOException {
+        long tinyChunkSize = 256; 
+        try (MemoryWal wal = new MemoryWal(walDir, tinyChunkSize)) {
+            for (int i = 0; i < 30; i++) {
+                wal.appendRemember("mem-" + i, ("payload-string-to-exceed-chunk-boundary-" + i).getBytes());
+            }
+        }
+
+        List<Path> initialChunks;
+        try (var stream = Files.list(walDir)) {
+            initialChunks = stream
+                    .filter(p -> p.getFileName().toString().startsWith("wal-") &&
+                                 p.getFileName().toString().endsWith(".bin"))
+                    .sorted()
+                    .toList();
+        }
+        assertThat(initialChunks.size()).isGreaterThan(2);
+
+        long maxSeqInChunk0;
+        try (MemoryWal wal2 = new MemoryWal(walDir, tinyChunkSize)) {
+            maxSeqInChunk0 = wal2.getMaxSequenceInChunk(initialChunks.get(0));
+            assertThat(maxSeqInChunk0).isGreaterThan(0);
+
+            wal2.truncateBefore(maxSeqInChunk0);
+        }
+
+        assertThat(Files.exists(initialChunks.get(0))).isFalse();
+        assertThat(Files.exists(initialChunks.get(initialChunks.size() - 1))).isTrue();
+    }
 }

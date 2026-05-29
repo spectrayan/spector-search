@@ -1,0 +1,99 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Spector Search — Test Defaults
+# ═══════════════════════════════════════════════════════════════════════
+# Minimal test-only defaults matching the values expected by
+# SpectorPropertiesTest. Decoupled from the production defaults file
+# so CI tests are self-contained.
+# ═══════════════════════════════════════════════════════════════════════
+
+spector:
+
+  # ─── Engine ───
+  engine:
+    dimensions: 384
+    capacity: 100000
+    similarity: COSINE
+    index-type: HNSW
+    quantization: NONE
+    persistence-mode: IN_MEMORY
+    data-directory: .spector/index
+    oversampling-factor: 0
+    gpu-enabled: false
+
+  # ─── HNSW ───
+  hnsw:
+    m: 16
+    ef-construction: 200
+    ef-search: 50
+
+  # ─── IVF/PQ ───
+  ivf:
+    nlist: 0
+    nprobe: 0
+    pq-subspaces: 0
+
+  # ─── SPECTRUM ───
+  spectrum:
+    n-centroids: 256
+    n-probe: 16
+    shard-threshold: 20000
+    oversampling-factor: 3
+    kmeans-iterations: 25
+
+  # ─── Embedding ───
+  embedding:
+    model: nomic-embed-text
+    base-url: http://localhost:11434
+    timeout: 30s
+    batch-size: 32
+    max-retries: 3
+
+  # ─── Chunking ───
+  chunking:
+    max-tokens: 512
+    overlap-tokens: 50
+
+  # ─── Reranker ───
+  reranker:
+    enabled: false
+    ollama-url: http://localhost:11434
+    model: llama3.2
+    max-candidates: 20
+
+  # ─── Persistence Files ───
+  persistence:
+    files:
+      index: index.spct
+      vectors: vectors.mmap
+      documents: documents.dat
+      id-mappings: id-mappings.dat
+
+  # ─── RAG ───
+  rag:
+    top-k: 5
+    similarity-threshold: 0.7
+    token-limit: 4096
+
+  # ─── Memory ───
+  memory:
+    enabled: false
+    persistence-mode: DISK
+    persistence-path: .spector/memory
+    dimensions: 384
+    capacity: 100000
+    decay-enabled: true
+    consolidation-interval: 60s
+
+  # ─── Ingestion ───
+  ingestion:
+    root-directory: .
+    file-pattern: "**/*.md"
+    skip-dirs: ".git,.idea,.mvn,target,node_modules,.github"
+    chunk-size: 800
+    chunk-overlap: 100
+
+  # ─── Cluster ───
+  cluster:
+    shard-count: 1
+    replica-count: 0
+    shard-strategy: HASH

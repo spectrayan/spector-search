@@ -57,7 +57,7 @@ class OllamaRealEmbeddingTest {
 
     @BeforeEach
     void setUp() {
-        memory = SpectorMemory.builder()
+        memory = DefaultSpectorMemory.builder()
                 .dimensions(detectedDimensions)
                 .embeddingProvider(embeddingProvider)
                 .persistenceMode(MemoryPersistenceMode.IN_MEMORY)
