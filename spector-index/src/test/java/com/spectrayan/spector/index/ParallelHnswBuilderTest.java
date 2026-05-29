@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+
+import com.spectrayan.spector.config.HnswParams;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;

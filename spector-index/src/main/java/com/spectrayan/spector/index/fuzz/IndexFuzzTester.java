@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.index.HnswIndex;
-import com.spectrayan.spector.index.HnswParams;
+import com.spectrayan.spector.config.HnswParams;
 import com.spectrayan.spector.index.ivf.IvfFlatIndex;
 
 /**

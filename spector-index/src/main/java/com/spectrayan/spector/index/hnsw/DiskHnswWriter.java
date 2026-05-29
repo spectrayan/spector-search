@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+
+import com.spectrayan.spector.config.HnswParams;
 import com.spectrayan.spector.core.quantization.QuantizationType;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.storage.IndexFileFormat;

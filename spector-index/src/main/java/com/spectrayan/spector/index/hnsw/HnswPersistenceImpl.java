@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+
+import com.spectrayan.spector.config.HnswParams;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.foreign.Arena;

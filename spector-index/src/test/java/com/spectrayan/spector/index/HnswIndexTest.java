@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+
+import com.spectrayan.spector.config.HnswParams;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

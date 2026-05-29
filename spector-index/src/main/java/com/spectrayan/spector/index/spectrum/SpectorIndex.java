@@ -2,7 +2,7 @@ package com.spectrayan.spector.index.spectrum;
 
 import com.spectrayan.spector.core.cluster.KMeans;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
-import com.spectrayan.spector.index.HnswParams;
+import com.spectrayan.spector.config.HnswParams;
 import com.spectrayan.spector.index.ScoredResult;
 import com.spectrayan.spector.index.VectorIndex;
 

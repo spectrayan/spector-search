@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+
+import com.spectrayan.spector.config.HnswParams;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;

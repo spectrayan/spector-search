@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+
+import com.spectrayan.spector.config.HnswParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import org.slf4j.Logger;

@@ -1,6 +1,6 @@
 package com.spectrayan.spector.index.spectrum;
 
-import com.spectrayan.spector.index.HnswParams;
+import com.spectrayan.spector.config.HnswParams;
 import com.spectrayan.spector.index.QuantizedHnswIndex;
 import com.spectrayan.spector.core.quantization.strategy.VasqStrategy;
 import com.spectrayan.spector.core.quantization.vasq.VasqCalibrator;

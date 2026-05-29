@@ -1,7 +1,7 @@
 package com.spectrayan.spector.index.spectrum;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
-import com.spectrayan.spector.index.HnswParams;
+import com.spectrayan.spector.config.HnswParams;
 
 /**
  * Configuration for the {@link SpectorIndex} adaptive vector index.

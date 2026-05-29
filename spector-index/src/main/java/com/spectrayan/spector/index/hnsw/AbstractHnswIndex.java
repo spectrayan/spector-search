@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+
+import com.spectrayan.spector.config.HnswParams;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
