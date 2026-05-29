@@ -244,7 +244,7 @@ graph TD
 ```bash
 java --add-modules jdk.incubator.vector \
      --enable-native-access=ALL-UNNAMED \
-     -jar spector-server.jar
+     -jar spector-node.jar
 ```
 
 ---

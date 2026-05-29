@@ -20,7 +20,7 @@
 - [ ] `spector-index` (HNSW / BM25)
 - [ ] `spector-query` (query orchestration)
 - [ ] `spector-engine` (engine facade)
-- [ ] `spector-server` (REST API)
+- [ ] `spector-node` (REST API)
 - [ ] `spector-bench` (benchmarks)
 
 ## Checklist

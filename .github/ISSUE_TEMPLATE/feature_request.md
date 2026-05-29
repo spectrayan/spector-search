@@ -17,7 +17,7 @@ A clear and concise description of what you want to happen.
 A clear and concise description of any alternative solutions or features you've considered.
 
 **Module(s) affected**
-Which module(s) would this feature impact? (e.g. spector-core, spector-index, spector-server)
+Which module(s) would this feature impact? (e.g. spector-core, spector-index, spector-node)
 
 **Additional context**
 Add any other context, benchmarks, or research papers about the feature request here.

@@ -129,7 +129,7 @@ sequenceDiagram
 **Node 1 (seed node):**
 
 ```bash
-java -jar spector-server.jar \
+java -jar spector-node.jar \
   --cluster-mode \
   --node-id node-1 \
   --grpc-port 9090 \
@@ -141,7 +141,7 @@ java -jar spector-server.jar \
 **Node 2:**
 
 ```bash
-java -jar spector-server.jar \
+java -jar spector-node.jar \
   --cluster-mode \
   --node-id node-2 \
   --grpc-port 9090 \
@@ -153,7 +153,7 @@ java -jar spector-server.jar \
 **Node 3:**
 
 ```bash
-java -jar spector-server.jar \
+java -jar spector-node.jar \
   --cluster-mode \
   --node-id node-3 \
   --grpc-port 9090 \
@@ -188,7 +188,7 @@ curl http://node-1:7070/api/v1/status
 For production deployments, enable TLS on gRPC communication:
 
 ```bash
-java -jar spector-server.jar \
+java -jar spector-node.jar \
   --cluster-mode \
   --grpc-port 9090 \
   --grpc-tls \

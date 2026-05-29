@@ -1,0 +1,116 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: spector-nvme-local
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
+description: "High-performance StorageClass for Spector cognitive off-heap data using local NVMe drives mapped via Local Volumes"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spector-search
+  labels:
+    app: spector-search
+spec:
+  ports:
+    - port: 8080
+      name: http-api
+    - port: 9090
+      name: internal-sync
+  clusterIP: None
+  selector:
+    app: spector-search
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: spector-node
+  labels:
+    app: spector-search
+spec:
+  serviceName: "spector-search"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: spector-search
+  template:
+    metadata:
+      labels:
+        app: spector-search
+      annotations:
+        # Inform container runtimes of low/high memory boundaries in cgroups v2
+        # resources.requests.memory sets memory.min/low, and limits.memory sets memory.max.
+        # This keeps the container's physical RAM consumption bounded while giving full headroom for page cache.
+        cgroups.kubernetes.io/memory-high: "15Gi"
+    spec:
+      # Pod Anti-Affinity: Prevent scheduling multiple Spector pods on the same physical bare-metal host.
+      # This ensures parallel off-heap page cache scans do not saturate host memory buses or NVMe IOPS.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - spector-search
+              topologyKey: "kubernetes.io/hostname"
+      containers:
+        - name: spector-search
+          image: spectrayan/spector-search:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http-api
+            - containerPort: 9090
+              name: internal-sync
+          env:
+            - name: JAVA_OPTS
+              # PRODUCTION JVM tuning for Panama FFM off-heap cognitive engine:
+              # - Keep heap small (-Xmx2G) to leave the remaining 14GB of the 16GB container limit
+              #   fully free for OS page-cache (madvise prefetching and zero-copy mmap mapped regions).
+              # - Enable vector API, preview features, and compiler optimizations.
+              value: "-Xms2G -Xmx2G -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions --add-modules=jdk.incubator.vector --enable-preview -Djava.lang.foreign.restricted=permit"
+            - name: SPECTOR_MEMORY_DIR
+              value: "/var/lib/spector/data"
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+            limits:
+              cpu: "8"
+              # Under cgroups v2:
+              # - limits.memory translates to memory.max = 16Gi
+              # - requests.memory translates to memory.low/min = 16Gi
+              # Since the JVM heap is restricted to 2Gi, the Linux kernel can comfortably allocate
+              # up to 14Gi for system page cache. This guarantees zero JVM heap OOMs, while
+              # preventing the Kubernetes OOM killer from terminating the pod when the page cache is hot.
+              memory: "16Gi"
+          volumeMounts:
+            - name: spector-offheap-store
+              mountPath: /var/lib/spector/data
+          livenessProbe:
+            httpGet:
+              path: /api/v2/memory/status
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v2/memory/status
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 2
+  volumeClaimTemplates:
+    - metadata:
+        name: spector-offheap-store
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "spector-nvme-local"
+        resources:
+          requests:
+            storage: 100Gi

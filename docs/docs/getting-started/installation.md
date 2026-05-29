@@ -24,7 +24,7 @@ Spector Search uses incubator modules. The required JVM flags are configured in 
 ```bash
 java --add-modules jdk.incubator.vector \
      --enable-native-access=ALL-UNNAMED \
-     -jar spector-server/target/spector-server.jar
+     -jar spector-node/target/spector-node.jar
 ```
 
 ## Server Configuration
@@ -32,8 +32,8 @@ java --add-modules jdk.incubator.vector \
 Start with custom port, dimensions, and API key:
 
 ```bash
-mvn exec:java -pl spector-server \
-  -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer" \
+mvn exec:java -pl spector-node \
+  -Dexec.mainClass="com.spectrayan.spector.server.SpectorNode" \
   -Dexec.args="7070 384 my-secret-key"
 ```
 

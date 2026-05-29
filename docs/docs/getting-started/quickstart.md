@@ -56,12 +56,12 @@ SIMD Species: S_256_BIT (AVX2, 8 float lanes)
 
 ```bash
 # Start on default port 7070 with 384 dimensions
-mvn exec:java -pl spector-server \
-  -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer"
+mvn exec:java -pl spector-node \
+  -Dexec.mainClass="com.spectrayan.spector.server.SpectorNode"
 
 # Start with custom port, dimensions, and API key
-mvn exec:java -pl spector-server \
-  -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer" \
+mvn exec:java -pl spector-node \
+  -Dexec.mainClass="com.spectrayan.spector.server.SpectorNode" \
   -Dexec.args="7070 384 my-secret-key"
 ```
 

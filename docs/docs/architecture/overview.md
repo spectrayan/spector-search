@@ -39,9 +39,8 @@ graph LR
     subgraph "⚡ Runtime & Interfaces"
         runtime["spector-runtime<br/><i>Unified context (engine + memory)</i>"]
         engine["spector-engine<br/><i>Search facade + lifecycle</i>"]
-        server["spector-server<br/><i>REST API + SSE streaming</i>"]
+        node["spector-node<br/><i>Armeria: REST + gRPC + SSE + cluster</i>"]
         mcp["spector-mcp<br/><i>MCP Server — Agent-native</i>"]
-        cluster["spector-cluster<br/><i>Distributed gRPC search</i>"]
         cli["spector-cli<br/><i>spectorctl CLI</i>"]
         client["spector-client<br/><i>Java client SDK</i>"]
         spring["spector-spring<br/><i>Spring AI VectorStore</i>"]
@@ -66,47 +65,68 @@ graph LR
 
 ```mermaid
 graph TD
-    server["🖥️ server"] --> runtime["🧠 runtime"]
-    mcp["🤖 mcp"] --> runtime
+    node["🌐 node"] --> runtime["⚡ runtime"]
+    node --> mcp["🤖 mcp"]
+    node --> metrics["📈 metrics"]
+    mcp --> runtime
+    mcp --> ingestion["📥 ingestion"]
     cli["🖥️ cli"] --> runtime
     cli --> client["📦 client"]
 
     runtime --> engine["⚡ engine"]
     runtime --> memory["🧠 memory"]
-    runtime --> ingestion["📥 ingestion"]
+    runtime --> ingestion
 
-    cluster["🌐 cluster"] --> runtime
     engine --> query["🔍 query"]
     engine --> rag["🤖 rag"]
-    engine --> commons["📄 commons"]
+    engine --> ingestion
+    engine --> index["📊 index"]
+    engine --> storage["💾 storage"]
     engine --> embedapi["🧬 embed-api"]
-    engine --> gpu["🎮 gpu"]
-    engine --> config["⚙️ config"]
+    engine -.-> gpu["🎮 gpu"]
 
-    memory --> core["🔬 core"]
-    memory --> embedapi
-    engine --> ingestion["📥 ingestion"]
+    memory --> index
+    memory --> storage
     memory --> ingestion
+    memory --> embedapi
+    memory --> core["🔬 core"]
 
-    ingestion --> config
+    metrics --> engine
+    metrics --> memory
+
+    ingestion --> config["⚙️ config"]
     ingestion --> embedapi
 
     rag --> query
-    rag --> embedapi
+    rag --> index
     rag --> storage
-    rag --> commons
+    rag --> embedapi
+    rag --> commons["📄 commons"]
 
-    query --> index["📊 index"]
-    index --> storage["💾 storage"]
+    query --> index
+    query --> commons
+    index --> storage
+    index --> config
+    storage --> config
     storage --> core
+    config --> core
 
+    embedapi --> commons
     gpu --> core
     gpu --> storage
 
     dist["📦 dist"] --> mcp
     dist --> cli
     dist --> runtime
+
+    spring["🌱 spring"] --> engine
+    spring --> memory
+    spring --> metrics
+    bench["🧪 bench"] --> engine
+    bench --> memory
 ```
+
+> **Legend:** Solid arrows = compile dependency. Dotted arrow (`gpu`) = optional dependency.
 
 **Dependency rules:**
 
@@ -114,19 +134,17 @@ graph TD
 |------|-------------|
 | `runtime → engine + memory + ingestion` | Composition root — wires all subsystems |
 | `cli → runtime + client` | CLI with local batch (runtime) and remote (client) modes |
-| `cluster → engine → query → index → storage → core` | Main data path |
-| `server → runtime` | REST API entry point |
-| `mcp → runtime` | MCP agent entry point (in-process, zero network) |
-| `runtime → ingestion` | Unified pipeline: chunk → embed → store |
+| `node → runtime` | Unified Armeria node: REST + gRPC + cluster coordination |
+| `mcp → runtime + ingestion` | MCP agent entry point (in-process, zero network) |
 | `engine → ingestion` | `EngineIngestionTarget` implements `IngestionTarget` |
 | `memory → ingestion` | `CognitiveIngestionTarget` implements `IngestionTarget` |
 | `engine → rag` | RAG context assembly pipeline |
-| `engine → gpu` | Optional GPU acceleration |
-| `memory → core, embed-api` | Cognitive memory module |
+| `engine -.-> gpu` | Optional GPU acceleration |
+| `memory → index, storage, core, embed-api` | Cognitive memory (independent of engine) |
 | `dist → mcp + cli + runtime` | Fat JAR distribution |
 
-> [!IMPORTANT]
-> No circular dependencies. `spector-ingestion` defines the `IngestionPipeline` and `IngestionTarget` interface. `spector-engine` and `spector-memory` both depend on it to implement their targets. `SpectorRuntime` is the single composition root — all entry points go through it.
+!!! important
+    **No circular dependencies.** `spector-memory` and `spector-engine` are **peers** — both depend on `spector-ingestion` for the `IngestionTarget` interface, but neither depends on the other. `SpectorRuntime` is the single composition root that wires them together.
 
 ---
 
@@ -314,22 +332,41 @@ graph TB
 
 ```mermaid
 graph TD
-    subgraph "🖥️ Javalin Server (Virtual Threads)"
-        CORS["CORS Filter"]
-        Auth["Auth Filter"]
-        JSON["JSON Codec"]
-        Routes["Route Handlers<br/>/health  /api/v1/ingest<br/>/api/v1/search  /api/v1/search/stream<br/>/api/v1/rag  /api/v1/status<br/>/api/v1/metrics"]
+    subgraph "SpectorNode - Armeria Server, single port"
+        CORS["CorsService decorator"]
+        Auth["API Key decorator"]
+        COMPRESS["EncodingService - gzip/brotli"]
+        subgraph "ApiModule Registration"
+            SE["🔍 SearchEndpoint"]
+            IE["📥 IngestEndpoint"]
+            RE["🤖 RagEndpoint"]
+            DE["🗑️ DocumentEndpoint"]
+            STE["📊 StatusEndpoint"]
+            ESE["📡 EventStreamEndpoint"]
+        end
+        gRPC["gRPC Service<br/>inter-node fan-out"]
+        HEALTH["💚 /health"]
+        PROM["📊 /metrics"]
     end
-    
-    CORS --> Auth --> JSON --> Routes
-    Routes --> Engine["⚡ SpectorEngine"]
+
+    subgraph "Service Facades"
+        SS["SearchService"]
+        IS["IngestService"]
+        RS["RagService"]
+    end
+
+    SE --> SS
+    IE --> IS
+    RE --> RS
+    SS & IS --> EB["SpectorEventBus<br/>17 event types"]
+    SS --> ENGINE["⚡ SpectorEngine"]
 ```
 
-Every request runs on its own virtual thread — no thread pool sizing, no blocking concerns. The server can handle thousands of concurrent connections with minimal resource consumption.
+Every request runs on its own virtual thread. The Armeria server handles HTTP REST, gRPC, and SSE events on a single port. API endpoints are registered via the `ApiModule` factory pattern, enabling straightforward API versioning (`/api/v1`, `/api/v2`).
 
 ### Streaming via SSE
 
-The `/api/v1/search/stream` endpoint uses Server-Sent Events to emit results progressively. This enables real-time UX without requiring WebFlux or Reactor — Javalin's built-in SSE support runs natively on virtual threads.
+The `/api/v1/search/stream` endpoint uses Server-Sent Events to emit results progressively. The `/api/v1/events` endpoint provides a live event stream where clients can subscribe to search, ingest, cluster, MCP, and engine events with optional category filtering.
 
 ---
 

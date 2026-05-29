@@ -164,8 +164,8 @@ var config = SpectorConfig.DEFAULT
 
 ```bash
 # Format: port dimensions apiKey
-mvn exec:java -pl spector-server \
-  -Dexec.mainClass="com.spectrayan.spector.server.SpectorServer" \
+mvn exec:java -pl spector-node \
+  -Dexec.mainClass="com.spectrayan.spector.server.SpectorNode" \
   -Dexec.args="7070 384 my-secret-key"
 ```
 

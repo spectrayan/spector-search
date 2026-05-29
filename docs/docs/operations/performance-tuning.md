@@ -275,7 +275,7 @@ java \
   -XX:+ZGenerational \
   -Xmx4g \
   -Xms4g \
-  -jar spector-server.jar
+  -jar spector-node.jar
 ```
 
 | Argument | Purpose |

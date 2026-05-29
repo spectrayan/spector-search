@@ -63,8 +63,8 @@ graph LR
 
     subgraph "⚡ Applications"
         engine["spector-engine<br/>Unified facade"]
-        server["spector-server<br/>REST API"]
-        cluster["spector-cluster<br/>Distributed gRPC"]
+        server["spector-node<br/>REST API"]
+        cluster["spector-node<br/>Distributed gRPC"]
         cli["spector-cli<br/>CLI tool"]
         client["spector-client<br/>Java SDK"]
         spring["spector-spring<br/>Spring AI"]
