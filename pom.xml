@@ -35,9 +35,9 @@
         <module>spector-engine</module>
         <module>spector-ingestion</module>
         <module>spector-memory</module>
+        <module>spector-metrics</module>
         <module>spector-runtime</module>
-        <module>spector-server</module>
-        <module>spector-cluster</module>
+        <module>spector-node</module>
         <module>spector-bench</module>
         <module>spector-cli</module>
         <module>spector-client</module>
@@ -69,6 +69,8 @@
         <commons-configuration2.version>2.11.0</commons-configuration2.version>
         <commons-beanutils.version>1.9.4</commons-beanutils.version>
         <snakeyaml.version>2.3</snakeyaml.version>
+        <micrometer.version>1.14.5</micrometer.version>
+        <armeria.version>1.31.3</armeria.version>
 
         <!-- Test dependency versions -->
         <junit.version>5.11.4</junit.version>
@@ -176,8 +178,30 @@
             </dependency>
             <dependency>
                 <groupId>com.spectrayan</groupId>
+                <artifactId>spector-metrics</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
+                <artifactId>spector-node</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.spectrayan</groupId>
                 <artifactId>spector-runtime</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+
+            <!-- ── Micrometer (Observability) ── -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-core</artifactId>
+                <version>${micrometer.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-registry-prometheus</artifactId>
+                <version>${micrometer.version}</version>
             </dependency>
 
             <!-- ── MCP SDK (official Anthropic Java SDK) ── -->
@@ -230,11 +254,30 @@
                 <version>${logback.version}</version>
             </dependency>
 
-            <!-- ── Javalin (REST) ── -->
+            <!-- ── Javalin (REST) — retained for spector-server backward compat ── -->
             <dependency>
                 <groupId>io.javalin</groupId>
                 <artifactId>javalin</artifactId>
                 <version>${javalin.version}</version>
+            </dependency>
+
+            <!-- ── Armeria (HTTP + gRPC on one port, built on Netty) ── -->
+            <dependency>
+                <groupId>com.linecorp.armeria</groupId>
+                <artifactId>armeria-bom</artifactId>
+                <version>${armeria.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.linecorp.armeria</groupId>
+                <artifactId>armeria</artifactId>
+                <version>${armeria.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.linecorp.armeria</groupId>
+                <artifactId>armeria-grpc</artifactId>
+                <version>${armeria.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.javalin</groupId>

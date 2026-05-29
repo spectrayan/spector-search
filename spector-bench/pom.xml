@@ -14,6 +14,10 @@
     <name>Spector Benchmarks</name>
     <description>JMH benchmarks for Spector Search performance testing.</description>
 
+    <properties>
+        <exec.mainClass>com.spectrayan.spector.bench.IndustryBenchmark</exec.mainClass>
+    </properties>
+
     <dependencies>
 
         <dependency>
@@ -31,6 +35,10 @@
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-gpu</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-memory</artifactId>
         </dependency>
 
         <!-- JMH -->
@@ -73,7 +81,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.5.0</version>
                 <configuration>
-                    <mainClass>com.spectrayan.spector.bench.IndustryBenchmark</mainClass>
+                    <mainClass>${exec.mainClass}</mainClass>
                     <arguments/>
                     <systemProperties>
                         <systemProperty>

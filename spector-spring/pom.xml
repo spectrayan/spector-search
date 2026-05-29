@@ -60,6 +60,12 @@
             <artifactId>spector-engine</artifactId>
         </dependency>
 
+        <!-- Spector GPU (required on classpath for Spring field introspection) -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-gpu</artifactId>
+        </dependency>
+
         <!-- Spector RAG (context assembly) -->
         <dependency>
             <groupId>com.spectrayan</groupId>
@@ -78,11 +84,52 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- ── Spector Metrics (metered decorators) ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-metrics</artifactId>
+        </dependency>
+
+        <!-- ── Spector Memory (embedded cognitive memory) ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-memory</artifactId>
+        </dependency>
+
+        <!-- ── Spring Boot Auto-Configuration ── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <version>3.5.3</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ── Spring Boot Actuator (health indicators, /actuator/metrics) ── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-actuator</artifactId>
+            <version>3.5.3</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ── Micrometer (for Spring Boot Actuator metrics bridge) ── -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>net.jqwik</groupId>
             <artifactId>jqwik</artifactId>
             <version>1.9.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <version>3.5.3</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
