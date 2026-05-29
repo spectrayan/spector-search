@@ -1,50 +1,44 @@
 package com.spectrayan.spector.runtime;
 
-import java.nio.file.Path;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.spectrayan.spector.commons.config.SpectorConfigFactory;
-import com.spectrayan.spector.commons.config.SpectorProperties;
+import com.spectrayan.spector.config.SpectorConfigFactory;
+import com.spectrayan.spector.config.SpectorMode;
+import com.spectrayan.spector.config.SpectorProperties;
 import com.spectrayan.spector.embed.EmbeddingProvider;
-import com.spectrayan.spector.engine.SpectorConfig;
+import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.memory.MemoryPersistenceMode;
 import com.spectrayan.spector.memory.SpectorMemory;
 
 /**
- * Unified application context for a running Spector instance.
+ * Composition root for a Spector instance.
  *
- * <p>Composes the two core subsystems:</p>
+ * <p><strong>This is the single entry point for all Spector consumers.</strong>
+ * It creates, wires, and exposes the subsystem services. No business logic
+ * lives here — each service owns its domain.</p>
+ *
+ * <h3>Services</h3>
  * <ul>
- *   <li>{@link SpectorEngine} — vector search, ingestion, RAG (always created)</li>
- *   <li>{@link SpectorMemory} — cognitive memory with biological mechanisms
- *       (opt-in via {@code spector.memory.enabled: true})</li>
+ *   <li>{@link #search()} — mode-aware search (engine or memory)</li>
+ *   <li>{@link #ingestion()} — mode-aware ingestion (text, file, directory)</li>
+ * </ul>
+ *
+ * <h3>Direct Subsystem Access</h3>
+ * <ul>
+ *   <li>{@link #engine()} — vector search engine (always available)</li>
+ *   <li>{@link #memory()} — cognitive memory (null if not enabled)</li>
  * </ul>
  *
  * <h3>Usage</h3>
  * <pre>{@code
- *   SpectorProperties props = SpectorProperties.builder()
- *       .configFile(Path.of("spector.yml"))
- *       .build();
- *   EmbeddingProvider embedder = createEmbedder(props);
- *
  *   try (SpectorRuntime runtime = SpectorRuntime.from(props, embedder)) {
- *       // Search
- *       runtime.engine().ingest("doc1", "title", "content");
- *       var results = runtime.engine().search("query", 10);
- *
- *       // Cognitive memory (if enabled)
- *       if (runtime.hasMemory()) {
- *           runtime.memory().remember("pref", "User likes dark mode",
- *               MemoryType.SEMANTIC, "preferences").join();
- *       }
+ *       runtime.ingestion().ingest("doc1", "some text");
+ *       runtime.ingestion().ingest(Path.of("/docs"), "**\/*.md", 800, 100, ".git");
+ *       var results = runtime.search().query("something", 10);
  *   }
  * }</pre>
- *
- * <p>Both subsystems share the same {@link EmbeddingProvider}, ensuring
- * consistent vector dimensions across search and memory.</p>
  */
 public final class SpectorRuntime implements AutoCloseable {
 
@@ -53,65 +47,106 @@ public final class SpectorRuntime implements AutoCloseable {
     private final SpectorEngine engine;
     private final SpectorMemory memory;  // nullable
     private final SpectorProperties properties;
+    private final SpectorMode mode;
 
-    private SpectorRuntime(SpectorEngine engine, SpectorMemory memory, SpectorProperties properties) {
+    // Lazily created services
+    private volatile SearchHandler searchService;
+    private volatile IngestionHandler ingestionService;
+
+    private SpectorRuntime(SpectorEngine engine, SpectorMemory memory,
+                           SpectorProperties properties, SpectorMode mode) {
         this.engine = engine;
         this.memory = memory;
         this.properties = properties;
+        this.mode = mode;
     }
 
     // ─────────────── Factory ───────────────
 
     /**
-     * Creates a runtime from hierarchical properties and an embedding provider.
-     *
-     * <p>Always creates a {@link SpectorEngine}. Creates a {@link SpectorMemory}
-     * only if {@code spector.memory.enabled} is {@code true}.</p>
+     * Creates a runtime from configuration and embedding provider.
      *
      * @param props    hierarchical configuration
      * @param embedder embedding provider (shared by engine and memory)
      * @return initialized runtime (caller must close)
      */
     public static SpectorRuntime from(SpectorProperties props, EmbeddingProvider embedder) {
+        return from(props, embedder, false);
+    }
+
+    /**
+     * Creates a runtime with optional writable index support.
+     *
+     * @param props         hierarchical configuration
+     * @param embedder      embedding provider
+     * @param forceWritable if true, creates a fresh writable index (for ingestion)
+     * @return initialized runtime (caller must close)
+     */
+    public static SpectorRuntime from(SpectorProperties props, EmbeddingProvider embedder,
+                                       boolean forceWritable) {
+        SpectorMode mode = SpectorConfigFactory.mode(props);
+
         // ── Engine ──
         SpectorConfig engineConfig = SpectorConfig.from(props);
+        if (forceWritable) {
+            engineConfig = engineConfig.withForceWritable(true);
+        }
         SpectorEngine engine = new SpectorEngine(engineConfig, embedder);
-        log.info("[Runtime] Engine initialized: dims={}, index={}, persistence={}",
-                engineConfig.dimensions(), engineConfig.indexType(), engineConfig.persistenceMode());
+        log.info("[Runtime] Engine: dims={}, index={}, persistence={}, mode={}, writable={}",
+                engineConfig.dimensions(), engineConfig.indexType(),
+                engineConfig.persistenceMode(), mode, forceWritable);
 
-        // ── Memory (opt-in) ──
+        // ── Memory (opt-in or auto-enabled in MEMORY mode) ──
         SpectorMemory memory = null;
         var memoryConfig = SpectorConfigFactory.memoryDefaults(props);
+        boolean memoryEnabled = memoryConfig.enabled() || mode == SpectorMode.MEMORY;
 
-        if (memoryConfig.enabled()) {
-            memory = SpectorMemory.builder()
-                    .dimensions(engineConfig.dimensions()) // share dimensions with engine
-                    .embeddingProvider(embedder)            // share embedder
+        if (memoryEnabled) {
+            var memoryBuilder = SpectorMemory.builder()
+                    .dimensions(engineConfig.dimensions())
+                    .embeddingProvider(embedder)
                     .persistenceMode(MemoryPersistenceMode.valueOf(memoryConfig.persistenceMode()))
                     .persistence(memoryConfig.persistencePath())
-                    .semanticCapacity(memoryConfig.capacity())
-                    .build();
-            log.info("[Runtime] Cognitive memory enabled: persistence={}, path={}",
+                    .semanticCapacity(memoryConfig.capacity());
+
+            if (mode == SpectorMode.MEMORY) {
+                memoryBuilder.semanticIndex(engine.index());
+            }
+
+            memory = memoryBuilder.build();
+            log.info("[Runtime] Memory: persistence={}, path={}",
                     memoryConfig.persistenceMode(), memoryConfig.persistencePath());
-        } else {
-            log.info("[Runtime] Cognitive memory disabled (set spector.memory.enabled=true to enable)");
         }
 
-        return new SpectorRuntime(engine, memory, props);
+        return new SpectorRuntime(engine, memory, props, mode);
     }
 
     /**
      * Creates a runtime with engine only (no memory).
-     *
-     * @param engine the search engine
-     * @param props  configuration properties
-     * @return runtime wrapping the engine
      */
     public static SpectorRuntime engineOnly(SpectorEngine engine, SpectorProperties props) {
-        return new SpectorRuntime(engine, null, props);
+        return new SpectorRuntime(engine, null, props, SpectorMode.SEARCH);
     }
 
-    // ─────────────── Accessors ───────────────
+    // ─────────────── Service Accessors ───────────────
+
+    /** Returns the mode-aware search service. */
+    public SearchHandler search() {
+        if (searchService == null) {
+            searchService = new SearchHandler(engine, memory, mode);
+        }
+        return searchService;
+    }
+
+    /** Returns the mode-aware ingestion service. */
+    public IngestionHandler ingestion() {
+        if (ingestionService == null) {
+            ingestionService = new IngestionHandler(engine, memory, mode);
+        }
+        return ingestionService;
+    }
+
+    // ─────────────── Direct Subsystem Access ───────────────
 
     /** Returns the search engine (never null). */
     public SpectorEngine engine() { return engine; }
@@ -122,8 +157,11 @@ public final class SpectorRuntime implements AutoCloseable {
     /** Returns {@code true} if cognitive memory is available. */
     public boolean hasMemory() { return memory != null; }
 
-    /** Returns the configuration properties used to create this runtime. */
+    /** Returns the configuration properties. */
     public SpectorProperties properties() { return properties; }
+
+    /** Returns the global operating mode. */
+    public SpectorMode mode() { return mode; }
 
     // ─────────────── Lifecycle ───────────────
 
@@ -141,6 +179,6 @@ public final class SpectorRuntime implements AutoCloseable {
                 log.error("[Runtime] Error closing memory: {}", e.getMessage(), e);
             }
         }
-        log.info("[Runtime] Shutdown complete");
+        log.info("[Runtime] Shutdown complete (mode={})", mode);
     }
 }

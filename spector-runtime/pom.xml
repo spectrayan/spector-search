@@ -19,6 +19,11 @@
     </description>
 
     <dependencies>
+
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-config</artifactId>
+        </dependency>
         <!-- ── Configuration ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>
@@ -41,6 +46,22 @@
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-embed-api</artifactId>
+        </dependency>
+
+        <!-- ── Query types for mode-aware routing ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-query</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-index</artifactId>
+        </dependency>
+
+        <!-- ── Ingestion utilities (file discovery, chunking) ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-ingestion</artifactId>
         </dependency>
     </dependencies>
 
