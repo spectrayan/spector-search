@@ -57,6 +57,11 @@ markdown_extensions:
       anchor_linenums: true
       line_spans: __span
   - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - docs/docs
+        - ..                       # Repo root — enables --8<-- "spector-core/README.md"
+      check_paths: true
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -131,10 +136,37 @@ nav:
           - "Prospective — Future Intents": memory/prospective.md
           - "Metamemory — Self-Reflection": memory/metamemory.md
           - "Sync — Persistence & Replication": memory/sync.md
+      - Advanced Profiles:
+          - Cognitive Profiles Overview: memory/cognitive-profiles.md
+          - "Focus Mode": memory/focus-mode.md
+          - "Explorer — Lateral Retrieval": memory/lateral-retrieval.md
+          - "Importance Fusion (ICNU)": memory/importance-fusion.md
       - Deep Dives:
           - "Performance & SIMD": memory/performance.md
           - "Off-Heap Panama Design": memory/panama-design.md
       - API Reference: memory/api-reference.md
+  - Modules:
+      - Overview: modules/index.md
+      - spector-core: modules/spector-core.md
+      - spector-commons: modules/spector-commons.md
+      - spector-storage: modules/spector-storage.md
+      - spector-embed-api: modules/spector-embed-api.md
+      - spector-embed-ollama: modules/spector-embed-ollama.md
+      - spector-index: modules/spector-index.md
+      - spector-query: modules/spector-query.md
+      - spector-gpu: modules/spector-gpu.md
+      - spector-rag: modules/spector-rag.md
+      - spector-engine: modules/spector-engine.md
+      - spector-ingestion: modules/spector-ingestion.md
+      - spector-memory: modules/spector-memory.md
+      - spector-runtime: modules/spector-runtime.md
+      - spector-mcp: modules/spector-mcp.md
+      - spector-server: modules/spector-server.md
+      - spector-cli: modules/spector-cli.md
+      - spector-client: modules/spector-client.md
+      - spector-spring: modules/spector-spring.md
+      - spector-cluster: modules/spector-cluster.md
+      - spector-bench: modules/spector-bench.md
   - Reference:
       - REST API: api-reference/rest-endpoints.md
       - MCP Server: sdk-usage/mcp-server.md

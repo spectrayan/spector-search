@@ -1,0 +1,1 @@
+--8<-- "spector-query/README.md"

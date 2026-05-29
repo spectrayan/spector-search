@@ -65,24 +65,50 @@ spectorctl index delete --name my-index
 
 ### 📥 `ingest` — Document Ingestion
 
-```bash
-# Ingest a single document with vector
-spectorctl ingest --id doc-1 \
-  --content "SIMD-accelerated vector search on Java 25" \
-  --vector "0.1,0.2,0.3,0.4,0.5"
+The `ingest` command supports two modes, auto-detected from the flags:
 
-# Ingest with title
-spectorctl ingest --id doc-2 \
-  --title "Panama FFM" \
-  --content "Foreign Function and Memory API for zero-copy storage" \
-  --vector "0.4,0.5,0.6,0.7,0.8"
+#### Local Batch Mode (via Runtime)
+
+Discovers and ingests files directly through `SpectorRuntime` — no server needed. Reads configuration from `spector.yml`.
+
+```bash
+# Ingest from config (root-directory, pattern, etc. from spector.yml)
+spectorctl ingest --config spector.yml
+
+# Ingest with explicit root directory
+spectorctl ingest --root /path/to/docs --pattern "**/*.md"
+
+# Override chunk size
+spectorctl ingest --config spector.yml --root . --chunk-size 1200
 ```
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `--id` | ✅ | Document identifier |
-| `--content` | ✅ | Document text content |
-| `--vector` | ✅ | Comma-separated float values |
+| `--config` | ❌ | Path to `spector.yml` config file |
+| `--root` | ❌ | Root directory for file discovery |
+| `--pattern` | ❌ | File glob pattern (default from config) |
+| `--chunk-size` | ❌ | Chunk size in characters (default from config) |
+
+> [!TIP]
+> If `--config` is provided and `spector.yml` contains `spector.ingestion.root-directory`, local batch mode activates automatically — no `--root` flag needed.
+
+#### Remote Mode (via HTTP)
+
+Sends a single document to a running Spector server.
+
+```bash
+# Ingest text content
+spectorctl ingest --id doc-1 --content "Hello world"
+
+# Ingest from a file
+spectorctl ingest --file README.md --title "Project README"
+```
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--id` | ❌ | Document ID (auto-generated if not provided) |
+| `--content` | ❌ | Document text content |
+| `--file` | ❌ | Path to file to ingest |
 | `--title` | ❌ | Document title |
 
 ---

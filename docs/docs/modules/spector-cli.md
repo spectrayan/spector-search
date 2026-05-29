@@ -1,0 +1,1 @@
+--8<-- "spector-cli/README.md"

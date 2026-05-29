@@ -46,8 +46,12 @@ graph LR
         end
     end
 
+    subgraph "spector-runtime"
+        Runtime["⚡ SpectorRuntime<br/><i>Composition Root</i>"]
+    end
+
     subgraph "spector-engine"
-        Engine["⚡ SpectorEngine"]
+        Engine["🔧 SpectorEngine"]
     end
 
     subgraph "spector-core"
@@ -62,7 +66,8 @@ graph LR
     T1 & T2 & T3 & T4 & T5 & T6 --> SB
     T1 & T2 & T3 --> RF
     T6 --> RF
-    T1 & T2 & T3 & T4 & T5 & T6 --> Engine
+    T1 & T2 & T3 & T4 & T5 & T6 --> Runtime
+    Runtime --> Engine
     Engine --> SIMD
 ```
 
@@ -73,18 +78,21 @@ sequenceDiagram
     participant Agent as 🤖 AI Agent
     participant MCP as 📡 MCP Transport (stdio)
     participant Handler as 🔧 McpToolHandler
-    participant Engine as ⚡ SpectorEngine
+    participant Runtime as ⚡ SpectorRuntime
+    participant Engine as 🔧 SpectorEngine
     participant SIMD as 🔬 SIMD Kernel
 
     Agent->>MCP: tools/call {"name": "semantic_search", "arguments": {"query": "..."}}
-    MCP->>Handler: SemanticSearchTool.execute(engine, args)
+    MCP->>Handler: SemanticSearchTool.execute(runtime, args)
     
     Note over Handler: requireString(args, "query")<br/>optionalInt(args, "top_k", 5)
     
-    Handler->>Engine: engine.search(query, topK)
+    Handler->>Runtime: runtime.search().query(query, topK)
+    Runtime->>Engine: engine.search(query, topK)
     Engine->>SIMD: HNSW traversal (off-heap MemorySegment)
     SIMD-->>Engine: ScoredResult[] (~100µs)
-    Engine-->>Handler: SearchResponse
+    Engine-->>Runtime: SearchResponse
+    Runtime-->>Handler: SpectorResult[]
     
     Note over Handler: ResultFormatter.formatSearchResults()<br/>McpToolHandler.textResult()
     
