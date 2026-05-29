@@ -29,7 +29,7 @@ import com.spectrayan.spector.memory.metamemory.MemoryIntrospector;
 import com.spectrayan.spector.memory.neurodivergent.IcnuWeights;
 import com.spectrayan.spector.memory.neurodivergent.LateralEvaluator;
 import com.spectrayan.spector.memory.pipeline.HebbianCoActivationListener;
-import com.spectrayan.spector.memory.pipeline.IngestionPipeline;
+import com.spectrayan.spector.memory.pipeline.CognitiveIngestionTarget;
 import com.spectrayan.spector.memory.pipeline.LtpReconsolidationListener;
 import com.spectrayan.spector.memory.pipeline.RecallPipeline;
 import com.spectrayan.spector.memory.prospective.ProspectiveScheduler;
@@ -99,7 +99,8 @@ public final class SpectorMemory implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(SpectorMemory.class);
 
     // ── Core Subsystems (Façade composition) ──
-    private final IngestionPipeline ingestionPipeline;
+    private final CognitiveIngestionTarget cognitiveTarget;
+    private final EmbeddingProvider embeddingProvider;
     private final RecallPipeline recallPipeline;
     private final TierRouter tierRouter;
     private final MemoryIndex index;
@@ -236,9 +237,11 @@ public final class SpectorMemory implements AutoCloseable {
                 builder.pinnedQuota);
 
         // ── Pipelines ──
-        this.ingestionPipeline = new IngestionPipeline(
-                embeddingProvider, quantizer, surpriseDetector, flashbulbPolicy,
-                tierRouter, index, wal, workingStore, builder.icnuWeights);
+        this.embeddingProvider = embeddingProvider;
+        this.cognitiveTarget = new CognitiveIngestionTarget(
+                quantizer, surpriseDetector, flashbulbPolicy,
+                tierRouter, index, wal, workingStore, builder.icnuWeights,
+                builder.semanticIndex, builder.vectorStore, builder.tagExtractor);
 
         // Build optional fused semantic recall strategy
         SemanticRecallStrategy semanticStrategy = builder.semanticIndex != null
@@ -262,6 +265,18 @@ public final class SpectorMemory implements AutoCloseable {
     }
 
     // ══════════════════════════════════════════════════════════════
+    // INGESTION TARGET — for unified IngestionPipeline
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Returns the cognitive ingestion target for use with the unified
+     * {@link com.spectrayan.spector.ingestion.IngestionPipeline}.
+     */
+    public CognitiveIngestionTarget target() {
+        return cognitiveTarget;
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // CORE API — remember / recall / forget / reflect
     // ══════════════════════════════════════════════════════════════
 
@@ -272,7 +287,9 @@ public final class SpectorMemory implements AutoCloseable {
                                               MemorySource source, String... tags) {
         return CompletableFuture.runAsync(() -> {
             try {
-                ingestionPipeline.ingest(id, text, type, tags, source);
+                // Embed text, then pass to cognitive target
+                float[] vector = embeddingProvider.embed(text).vector();
+                cognitiveTarget.ingestCognitive(id, text, vector, type, tags, source, null);
 
                 // Circadian trigger: auto-reflect after volume threshold
                 if (type == MemoryType.EPISODIC) {
@@ -522,7 +539,7 @@ public final class SpectorMemory implements AutoCloseable {
     public SuppressionSet suppression() { return suppressionSet; }
     public HabituationPenalty habituation() { return habituationPenalty; }
     public ScalarQuantizer quantizer() { return quantizer; }
-    public IngestionPipeline ingestion() { return ingestionPipeline; }
+    public CognitiveIngestionTarget cognitiveTarget() { return cognitiveTarget; }
     public RecallPipeline recallPipeline() { return recallPipeline; }
     public TierRouter tierRouter() { return tierRouter; }
     public MemoryIndex index() { return index; }
@@ -575,6 +592,8 @@ public final class SpectorMemory implements AutoCloseable {
         private IcnuWeights icnuWeights;
         private boolean pinSourceEpisodes = false;
         private int pinnedQuota = 10_000;
+        private com.spectrayan.spector.memory.pipeline.TagExtractor tagExtractor;
+        private com.spectrayan.spector.storage.VectorStore vectorStore;
 
         public Builder dimensions(int dimensions) { this.dimensions = dimensions; return this; }
         public Builder embeddingProvider(EmbeddingProvider p) { this.embeddingProvider = p; return this; }
@@ -598,6 +617,9 @@ public final class SpectorMemory implements AutoCloseable {
         /** Optional HNSW/IVF index for fused semantic recall (default: null = header-only fallback). */
         public Builder semanticIndex(com.spectrayan.spector.index.VectorIndex idx) { this.semanticIndex = idx; return this; }
 
+        /** Engine's VectorStore for store-backed HNSW population (default: null). */
+        public Builder vectorStore(com.spectrayan.spector.storage.VectorStore vs) { this.vectorStore = vs; return this; }
+
         /** Inhibition of Return TTL in millis (default: 300_000 = 5 minutes). */
         public Builder inhibitionTtlMs(long ms) { this.inhibitionTtlMs = ms; return this; }
 
@@ -612,6 +634,9 @@ public final class SpectorMemory implements AutoCloseable {
 
         /** Maximum number of pinned records (default: 10,000). */
         public Builder pinnedQuota(int quota) { this.pinnedQuota = quota; return this; }
+
+        /** Pluggable tag extraction strategy for cognitive ingestion (default: ContentTagExtractor). */
+        public Builder tagExtractor(com.spectrayan.spector.memory.pipeline.TagExtractor te) { this.tagExtractor = te; return this; }
 
         public SpectorMemory build() {
             if (dimensions <= 0 && embeddingProvider != null) {
