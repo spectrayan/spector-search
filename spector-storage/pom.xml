@@ -15,6 +15,11 @@
     <description>Panama MemorySegment-based zero-copy vector and document storage.</description>
 
     <dependencies>
+
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-config</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-core</artifactId>

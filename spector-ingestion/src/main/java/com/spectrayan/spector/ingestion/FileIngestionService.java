@@ -10,14 +10,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.function.BiConsumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.spectrayan.spector.commons.config.SpectorConfigFactory;
-import com.spectrayan.spector.commons.config.SpectorProperties;
-import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.config.SpectorConfigFactory;
+import com.spectrayan.spector.config.SpectorProperties;
 
 /**
  * Generic file ingestion service that discovers and ingests files from a directory tree.
@@ -139,79 +137,6 @@ public class FileIngestionService {
             List<String> failures, long elapsedMs
     ) {}
 
-    /**
-     * Discovers and ingests all matching files using the given engine.
-     *
-     * <p>Files smaller than {@code chunkSize} are ingested as a single document.
-     * Larger files use the engine's auto-chunked ingestion.</p>
-     *
-     * @param engine the Spector engine (must have an embedding provider for auto-embed)
-     * @return aggregated result
-     * @throws IOException if file discovery or reading fails
-     */
-    public FileIngestionResult ingest(SpectorEngine engine) throws IOException {
-        return ingest(engine, null);
-    }
-
-    /**
-     * Discovers and ingests all matching files with progress reporting.
-     *
-     * @param engine   the Spector engine
-     * @param progress optional callback (fileIndex, filePath) for progress reporting
-     * @return aggregated result
-     * @throws IOException if file discovery or reading fails
-     */
-    public FileIngestionResult ingest(SpectorEngine engine,
-                                       BiConsumer<Integer, String> progress) throws IOException {
-        List<Path> files = discover();
-        if (files.isEmpty()) {
-            log.warn("No files found matching '{}' in {}", filePattern, rootDirectory);
-            return new FileIngestionResult(0, 0, List.of(), 0);
-        }
-
-        long startTime = System.currentTimeMillis();
-        int totalChunks = 0;
-        int fileCount = 0;
-        List<String> failures = new ArrayList<>();
-
-        for (Path file : files) {
-            String relativePath = rootDirectory.relativize(file).toString().replace('\\', '/');
-            try {
-                String content = Files.readString(file);
-                if (content.isBlank()) {
-                    log.debug("Skipping empty file: {}", relativePath);
-                    continue;
-                }
-
-                fileCount++;
-                String title = extractTitle(content, relativePath);
-
-                if (content.length() <= chunkSize) {
-                    engine.ingest(relativePath, title, content);
-                    totalChunks++;
-                } else {
-                    int chunks = engine.ingestChunkedAuto(relativePath, content);
-                    totalChunks += chunks;
-                }
-
-                if (progress != null) {
-                    progress.accept(fileCount, relativePath);
-                }
-
-                log.debug("Ingested '{}'", relativePath);
-
-            } catch (Exception e) {
-                failures.add(relativePath);
-                log.error("Failed to ingest '{}': {}", relativePath, e.getMessage());
-            }
-        }
-
-        long elapsed = System.currentTimeMillis() - startTime;
-        log.info("File ingestion complete: {} files, {} chunks, {} failures, {}ms",
-                fileCount, totalChunks, failures.size(), elapsed);
-
-        return new FileIngestionResult(fileCount, totalChunks, failures, elapsed);
-    }
 
     // ─────────────── Accessors ───────────────
 
@@ -229,7 +154,7 @@ public class FileIngestionService {
     /**
      * Extracts a title from the first heading in the content, or uses the filename as fallback.
      */
-    static String extractTitle(String content, String fallback) {
+    public static String extractTitle(String content, String fallback) {
         for (String line : content.split("\n", 10)) {
             String trimmed = line.trim();
             if (trimmed.startsWith("# ")) {

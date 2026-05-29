@@ -12,29 +12,24 @@
 
     <artifactId>spector-ingestion</artifactId>
     <name>Spector Ingestion</name>
-    <description>Document ingestion pipeline: chunking, embedding, and indexing orchestration.</description>
+    <description>Pure ingestion utilities: file discovery, text chunking, title extraction.
+        No dependency on runtime or engine — used as a utility by spector-runtime.</description>
 
     <dependencies>
+
+        <!-- ── Config (SpectorProperties for fromProperties factory) ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>
-            <artifactId>spector-commons</artifactId>
+            <artifactId>spector-config</artifactId>
         </dependency>
+
+        <!-- ── Embedding API (EmbeddingProvider interface) ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-embed-api</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-storage</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-index</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-engine</artifactId>
-        </dependency>
+
+        <!-- ── Ollama Embedding Provider (runtime — loaded via reflection) ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-embed-ollama</artifactId>

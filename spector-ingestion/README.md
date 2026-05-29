@@ -1,31 +1,101 @@
 # spector-ingestion 📥
 
-> **High-throughput document ingestion pipelines and parallel streaming processors for Spector Search.**
+> **Pure ingestion utilities — file discovery, text chunking, and title extraction.**
 
-`spector-ingestion` implements highly parallel, lock-free document ingestion loops. It processes massive, streaming batches of unstructured data by binding parallel tokenizer and chunking pipelines directly to modern Virtual Thread executor contexts.
+`spector-ingestion` is a utility module with **no dependency on engine, runtime, or memory**. It provides the building blocks that `IngestionHandler` (in `spector-runtime`) uses for file-based ingestion.
 
 ---
 
-## 🏗️ Core Architecture & Roles
+## 🏗️ Architecture
 
-1. **`IngestionPipeline`:** Manages end-to-end ingestion lifecycles (parse -> chunk -> embed -> index).
-2. **`StreamIngester`:** Efficiently streams tokens from databases, file systems, or network sockets into a sliding window parser.
-3. **`BatchProcessor`:** Dynamically aggregates documents into batches and queues them for GPU/CPU parallel vector calculations.
+```
+spector-ingestion (pure utility)
+├── FileIngestionService    — file discovery + title extraction
+├── IngestionPipeline       — chunking pipeline with configurable strategies
+├── IngestionResult         — result record for ingestion operations
+└── EmbeddingProviderFactory — embedding provider creation
+
+Dependencies:
+├── spector-config     (configuration)
+└── spector-embed-api  (embedding SPI)
+```
+
+> [!IMPORTANT]
+> This module does **NOT** depend on `spector-engine` or `spector-runtime`. Mode-aware ingestion routing is handled by `IngestionHandler` in `spector-runtime`.
 
 ---
 
 ## 🚀 Key APIs
 
-### Setting Up a Parallel Streaming Pipeline
+### File Discovery
+
 ```java
-// Setup a streaming processor with 4 parallel threads
-IngestionPipeline pipeline = IngestionPipeline.builder()
-    .engine(engine)
-    .embeddingProvider(provider)
-    .concurrency(4)
-    .batchSize(100)
+// Build from config
+var service = FileIngestionService.fromProperties(props, rootDir);
+
+// Or use the builder
+var service = FileIngestionService.builder()
+    .rootDirectory(Path.of("/docs"))
+    .filePattern("**/*.md")
+    .chunkSize(800)
+    .chunkOverlap(100)
+    .skipDirs(".git", ".idea")
     .build();
 
-// Stream and process documents in the background
-pipeline.processStream(documentStream);
+// Discover matching files
+List<Path> files = service.discover();
 ```
+
+### Title Extraction
+
+```java
+// Extract title from markdown heading or use fallback
+String title = FileIngestionService.extractTitle(content, "fallback.md");
+```
+
+### Chunking Pipeline
+
+```java
+var pipeline = new IngestionPipeline(target, embeddingProvider);
+
+// Single document
+IngestionResult result = pipeline.ingest("doc-1", "Hello world");
+
+// Chunked (auto-splits large docs)
+IngestionResult result = pipeline.ingestChunked("doc-1", longText);
+
+// Streaming file (bounded memory for large files)
+IngestionResult result = pipeline.ingestFile(Path.of("corpus.txt"), "corpus", 512, 64);
+```
+
+---
+
+## 📊 Result Tracking
+
+```java
+public record IngestionResult(
+    String documentId,
+    int chunksStored,
+    List<String> failures,
+    long durationMs
+) {
+    boolean isFullSuccess();  // true if no failures
+}
+```
+
+---
+
+## 🔗 How It Fits
+
+All entry points (CLI, MCP, Server) route through `SpectorRuntime`:
+
+```
+CLI/MCP/Server → SpectorRuntime.ingestion() → IngestionHandler
+                                                    │
+                                          ┌─────────┼─────────┐
+                                          ▼                    ▼
+                                     engine/memory    FileIngestionService
+                                    (mode-aware)       (discovery + chunking)
+```
+
+`IngestionHandler` composes this module's utilities with mode-aware routing — SEARCH mode routes to engine, MEMORY mode routes to cognitive memory.

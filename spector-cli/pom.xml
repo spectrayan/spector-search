@@ -26,10 +26,29 @@
             <version>${picocli.version}</version>
         </dependency>
 
-        <!-- Spector Client SDK -->
+        <!-- Spector Client SDK (remote mode) -->
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-client</artifactId>
+        </dependency>
+
+        <!-- ── Runtime (local mode — direct ingestion via runtime) ── -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-runtime</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-embed-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-embed-ollama</artifactId>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Jackson for JSON parsing -->
