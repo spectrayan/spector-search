@@ -33,10 +33,7 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-index</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.spectrayan</groupId>
-            <artifactId>spector-engine</artifactId>
-        </dependency>
+
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-embed-api</artifactId>
