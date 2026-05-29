@@ -6,16 +6,26 @@
 
 ## Architecture
 
-```
-spector-runtime (Composition Root)
-├── SpectorRuntime          — lifecycle, wiring, pipeline factory
-├── SearchHandler           — mode-aware search routing
-├── IngestionHandler        — thin layer over unified IngestionPipeline
-├── spector-engine          (vector search, RAG, EngineIngestionTarget)
-├── spector-memory          (cognitive memory, CognitiveIngestionTarget)
-├── spector-ingestion       (IngestionPipeline, IngestionTarget, FileDiscoveryService)
-├── spector-config          (configuration)
-└── spector-embed-api       (embedding)
+```mermaid
+graph TD
+    RT["SpectorRuntime<br/><i>Composition Root</i>"]
+    SH["SearchHandler<br/><i>mode-aware routing</i>"]
+    IH["IngestionHandler<br/><i>pipeline delegation</i>"]
+    ENG["spector-engine<br/><i>vector search, RAG</i>"]
+    MEM["spector-memory<br/><i>cognitive memory</i>"]
+    ING["spector-ingestion<br/><i>IngestionPipeline</i>"]
+    CFG["spector-config"]
+    EMB["spector-embed-api"]
+
+    RT --> SH
+    RT --> IH
+    SH --> ENG
+    SH --> MEM
+    IH --> ING
+    ING --> ENG
+    ING --> MEM
+    RT --> CFG
+    RT --> EMB
 ```
 
 `SpectorRuntime.ingestion()` builds the `IngestionPipeline` with the correct `IngestionTarget` (engine or cognitive) and reads chunking configuration from `spector.yml`.
@@ -73,7 +83,7 @@ spector:
   engine:
     dimensions: 768
     persistence-mode: DISK
-    data-directory: .spector-data
+    data-directory: .spector/index
   embedding:
     model: nomic-embed-text
     base-url: http://localhost:11434
@@ -94,7 +104,7 @@ spector:
 |--------|---------------------------|
 | `spector-cli` | `SpectorCtl` — CLI commands call `runtime.search()` / `runtime.ingestion()` |
 | `spector-mcp` | `SpectorMcpServer(runtime)` — MCP tools call runtime handlers |
-| `spector-server` | `SpectorServer(runtime)` — REST API endpoints |
+| `spector-node` | `SpectorNode(runtime)` — Armeria REST + gRPC + SSE endpoints |
 | `spector-dist` | Fat JAR bundles runtime + all modules |
 
 ## Dependencies

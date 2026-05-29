@@ -2,7 +2,7 @@
 
 > **High-performance Java SDK client for remote Spector Search servers.**
 
-`spector-client` implements a type-safe, developer-friendly Java SDK for interacting with remote `SpectorServer` nodes. It handles HTTP request builders, JSON serialization/deserialization, connection pooling, and resilient API call fallbacks automatically.
+`spector-client` implements a type-safe, developer-friendly Java SDK for interacting with remote `SpectorNode` nodes. It handles HTTP request builders, JSON serialization/deserialization, connection pooling, and resilient API call fallbacks automatically.
 
 ---
 

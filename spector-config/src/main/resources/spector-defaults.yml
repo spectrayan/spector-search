@@ -1,0 +1,110 @@
+# ═══════════════════════════════════════════════════════════════════════
+# Spector Search — Default Configuration
+# ═══════════════════════════════════════════════════════════════════════
+#
+# This file is bundled inside the JAR and provides sensible defaults.
+# Override any value by placing a 'spector.yml' in the working directory,
+# using a profile file (spector-{profile}.yml), system properties
+# (-Dspector.engine.dimensions=768), or environment variables
+# (SPECTOR_ENGINE_DIMENSIONS=768).
+#
+# Resolution order (highest priority wins):
+#   1. Programmatic overrides
+#   2. System properties
+#   3. Environment variables
+#   4. spector-{profile}.yml
+#   5. spector.yml (working directory)
+#   6. spector-defaults.yml (this file, classpath)
+# ═══════════════════════════════════════════════════════════════════════
+
+spector:
+
+  # ─── Engine (core search engine) ───
+  engine:
+    dimensions: 384
+    capacity: 100000
+    similarity: COSINE
+    index-type: HNSW
+    quantization: NONE
+    persistence-mode: IN_MEMORY
+    data-directory: .spector/index
+    oversampling-factor: 0
+    gpu-enabled: false
+
+  # ─── HNSW Index Parameters ───
+  hnsw:
+    m: 16
+    ef-construction: 200
+    ef-search: 50
+
+  # ─── IVF/PQ Parameters ───
+  ivf:
+    nlist: 0
+    nprobe: 0
+    pq-subspaces: 0
+
+  # ─── SPECTRUM Adaptive Index ───
+  spectrum:
+    n-centroids: 256
+    n-probe: 16
+    shard-threshold: 20000
+    oversampling-factor: 3
+    kmeans-iterations: 25
+
+  # ─── Embedding Provider ───
+  embedding:
+    model: nomic-embed-text
+    base-url: http://localhost:11434
+    timeout: 30s
+    batch-size: 32
+    max-retries: 3
+
+  # ─── Text Chunking ───
+  chunking:
+    max-tokens: 512
+    overlap-tokens: 50
+
+  # ─── Reranker ───
+  reranker:
+    enabled: false
+    ollama-url: http://localhost:11434
+    model: llama3.2
+    max-candidates: 20
+
+  # ─── Persistence File Names ───
+  persistence:
+    files:
+      index: index.spct
+      vectors: vectors.mmap
+      documents: documents.dat
+      id-mappings: id-mappings.dat
+
+  # ─── RAG (Retrieval-Augmented Generation) ───
+  rag:
+    top-k: 5
+    similarity-threshold: 0.7
+    token-limit: 4096
+
+  # ─── Cognitive Memory Module ───
+  memory:
+    enabled: false
+    persistence-mode: DISK
+    persistence-path: .spector/memory
+    dimensions: 384
+    capacity: 100000
+    decay-enabled: true
+    consolidation-interval: 60s
+
+  # ─── File Ingestion ───
+  ingestion:
+    root-directory: .
+    file-pattern: "**/*.md"
+    skip-dirs: ".git,.idea,.mvn,target,node_modules,.github"
+    chunk-size: 800
+    chunk-overlap: 100
+
+  # ─── Cluster ───
+  cluster:
+    shard-count: 1
+    replica-count: 0
+    shard-strategy: HASH

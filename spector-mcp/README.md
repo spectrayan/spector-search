@@ -105,7 +105,7 @@ spector:
   engine:
     dimensions: 768
     persistence-mode: DISK
-    data-directory: .spector-data
+    data-directory: .spector/index
   embedding:
     model: nomic-embed-text
     base-url: http://localhost:11434

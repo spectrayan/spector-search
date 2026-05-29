@@ -42,14 +42,13 @@ logs/
 *.vec
 *.dat
 embedding-cache/
-.spector-data/
-.spector-memory/
+.spector/
 
 # ──────────── User config ────────────
-spector.yml
-spector.yaml
-spector-*.yml
+spector-local.yml
 !spector.yml.example
+!**/src/main/resources/spector-defaults.yml
+!**/src/test/resources/spector-defaults.yml
 
 # ──────────── Documentation build ────────────
 docs/site/

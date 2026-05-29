@@ -92,8 +92,8 @@ spectorctl status --json
 
 ```
 spectorctl ingest --root /docs    → SpectorRuntime → IngestionHandler → engine/memory
-spectorctl ingest --content "..."  → SpectorClient → HTTP → SpectorServer
-spectorctl search --text "..."     → SpectorClient → HTTP → SpectorServer
+spectorctl ingest --content "..."  → SpectorClient → HTTP → SpectorNode
+spectorctl search --text "..."     → SpectorClient → HTTP → SpectorNode
 ```
 
 The CLI depends on both `spector-runtime` (local operations) and `spector-client` (remote operations). Mode is auto-detected from the flags provided.
