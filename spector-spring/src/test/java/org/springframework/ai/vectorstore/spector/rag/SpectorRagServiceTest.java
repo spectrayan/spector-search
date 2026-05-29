@@ -1,7 +1,7 @@
 package org.springframework.ai.vectorstore.spector.rag;
 
 import com.spectrayan.spector.engine.SpectorEngine;
-import com.spectrayan.spector.engine.rag.ContextBuilder;
+import com.spectrayan.spector.rag.ContextBuilder;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.runtime.SpectorRuntime;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -96,6 +97,18 @@ public abstract class McpToolHandler {
      * @return fully-configured tool specification ready for server registration
      */
     public final McpServerFeatures.SyncToolSpecification toToolSpecification(SpectorEngine engine) {
+        return toToolSpecification(engine, null);
+    }
+
+    /**
+     * Builds the MCP tool specification with optional runtime for mode-aware routing.
+     *
+     * @param engine  the Spector engine instance
+     * @param runtime the Spector runtime (nullable, for mode-aware tools)
+     * @return fully-configured tool specification
+     */
+    public final McpServerFeatures.SyncToolSpecification toToolSpecification(
+            SpectorEngine engine, SpectorRuntime runtime) {
         var tool = McpSchema.Tool.builder(name())
                 .description(description())
                 .inputSchema(inputSchema())

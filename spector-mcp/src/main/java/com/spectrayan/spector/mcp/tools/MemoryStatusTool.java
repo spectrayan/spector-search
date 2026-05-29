@@ -5,6 +5,7 @@ import java.util.Map;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.SpectorMemory;
+import com.spectrayan.spector.memory.neurodivergent.LateralEvaluator;
 import com.spectrayan.spector.mcp.schema.ToolSchemaBuilder;
 
 import io.modelcontextprotocol.spec.McpSchema;
@@ -51,7 +52,18 @@ public final class MemoryStatusTool extends MemoryToolHandler {
         sb.append("  WAL Events:          ").append(memory.wal().size()).append("\n");
         sb.append("  WAL High-Water Mark: ").append(memory.wal().highWaterMark()).append("\n");
         sb.append("  Suppressed Memories: ").append(memory.suppression().size()).append("\n");
-        sb.append("  Pending Reminders:   ").append(memory.prospective().pendingCount()).append("\n");
+        sb.append("  Pending Reminders:   ").append(memory.prospective().pendingCount()).append("\n\n");
+
+        // Lateral evaluator metrics
+        LateralEvaluator lateral = memory.lateralEvaluator();
+        LateralEvaluator.LateralMetrics metrics = lateral.metrics();
+        sb.append("Lateral Retrieval:\n");
+        sb.append("  Enabled:    ").append(lateral.isLateralEnabled()).append("\n");
+        sb.append("  Threshold:  ").append(String.format("%.2f", lateral.currentDistanceThreshold())).append("\n");
+        sb.append("  Samples:    ").append(metrics.sampleSize()).append("\n");
+        sb.append("  LUR (util): ").append(String.format("%.2f", metrics.utilityRate())).append("\n");
+        sb.append("  LSR (supp): ").append(String.format("%.2f", metrics.suppressionRate())).append("\n");
+        sb.append("  LHI (hall): ").append(String.format("%.2f", metrics.hallucinationIndex())).append("\n");
 
         return textResult(sb.toString());
     }

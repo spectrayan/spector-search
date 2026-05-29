@@ -60,6 +60,12 @@
             <artifactId>spector-engine</artifactId>
         </dependency>
 
+        <!-- Spector RAG (context assembly) -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-rag</artifactId>
+        </dependency>
+
         <!-- Spector Client (remote mode) -->
         <dependency>
             <groupId>com.spectrayan</groupId>

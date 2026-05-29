@@ -1,6 +1,6 @@
 package org.springframework.ai.vectorstore.spector.rag;
 
-import com.spectrayan.spector.engine.rag.ChunkAttribution;
+import com.spectrayan.spector.rag.ChunkAttribution;
 
 import java.util.List;
 

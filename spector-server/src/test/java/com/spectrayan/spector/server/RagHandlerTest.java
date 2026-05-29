@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.spectrayan.spector.engine.SpectorConfig;
+import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
 
 import io.javalin.testtools.JavalinTest;
