@@ -58,13 +58,15 @@ public class VectorStoreFactory {
     }
 
     private VectorStore createMapped(SpectorConfig config) {
-        Path file = persistenceFiles.resolveVectors(config.dataDirectory());
-        log.info("Creating MappedVectorStore: dims={}, capacity={}, path={}",
-                config.dimensions(), config.capacity(), file);
+        Path shardDir = persistenceFiles.resolveShardDir(config.dataDirectory());
+        int nodesPerShard = config.effectiveNodesPerShard();
+        log.info("Creating ShardedMappedVectorStore: dims={}, capacity={}, nodesPerShard={}, dir={}",
+                config.dimensions(), config.capacity(), nodesPerShard, shardDir);
         try {
-            return new MappedVectorStore(file, config.dimensions(), config.capacity());
+            return new ShardedMappedVectorStore(shardDir, config.dimensions(),
+                    config.capacity(), nodesPerShard);
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to create memory-mapped vector store: " + file, e);
+            throw new UncheckedIOException("Failed to create sharded vector store: " + shardDir, e);
         }
     }
 }

@@ -49,6 +49,7 @@ public class MappedVectorStore implements VectorStore {
     private final AtomicInteger count;
     private final ReentrantLock writeLock = new ReentrantLock();
     private volatile boolean closed;
+    private volatile long lastAccessed;
 
     /**
      * Creates or opens a memory-mapped vector store.
@@ -69,6 +70,7 @@ public class MappedVectorStore implements VectorStore {
         this.idToIndex = new ConcurrentHashMap<>(capacity);
         this.count = new AtomicInteger(0);
         this.closed = false;
+        this.lastAccessed = System.currentTimeMillis();
 
         // Ensure parent directories exist
         Path parent = filePath.getParent();
@@ -87,6 +89,8 @@ public class MappedVectorStore implements VectorStore {
         this.arena = Arena.ofShared();
         this.segment = channel.map(FileChannel.MapMode.READ_WRITE, 0, totalBytes, arena);
 
+        warmup(); // Warm up asynchronously on creation
+
         log.info("MappedVectorStore created: path={}, dimensions={}, capacity={}, bytes={}",
                 filePath, dimensions, capacity, totalBytes);
     }
@@ -96,6 +100,7 @@ public class MappedVectorStore implements VectorStore {
         writeLock.lock();
         try {
             ensureOpen();
+            this.lastAccessed = System.currentTimeMillis();
             if (vector.length != layout.dimensions()) {
                 throw new IllegalArgumentException(
                         "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
@@ -126,6 +131,7 @@ public class MappedVectorStore implements VectorStore {
     @Override
     public float[] get(String id) {
         ensureOpen();
+        this.lastAccessed = System.currentTimeMillis();
         Integer index = idToIndex.get(id);
         return index == null ? null : layout.readVector(segment, index);
     }
@@ -134,6 +140,7 @@ public class MappedVectorStore implements VectorStore {
     public float[] getByIndex(int index) {
         ensureOpen();
         validateIndex(index);
+        this.lastAccessed = System.currentTimeMillis();
         return layout.readVector(segment, index);
     }
 
@@ -141,11 +148,13 @@ public class MappedVectorStore implements VectorStore {
     public void getByIndex(int index, float[] dst, int dstOffset) {
         ensureOpen();
         validateIndex(index);
+        this.lastAccessed = System.currentTimeMillis();
         layout.readVector(segment, index, dst, dstOffset);
     }
 
     @Override
     public int indexOf(String id) {
+        this.lastAccessed = System.currentTimeMillis();
         Integer index = idToIndex.get(id);
         return index == null ? -1 : index;
     }
@@ -188,6 +197,10 @@ public class MappedVectorStore implements VectorStore {
                 try {
                     // Force pending writes to disk
                     segment.force();
+                    if (segment.isMapped()) {
+                        com.spectrayan.spector.commons.concurrent.MemoryPinning.unlock(segment);
+                        segment.unload();
+                    }
                     arena.close();
                     channel.close();
                     raf.close();
@@ -197,6 +210,53 @@ public class MappedVectorStore implements VectorStore {
                     log.warn("Error closing MappedVectorStore file channel", e);
                 }
             }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    /**
+     * Pre-touches and loads the mapped memory segment into physical memory
+     * to prevent cold-start page fault latency spikes during initial queries.
+     * Performs a best-effort asynchronous load using a virtual thread.
+     */
+    public void warmup() {
+        if (segment.isMapped()) {
+            Thread.startVirtualThread(() -> {
+                long start = System.nanoTime();
+                try {
+                    segment.load();
+                    boolean pinned = com.spectrayan.spector.commons.concurrent.MemoryPinning.lock(segment);
+                    long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+                    log.info("MappedVectorStore warmed up successfully (pinned={}) in {} ms (file={})",
+                            pinned, elapsedMs, filePath);
+                } catch (Exception e) {
+                    log.warn("Failed to warm up MappedVectorStore: {}", e.getMessage());
+                }
+            });
+        }
+    }
+
+    /**
+     * Evicts the mapped segment pages from physical memory if it has been inactive
+     * for at least the specified grace period.
+     *
+     * @param gracePeriodMs threshold of inactivity in milliseconds
+     * @return true if successfully evicted, false if segment is active or not mapped
+     */
+    public boolean unloadIdle(long gracePeriodMs) {
+        writeLock.lock();
+        try {
+            if (!closed && segment.isMapped()) {
+                long idleMs = System.currentTimeMillis() - lastAccessed;
+                if (idleMs >= gracePeriodMs) {
+                    com.spectrayan.spector.commons.concurrent.MemoryPinning.unlock(segment);
+                    segment.unload();
+                    log.info("MappedVectorStore idle-evicted: file={} (idle for {} ms)", filePath, idleMs);
+                    return true;
+                }
+            }
+            return false;
         } finally {
             writeLock.unlock();
         }
