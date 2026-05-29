@@ -1,12 +1,26 @@
 # 📥 Ingestion Pipeline
 
-> **Standalone ingestion orchestration: document → chunk → embed → store → index.** The `spector-ingestion` module handles the full ingestion flow using virtual threads for parallel embedding, with no reactive framework overhead.
+> **Standalone ingestion orchestration: document → chunk → embed → store → index.** The `spector-ingestion` module provides pure utility functions (file discovery, chunking, title extraction). Mode-aware routing is handled by `IngestionHandler` in `spector-runtime`.
 
 ---
 
+## Architecture
+
+All entry points (CLI, MCP, Server) route ingestion through `SpectorRuntime`:
+
+```
+CLI/MCP/Server → SpectorRuntime.ingestion() → IngestionHandler → engine or memory
+                                                    ↓
+                                            FileIngestionService (discovery + chunking)
+```
+
+- **`IngestionHandler`** (in `spector-runtime`) — mode-aware routing: SEARCH → engine, MEMORY → cognitive memory
+- **`FileIngestionService`** (in `spector-ingestion`) — pure utility: file discovery, chunking, title extraction
+- **`IngestionPipeline`** (in `spector-ingestion`) — chunking pipeline with configurable strategies
+
 ## Module: `spector-ingestion`
 
-The ingestion pipeline is a standalone module that decouples document processing from the engine facade. It can be used directly for bulk offline ingestion, real-time pipelines, or custom ingestion flows.
+The ingestion module is a **pure utility** with no dependency on engine or runtime. It provides building blocks that `IngestionHandler` composes.
 
 **Key classes:**
 

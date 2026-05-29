@@ -96,7 +96,7 @@ graph LR
 | | |
 |---|---|
 | **Language** | Java 25 |
-| **License** | Apache 2.0 |
+| **License** | Apache 2.0 · [BSL 1.1](https://github.com/spectrayan/spector-search/blob/main/spector-memory/LICENSE) (memory module) |
 | **Modules** | 18 Maven modules |
 | **Dependencies** | Zero (JDK only) |
 | **SIMD** | AVX2 / AVX-512 / NEON |
@@ -106,4 +106,4 @@ graph LR
 
 ---
 
-**Built with ⚡ by [Spectrayan](https://www.spectrayan.com/)** · [GitHub](https://github.com/spectrayan/spector-search) · [Apache 2.0 License](https://github.com/spectrayan/spector-search/blob/main/LICENSE)
+**Built with ⚡ by [Spectrayan](https://www.spectrayan.com/)** · [GitHub](https://github.com/spectrayan/spector-search) · [Apache 2.0](https://github.com/spectrayan/spector-search/blob/main/LICENSE) · [BSL 1.1 (memory)](https://github.com/spectrayan/spector-search/blob/main/spector-memory/LICENSE)

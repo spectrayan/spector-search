@@ -1,0 +1,1 @@
+--8<-- "spector-ingestion/README.md"

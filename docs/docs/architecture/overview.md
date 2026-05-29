@@ -68,26 +68,26 @@ graph LR
 graph TD
     server["🖥️ server"] --> runtime["🧠 runtime"]
     mcp["🤖 mcp"] --> runtime
+    cli["🖥️ cli"] --> runtime
+    cli --> client["📦 client"]
 
     runtime --> engine["⚡ engine"]
     runtime --> memory["🧠 memory"]
+    runtime --> ingestion["📥 ingestion"]
 
-    cluster["🌐 cluster"] --> engine
+    cluster["🌐 cluster"] --> runtime
     engine --> query["🔍 query"]
-    engine --> ingestion["📥 ingestion"]
     engine --> rag["🤖 rag"]
     engine --> commons["📄 commons"]
     engine --> embedapi["🧬 embed-api"]
     engine --> gpu["🎮 gpu"]
+    engine --> config["⚙️ config"]
 
     memory --> core["🔬 core"]
-    memory --> engine
     memory --> embedapi
 
-    ingestion --> commons
+    ingestion --> config
     ingestion --> embedapi
-    ingestion --> storage
-    ingestion --> index
 
     rag --> query
     rag --> embedapi
@@ -102,28 +102,27 @@ graph TD
     gpu --> storage
 
     dist["📦 dist"] --> mcp
+    dist --> cli
     dist --> runtime
-    dist --> ingestion
 ```
 
 **Dependency rules:**
 
 | Path | Description |
 |------|-------------|
-| `runtime → engine + memory` | Unified application context |
+| `runtime → engine + memory + ingestion` | Composition root — wires all subsystems |
+| `cli → runtime + client` | CLI with local batch (runtime) and remote (client) modes |
 | `cluster → engine → query → index → storage → core` | Main data path |
 | `server → runtime` | REST API entry point |
 | `mcp → runtime` | MCP agent entry point (in-process, zero network) |
-| `engine → ingestion` | Document ingestion pipeline |
+| `runtime → ingestion` | File discovery + chunking utility |
 | `engine → rag` | RAG context assembly pipeline |
 | `engine → gpu` | Optional GPU acceleration |
-| `engine → commons` | Document processing |
-| `engine → embed-api` | Embedding generation |
-| `memory → engine, core, embed-api` | Cognitive memory module |
-| `dist → mcp + runtime + ingestion` | Fat JAR distribution |
+| `memory → core, embed-api` | Cognitive memory module |
+| `dist → mcp + cli + runtime` | Fat JAR distribution |
 
 > [!IMPORTANT]
-> No circular dependencies. Each module defines clear interfaces at its boundary. You can depend on any module independently.
+> No circular dependencies. `spector-ingestion` is a pure utility (file discovery, chunking) with no dependency on engine or runtime. `SpectorRuntime` is the single composition root — all entry points go through it.
 
 ---
 
@@ -131,37 +130,42 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant Client as 👤 Client (REST/SDK/CLI)
-    participant Engine as ⚡ SpectorEngine
-    participant Pipeline as 📥 IngestionPipeline
+    participant Client as 👤 Client (CLI/MCP/REST)
+    participant Runtime as ⚡ SpectorRuntime
+    participant Handler as 📥 IngestionHandler
+    participant Service as 📁 FileIngestionService
+    participant Engine as 🔧 SpectorEngine
     participant Embed as 🧠 EmbeddingProvider
     participant BM25 as 📝 BM25 Index
     participant HNSW as 🧠 HNSW Index
-    participant SIMD as 🔬 SIMD Kernels
     participant Store as 💾 Storage (mmap)
 
-    Client->>Engine: Ingest (ID, content)
-    Engine->>Pipeline: Delegate ingestion
-    Pipeline->>Embed: Embed text (virtual thread)
-    Embed-->>Pipeline: Vector
-    par Parallel indexing via virtual threads
-        Pipeline->>BM25: Tokenize + update inverted index
-        Pipeline->>HNSW: Insert vector into graph
-        HNSW->>SIMD: Distance computation
-        Pipeline->>Store: Persist vector (zero-copy mmap)
+    Client->>Runtime: runtime.ingestion().ingest(dir, pattern)
+    Runtime->>Handler: Mode-aware routing
+    Handler->>Service: discover(rootDir, pattern)
+    Service-->>Handler: List<Path> files
+    loop Each file
+        Handler->>Handler: Read + chunk content
+        Handler->>Engine: engine.ingest(id, content)
+        Engine->>Embed: Embed text (virtual thread)
+        Embed-->>Engine: Vector
+        par Parallel indexing via virtual threads
+            Engine->>BM25: Tokenize + update inverted index
+            Engine->>HNSW: Insert vector into graph
+            Engine->>Store: Persist vector (zero-copy mmap)
+        end
     end
     Store-->>Client: ✅ Indexed
 ```
 
-1. **Engine** receives the document and delegates to the **IngestionPipeline**
-2. **IngestionPipeline** handles chunking (if needed) and embedding via virtual threads
-3. **BM25 Index** tokenizes content and updates the inverted index
-4. **HNSW Index** inserts the vector into the graph using SIMD distance kernels
-5. **Storage** persists the raw vector to a memory-mapped file (zero-copy)
-6. If IVF-PQ is configured, the vector is also added to the IVF partition
+1. **Client** calls `runtime.ingestion().ingest()` — all entry points use this
+2. **IngestionHandler** routes based on mode (SEARCH → engine, MEMORY → cognitive memory)
+3. **FileIngestionService** handles file discovery and chunking (pure utility)
+4. **Engine** handles embedding, BM25 indexing, HNSW insertion, and storage
+5. In MEMORY mode, content routes to **SpectorMemory** instead of the engine
 
 > [!TIP]
-> The `IngestionPipeline` can be used independently of the engine facade for bulk offline ingestion or custom pipelines.
+> `FileIngestionService` can be used independently for file discovery and chunking without any engine or runtime dependency.
 
 ---
 
@@ -204,20 +208,23 @@ sequenceDiagram
     participant Agent as 🤖 AI Agent (Claude/Cursor)
     participant MCP as 📡 MCP Transport (stdio)
     participant Handler as 🔧 McpToolHandler
-    participant Engine as ⚡ SpectorEngine
+    participant Runtime as ⚡ SpectorRuntime
+    participant Engine as 🔧 SpectorEngine
     participant SIMD as 🔬 SIMD Kernels
 
     Agent->>MCP: tools/call {"name": "semantic_search", "arguments": {"query": "..."}}
-    MCP->>Handler: SemanticSearchTool.execute(engine, args)
-    Handler->>Engine: engine.search(query, topK)
+    MCP->>Handler: SemanticSearchTool.execute(runtime, args)
+    Handler->>Runtime: runtime.search().query(text, topK)
+    Runtime->>Engine: engine.search(query, topK)
     Engine->>SIMD: HNSW traversal (off-heap MemorySegment)
     SIMD-->>Engine: ScoredResult[] (~100µs)
-    Engine-->>Handler: SearchResponse
+    Engine-->>Runtime: SearchResponse
+    Runtime-->>Handler: SpectorResult[]
     Handler-->>MCP: CallToolResult
     MCP-->>Agent: JSON-RPC response with search results
 ```
 
-The MCP path routes through `SpectorRuntime` — which holds both the search engine and optional cognitive memory. The MCP server simply wraps runtime method calls with JSON-RPC transport. There is **zero network overhead** because everything runs in the same JVM process.
+The MCP path routes through `SpectorRuntime` — the single composition root that holds both the search engine and optional cognitive memory. The MCP server wraps runtime handler calls with JSON-RPC transport. There is **zero network overhead** because everything runs in the same JVM process.
 
 > [!TIP]
 > For full MCP architecture details, tool schemas, and design patterns, see the dedicated [MCP Integration](mcp-integration.md) page.
