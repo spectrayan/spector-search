@@ -27,7 +27,7 @@ class SpectorEngineTest {
 
     @Test
     void ingestAndKeywordSearch() {
-        try (var engine = new SpectorEngine(testConfig())) {
+        try (var engine = new DefaultSpectorEngine(testConfig())) {
             engine.ingest("d1", "java programming language", randomVector(DIM, 1));
             engine.ingest("d2", "python machine learning", randomVector(DIM, 2));
 
@@ -39,7 +39,7 @@ class SpectorEngineTest {
 
     @Test
     void ingestAndVectorSearch() {
-        try (var engine = new SpectorEngine(testConfig())) {
+        try (var engine = new DefaultSpectorEngine(testConfig())) {
             float[] v1 = randomVector(DIM, 1);
             engine.ingest("d1", "hello", v1);
             engine.ingest("d2", "world", randomVector(DIM, 2));
@@ -52,7 +52,7 @@ class SpectorEngineTest {
 
     @Test
     void ingestAndHybridSearch() {
-        try (var engine = new SpectorEngine(testConfig())) {
+        try (var engine = new DefaultSpectorEngine(testConfig())) {
             float[] v1 = randomVector(DIM, 1);
             engine.ingest("d1", "java virtual machine performance", v1);
             engine.ingest("d2", "python deep learning", randomVector(DIM, 2));
@@ -65,7 +65,7 @@ class SpectorEngineTest {
 
     @Test
     void documentCount() {
-        try (var engine = new SpectorEngine(testConfig())) {
+        try (var engine = new DefaultSpectorEngine(testConfig())) {
             assertThat(engine.documentCount()).isEqualTo(0);
             engine.ingest("d1", "hello", randomVector(DIM, 1));
             assertThat(engine.documentCount()).isEqualTo(1);
@@ -76,7 +76,7 @@ class SpectorEngineTest {
 
     @Test
     void batchIngest() {
-        try (var engine = new SpectorEngine(testConfig())) {
+        try (var engine = new DefaultSpectorEngine(testConfig())) {
             String[] ids = {"d1", "d2", "d3"};
             String[] contents = {"alpha", "beta", "gamma"};
             float[][] vectors = {randomVector(DIM, 1), randomVector(DIM, 2), randomVector(DIM, 3)};
@@ -88,7 +88,7 @@ class SpectorEngineTest {
 
     @Test
     void closedEngineThrows() {
-        var engine = new SpectorEngine(testConfig());
+        var engine = new DefaultSpectorEngine(testConfig());
         engine.close();
         assertThatThrownBy(() -> engine.ingest("d1", "text", randomVector(DIM, 1)))
                 .isInstanceOf(IllegalStateException.class);
@@ -97,7 +97,7 @@ class SpectorEngineTest {
     @Test
     void configAccessor() {
         var config = testConfig();
-        try (var engine = new SpectorEngine(config)) {
+        try (var engine = new DefaultSpectorEngine(config)) {
             assertThat(engine.config()).isEqualTo(config);
             assertThat(engine.config().dimensions()).isEqualTo(DIM);
         }
@@ -105,7 +105,7 @@ class SpectorEngineTest {
 
     @Test
     void multipleDocumentsEndToEnd() {
-        try (var engine = new SpectorEngine(testConfig())) {
+        try (var engine = new DefaultSpectorEngine(testConfig())) {
             Random rng = new Random(42);
             for (int i = 0; i < 50; i++) {
                 engine.ingest("doc-" + i, "document number " + i + " with text", randomVector(DIM, rng));
@@ -127,7 +127,7 @@ class SpectorEngineTest {
                 .withCapacity(2000)
                 .withIvfPq(8, 4, 4); // nlist=8, nprobe=4, M=4
 
-        try (var engine = new SpectorEngine(config)) {
+        try (var engine = new DefaultSpectorEngine(config)) {
             Random rng = new Random(42);
 
             // Ingest enough vectors for auto-training (nlist*40 = 320)
@@ -148,7 +148,7 @@ class SpectorEngineTest {
                 .withCapacity(2000)
                 .withIvfPq(8, 4, 4);
 
-        try (var engine = new SpectorEngine(config)) {
+        try (var engine = new DefaultSpectorEngine(config)) {
             engine.ingest("d1", "java programming language", randomVector(DIM, 1));
             engine.ingest("d2", "python machine learning", randomVector(DIM, 2));
 
@@ -215,7 +215,7 @@ class SpectorEngineTest {
                 .withCapacity(numDocs)
                 .withVasq();
 
-        try (var engine = new SpectorEngine(config)) {
+        try (var engine = new DefaultSpectorEngine(config)) {
             Random rng = new Random(42);
             for (int i = 0; i < numDocs; i++) {
                 engine.ingest("doc-" + i, "document number " + i, randomVector(DIM, rng));
@@ -236,7 +236,7 @@ class SpectorEngineTest {
                 .withCapacity(numDocs)
                 .withVasq();
 
-        try (var engine = new SpectorEngine(config)) {
+        try (var engine = new DefaultSpectorEngine(config)) {
             Random rng = new Random(10);
             float[] specialVec = randomVector(DIM, rng);
             engine.ingest("special", "java programming language runtime", specialVec);
@@ -264,6 +264,76 @@ class SpectorEngineTest {
                 .withVasq(5);
 
         assertThat(config.effectiveOversamplingFactor()).isEqualTo(5);
+    }
+
+    @Test
+    void vasq_diskPersistence_savesAndLoads(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tempDir) throws java.io.IOException {
+        int numDocs = 50;
+        var config = SpectorConfig.DEFAULT
+                .withDimensions(DIM)
+                .withCapacity(numDocs)
+                .withQuantization(com.spectrayan.spector.core.quantization.QuantizationType.SCALAR_INT8)
+                .withPersistence(com.spectrayan.spector.config.PersistenceMode.DISK, tempDir);
+
+        // 1. Ingest and save
+        try (var engine = new DefaultSpectorEngine(config)) {
+            Random rng = new Random(42);
+            for (int i = 0; i < numDocs; i++) {
+                engine.ingest("doc-" + i, "document content " + i, randomVector(DIM, rng));
+            }
+            assertThat(engine.documentCount()).isEqualTo(numDocs);
+            // Engine close() is triggered via try-with-resources, saving the index.bin and documents.bin
+        }
+
+        // Verify sharded index directory exists (engine now uses ShardedDiskHnswWriter)
+        java.nio.file.Path shardDir = tempDir.resolve("index_shards");
+        assertThat(java.nio.file.Files.exists(shardDir)).isTrue();
+
+        // 2. Load and verify search
+        try (var engine = new DefaultSpectorEngine(config)) {
+            assertThat(engine.documentCount()).isEqualTo(numDocs);
+            
+            Random rng = new Random(42);
+            SearchResponse response = engine.vectorSearch(randomVector(DIM, rng), 5);
+            assertThat(response.results()).isNotEmpty();
+            assertThat(response.results().length).isLessThanOrEqualTo(5);
+        }
+    }
+
+    @Test
+    void spectrum_diskPersistence_savesAndLoads(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tempDir) throws java.io.IOException {
+        int numDocs = 300;
+        var config = SpectorConfig.DEFAULT
+                .withDimensions(DIM)
+                .withCapacity(500)
+                .withSpectrum(4, 2, 10) // 4 centroids, probe 2, promote HNSW at 10 residuals
+                .withPersistence(com.spectrayan.spector.config.PersistenceMode.DISK, tempDir);
+
+        // 1. Ingest and save
+        try (var engine = new DefaultSpectorEngine(config)) {
+            Random rng = new Random(42);
+            for (int i = 0; i < numDocs; i++) {
+                engine.ingest("doc-" + i, "document content " + i, randomVector(DIM, rng));
+            }
+            assertThat(engine.documentCount()).isEqualTo(numDocs);
+            // Engine close() saves the index
+        }
+
+        // Verify index files exist
+        java.nio.file.Path indexDir = tempDir.resolve("index_spectrum");
+        assertThat(java.nio.file.Files.exists(indexDir)).isTrue();
+        assertThat(java.nio.file.Files.exists(indexDir.resolve("meta.properties"))).isTrue();
+        assertThat(java.nio.file.Files.exists(indexDir.resolve("centroids.bin"))).isTrue();
+
+        // 2. Load and verify search
+        try (var engine = new DefaultSpectorEngine(config)) {
+            assertThat(engine.documentCount()).isEqualTo(numDocs);
+            
+            Random rng = new Random(42);
+            SearchResponse response = engine.vectorSearch(randomVector(DIM, rng), 5);
+            assertThat(response.results()).isNotEmpty();
+            assertThat(response.results().length).isLessThanOrEqualTo(5);
+        }
     }
 
     // ─────────────── Helpers ───────────────
