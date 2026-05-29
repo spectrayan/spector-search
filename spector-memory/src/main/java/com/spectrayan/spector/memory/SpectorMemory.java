@@ -11,6 +11,7 @@ import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.ProceduralMemoryStore;
 import com.spectrayan.spector.memory.cortex.SemanticMemoryStore;
+import com.spectrayan.spector.memory.cortex.SemanticRecallStrategy;
 import com.spectrayan.spector.memory.cortex.TierRouter;
 import com.spectrayan.spector.memory.cortex.WorkingMemoryStore;
 import com.spectrayan.spector.memory.dopamine.FlashbulbPolicy;
@@ -25,6 +26,8 @@ import com.spectrayan.spector.memory.inhibition.SuppressionSet;
 import com.spectrayan.spector.memory.interference.SemanticDeduplicator;
 import com.spectrayan.spector.memory.metamemory.MemoryInsight;
 import com.spectrayan.spector.memory.metamemory.MemoryIntrospector;
+import com.spectrayan.spector.memory.neurodivergent.IcnuWeights;
+import com.spectrayan.spector.memory.neurodivergent.LateralEvaluator;
 import com.spectrayan.spector.memory.pipeline.HebbianCoActivationListener;
 import com.spectrayan.spector.memory.pipeline.IngestionPipeline;
 import com.spectrayan.spector.memory.pipeline.LtpReconsolidationListener;
@@ -111,6 +114,7 @@ public final class SpectorMemory implements AutoCloseable {
     private final ProspectiveScheduler prospectiveScheduler;
     private final MemoryIntrospector introspector;
     private final MemoryWal wal;
+    private final LateralEvaluator lateralEvaluator;
 
     // ── Configuration ──
     private final int dimensions;
@@ -218,24 +222,33 @@ public final class SpectorMemory implements AutoCloseable {
         this.valenceTracker = new ValenceTracker(builder.valenceLearningRate);
         this.coActivationTracker = new CoActivationTracker();
         this.suppressionSet = new SuppressionSet();
-        this.habituationPenalty = new HabituationPenalty();
+        this.habituationPenalty = new HabituationPenalty(0.2f, builder.inhibitionTtlMs, builder.inhibitionFloor);
         this.prospectiveScheduler = new ProspectiveScheduler();
         this.introspector = new MemoryIntrospector(coActivationTracker);
+        this.lateralEvaluator = new LateralEvaluator();
         this.reflectDaemon = new ReflectDaemon(
                 circadianPolicy,
                 builder.dimensions > 0 ? new CentroidRouter(builder.dimensions) : null,
                 builder.textGenerationProvider,
-                embeddingProvider);
+                embeddingProvider,
+                5, // minClusterSize
+                builder.pinSourceEpisodes,
+                builder.pinnedQuota);
 
         // ── Pipelines ──
         this.ingestionPipeline = new IngestionPipeline(
                 embeddingProvider, quantizer, surpriseDetector, flashbulbPolicy,
-                tierRouter, index, wal);
+                tierRouter, index, wal, workingStore, builder.icnuWeights);
+
+        // Build optional fused semantic recall strategy
+        SemanticRecallStrategy semanticStrategy = builder.semanticIndex != null
+                ? new SemanticRecallStrategy(builder.semanticIndex, semanticStore, index)
+                : null;
 
         this.recallPipeline = new RecallPipeline(
                 embeddingProvider, tierRouter, index,
                 suppressionSet, habituationPenalty, prospectiveScheduler, wal,
-                quantizer.mins(), quantizer.scales());
+                quantizer.mins(), quantizer.scales(), semanticStrategy);
 
         // Register post-recall observers (Phase 6: Observer pattern)
         recallPipeline.addListener(new LtpReconsolidationListener(index, tierRouter, wal));
@@ -292,6 +305,20 @@ public final class SpectorMemory implements AutoCloseable {
         return recallPipeline.recall(queryText, options);
     }
 
+    /**
+     * Convenience recall using a {@link CognitiveProfile} preset.
+     *
+     * <p>Equivalent to:
+     * {@code recall(queryText, RecallOptions.builder().profile(profile).build())}</p>
+     *
+     * @param queryText the query text
+     * @param profile   cognitive scoring profile (BALANCED, EXPLORING, DEBUGGING, etc.)
+     * @return ranked list of cognitive results
+     */
+    public List<CognitiveResult> recall(String queryText, CognitiveProfile profile) {
+        return recall(queryText, RecallOptions.builder().profile(profile).build());
+    }
+
     /** Convenience overload with default options. */
     public List<CognitiveResult> recall(String queryText) {
         return recall(queryText, RecallOptions.DEFAULT);
@@ -337,6 +364,14 @@ public final class SpectorMemory implements AutoCloseable {
 
     /**
      * Reports an outcome (positive/negative) for a previously recalled memory.
+     *
+     * <p>Also increments {@code recall_count} for LTP reconsolidation — this is
+     * now the <em>only</em> place recall_count increases. Passive recall (appearing
+     * in search results) no longer inflates recall_count, preventing memories
+     * from becoming artificially "immortal" through reconsolidation.</p>
+     *
+     * @param memoryId the memory to reinforce
+     * @param valence  outcome valence (positive = good, negative = bad)
      */
     public void reinforce(String memoryId, byte valence) {
         Objects.requireNonNull(memoryId, "memoryId is required");
@@ -350,14 +385,39 @@ public final class SpectorMemory implements AutoCloseable {
         if (segment != null) {
             CognitiveRecordLayout layout = tierRouter.layoutFor(loc.type());
             valenceTracker.reinforce(segment, loc.offset(), layout, valence);
+            layout.incrementRecallCount(segment, loc.offset()); // LTP on explicit use
+        }
+
+        // Neurodivergent: Feed lateral evaluator based on whether this was a lateral result
+        if (recallPipeline.wasLateral(memoryId)) {
+            if (valence > 0) {
+                lateralEvaluator.recordLateralReinforcement();
+                log.debug("Lateral reinforcement: '{}' (positive valence={})", memoryId, valence);
+            } else if (valence < 0) {
+                lateralEvaluator.recordLateralSuppression();
+                log.debug("Lateral suppression via reinforce: '{}' (negative valence={})", memoryId, valence);
+            }
         }
 
         wal.appendReinforce(memoryId, valence);
         log.debug("Reinforce: '{}' with valence={}", memoryId, valence);
     }
 
-    public void suppress(String memoryId, String reason) { suppressionSet.suppress(memoryId, reason); }
-    public void suppress(String memoryId) { suppressionSet.suppress(memoryId); }
+    public void suppress(String memoryId, String reason) {
+        suppressionSet.suppress(memoryId, reason);
+        // Also register offset for hot-loop filtering
+        MemoryLocation loc = index.locate(memoryId);
+        if (loc != null) {
+            suppressionSet.registerOffset(loc.type().ordinal(), loc.offset());
+        }
+
+        // Neurodivergent: Feed lateral evaluator
+        if (recallPipeline.wasLateral(memoryId)) {
+            lateralEvaluator.recordLateralSuppression();
+            log.debug("Lateral suppression: '{}' (reason={})", memoryId, reason);
+        }
+    }
+    public void suppress(String memoryId) { suppress(memoryId, null); }
     public void unsuppress(String memoryId) { suppressionSet.unsuppress(memoryId); }
 
     /**
@@ -466,6 +526,7 @@ public final class SpectorMemory implements AutoCloseable {
     public RecallPipeline recallPipeline() { return recallPipeline; }
     public TierRouter tierRouter() { return tierRouter; }
     public MemoryIndex index() { return index; }
+    public LateralEvaluator lateralEvaluator() { return lateralEvaluator; }
 
     @Override
     public void close() {
@@ -508,6 +569,12 @@ public final class SpectorMemory implements AutoCloseable {
         private float deduplicationRadius = 0.05f;
         private TextGenerationProvider textGenerationProvider;
         private ScalarQuantizer quantizer;
+        private com.spectrayan.spector.index.VectorIndex semanticIndex;
+        private long inhibitionTtlMs = 300_000L;
+        private float inhibitionFloor = 0.1f;
+        private IcnuWeights icnuWeights;
+        private boolean pinSourceEpisodes = false;
+        private int pinnedQuota = 10_000;
 
         public Builder dimensions(int dimensions) { this.dimensions = dimensions; return this; }
         public Builder embeddingProvider(EmbeddingProvider p) { this.embeddingProvider = p; return this; }
@@ -527,6 +594,24 @@ public final class SpectorMemory implements AutoCloseable {
         public Builder deduplicationRadius(float r) { this.deduplicationRadius = r; return this; }
         public Builder textGenerationProvider(TextGenerationProvider p) { this.textGenerationProvider = p; return this; }
         public Builder quantizer(ScalarQuantizer quantizer) { this.quantizer = quantizer; return this; }
+
+        /** Optional HNSW/IVF index for fused semantic recall (default: null = header-only fallback). */
+        public Builder semanticIndex(com.spectrayan.spector.index.VectorIndex idx) { this.semanticIndex = idx; return this; }
+
+        /** Inhibition of Return TTL in millis (default: 300_000 = 5 minutes). */
+        public Builder inhibitionTtlMs(long ms) { this.inhibitionTtlMs = ms; return this; }
+
+        /** Inhibition of Return floor multiplier (default: 0.1). */
+        public Builder inhibitionFloor(float floor) { this.inhibitionFloor = floor; return this; }
+
+        /** ICNU fusion weights for neurodivergent importance computation (default: IcnuWeights.DEFAULT). */
+        public Builder icnuWeights(IcnuWeights w) { this.icnuWeights = w; return this; }
+
+        /** Enable lossless consolidation — pin source episodes during REM sleep (default: false). */
+        public Builder pinSourceEpisodes(boolean pin) { this.pinSourceEpisodes = pin; return this; }
+
+        /** Maximum number of pinned records (default: 10,000). */
+        public Builder pinnedQuota(int quota) { this.pinnedQuota = quota; return this; }
 
         public SpectorMemory build() {
             if (dimensions <= 0 && embeddingProvider != null) {

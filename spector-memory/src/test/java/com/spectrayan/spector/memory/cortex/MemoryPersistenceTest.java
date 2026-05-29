@@ -26,7 +26,7 @@ class MemoryPersistenceTest {
     Path tmpDir;
 
     private CognitiveHeader createHeader(long timestamp, float importance) {
-        return CognitiveHeader.create(timestamp, 0xCAFEL, 1.0f, importance, 0, MemoryType.WORKING);
+        return CognitiveHeader.create(timestamp, 0xCAFEL, 1.0f, importance, (short) 0, MemoryType.WORKING);
     }
 
     private byte[] dummyVec(int len, byte fill) {
@@ -99,7 +99,7 @@ class MemoryPersistenceTest {
         try (var store = new SemanticMemoryStore(VEC_BYTES, CAPACITY, file)) {
             for (int i = 0; i < 3; i++) {
                 var header = CognitiveHeader.create(
-                        System.currentTimeMillis(), 0xBEEFL, 1.0f, 0.7f + i * 0.1f, i, MemoryType.SEMANTIC);
+                        System.currentTimeMillis(), 0xBEEFL, 1.0f, 0.7f + i * 0.1f, (short) i, MemoryType.SEMANTIC);
                 store.store(header);
             }
             assertThat(store.size()).isEqualTo(3);

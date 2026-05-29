@@ -44,7 +44,7 @@ class TombstoneCompactorRebuildTest {
             for (int i = 0; i < 100; i++) {
                 CognitiveHeader header = CognitiveHeader.create(
                         System.currentTimeMillis(), (long) i, 1.0f,
-                        (float) i / 10, 0, MemoryType.EPISODIC);
+                        (float) i / 10, (short) 0, MemoryType.EPISODIC);
                 store.append(header, makeVec(i));
             }
 
@@ -95,7 +95,7 @@ class TombstoneCompactorRebuildTest {
             // Add 10 records with distinctive vectors
             for (int i = 0; i < 10; i++) {
                 CognitiveHeader header = CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC);
+                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC);
                 store.append(header, makeVec(i * 100)); // distinctive seed
             }
 
@@ -132,7 +132,7 @@ class TombstoneCompactorRebuildTest {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             for (int i = 0; i < 10; i++) {
                 CognitiveHeader header = CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC);
+                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC);
                 store.append(header, makeVec(i));
             }
 
@@ -173,7 +173,7 @@ class TombstoneCompactorRebuildTest {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             for (int i = 0; i < 20; i++) {
                 CognitiveHeader header = CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC);
+                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC);
                 store.append(header, makeVec(i));
             }
 
@@ -206,7 +206,7 @@ class TombstoneCompactorRebuildTest {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             for (int i = 0; i < 5; i++) {
                 store.append(CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC), makeVec(i));
+                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC), makeVec(i));
             }
 
             EpisodicPartition partition = store.partitions().getFirst();
@@ -226,7 +226,7 @@ class TombstoneCompactorRebuildTest {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             for (int i = 0; i < 10; i++) {
                 store.append(CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC), makeVec(i));
+                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC), makeVec(i));
             }
 
             EpisodicPartition partition = store.partitions().getFirst();

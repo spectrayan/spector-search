@@ -43,7 +43,7 @@ class EpisodicMmapPersistenceTest {
             for (int i = 0; i < 50; i++) {
                 CognitiveHeader header = CognitiveHeader.create(
                         System.currentTimeMillis(), i * 7L, 1.0f,
-                        (float) i / 10, 0, MemoryType.EPISODIC);
+                        (float) i / 10, (short) 0, MemoryType.EPISODIC);
                 byte[] vec = makeVec(i);
                 store.append(header, vec);
             }
@@ -75,7 +75,7 @@ class EpisodicMmapPersistenceTest {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             for (int i = 0; i < 20; i++) {
                 CognitiveHeader header = CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC);
+                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC);
                 store.append(header, makeVec(i));
             }
 
@@ -106,7 +106,7 @@ class EpisodicMmapPersistenceTest {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             for (int i = 0; i < 10; i++) {
                 store.append(CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC), makeVec(i));
+                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC), makeVec(i));
             }
         }
 
@@ -116,7 +116,7 @@ class EpisodicMmapPersistenceTest {
             // Append more records
             for (int i = 10; i < 20; i++) {
                 store2.append(CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 2.0f, 0, MemoryType.EPISODIC), makeVec(i));
+                        System.currentTimeMillis(), 0L, 1.0f, 2.0f, (short) 0, MemoryType.EPISODIC), makeVec(i));
             }
             assertThat(store2.totalRecords()).isEqualTo(20);
         }
@@ -141,7 +141,7 @@ class EpisodicMmapPersistenceTest {
     void partitionStatesLifecycle() {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             store.append(CognitiveHeader.create(
-                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC), makeVec(0));
+                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC), makeVec(0));
 
             EpisodicMemoryStore.EpisodicPartition partition = store.partitions().getFirst();
             assertThat(partition.state()).isEqualTo(EpisodicMemoryStore.PartitionState.ACTIVE);
@@ -160,7 +160,7 @@ class EpisodicMmapPersistenceTest {
     void partitionFileCreatedOnDisk() throws IOException {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             store.append(CognitiveHeader.create(
-                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC), makeVec(0));
+                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC), makeVec(0));
         }
 
         // Verify partition file exists
@@ -174,7 +174,7 @@ class EpisodicMmapPersistenceTest {
     void recordOffsetAccountsForMetadataHeader() {
         try (EpisodicMemoryStore store = new EpisodicMemoryStore(storePath, VEC_BYTES, CAPACITY)) {
             store.append(CognitiveHeader.create(
-                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC), makeVec(0));
+                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC), makeVec(0));
 
             EpisodicMemoryStore.EpisodicPartition partition = store.partitions().getFirst();
 
@@ -197,7 +197,7 @@ class EpisodicMmapPersistenceTest {
             // Create partition with 10 records
             for (int i = 0; i < 10; i++) {
                 store.append(CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, (float) i, 0, MemoryType.EPISODIC), makeVec(i));
+                        System.currentTimeMillis(), 0L, 1.0f, (float) i, (short) 0, MemoryType.EPISODIC), makeVec(i));
             }
 
             EpisodicMemoryStore.EpisodicPartition old = store.partitions().getFirst();

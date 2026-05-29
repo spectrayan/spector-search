@@ -93,15 +93,15 @@ class PerformanceBenchmarkTest {
     void p8_scoredRecordContainsHeader() {
         CognitiveHeader header = new CognitiveHeader(
                 System.currentTimeMillis(), 0x1234L, 1.0f, 0.8f,
-                42, (short) 5, (byte) 10, (byte) 0);
+                5, (short) 42, (byte) 10, (byte) 0);
 
         ScoredRecord sr = new ScoredRecord(1024L, 0.95f, 7, header);
 
         assertThat(sr.header()).isNotNull();
         assertThat(sr.header().importance()).isEqualTo(0.8f);
-        assertThat(sr.header().recallCount()).isEqualTo((short) 5);
+        assertThat(sr.header().recallCount()).isEqualTo(5);
         assertThat(sr.header().valence()).isEqualTo((byte) 10);
-        assertThat(sr.header().centroidId()).isEqualTo(42);
+        assertThat(sr.header().centroidId()).isEqualTo((short) 42);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -260,7 +260,7 @@ class PerformanceBenchmarkTest {
                         System.currentTimeMillis() - rng.nextInt(86_400_000),
                         rng.nextLong(), 1.0f,
                         0.3f + rng.nextFloat() * 0.7f,
-                        rng.nextInt(100), MemoryType.EPISODIC);
+                        (short) rng.nextInt(100), MemoryType.EPISODIC);
                 layout.writeHeader(seg, offset, header);
 
                 // Write random quantized vector

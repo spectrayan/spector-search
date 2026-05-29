@@ -94,7 +94,7 @@ class WorkingMemoryStoreTest {
                 SynapticTagEncoder.encode(tags),
                 1.0f,
                 1.0f,
-                0,
+                (short) 0,
                 MemoryType.WORKING
         );
     }

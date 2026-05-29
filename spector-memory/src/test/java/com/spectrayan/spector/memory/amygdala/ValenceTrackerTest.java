@@ -19,7 +19,7 @@ class ValenceTrackerTest {
     void reinforceBlends() {
         try (var arena = Arena.ofConfined()) {
             MemorySegment seg = arena.allocate(layout.stride());
-            var header = CognitiveHeader.create(System.currentTimeMillis(), 0L, 1f, 1f, 0, MemoryType.EPISODIC);
+            var header = CognitiveHeader.create(System.currentTimeMillis(), 0L, 1f, 1f, (short) 0, MemoryType.EPISODIC);
             layout.writeHeader(seg, 0, header);
 
             var tracker = new ValenceTracker(0.5f);

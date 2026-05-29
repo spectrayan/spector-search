@@ -41,13 +41,12 @@ public final class LtpReconsolidationListener implements RecallListener {
         for (CognitiveResult r : results) {
             MemoryLocation loc = index.locate(r.id());
             if (loc != null) {
-                MemorySegment segment = tierRouter.segmentFor(loc.type());
-                if (segment != null) {
-                    CognitiveRecordLayout layout = tierRouter.layoutFor(loc.type());
-                    layout.incrementRecallCount(segment, loc.offset());
-                    wal.append(WalEvent.EventType.RECALL_HIT,
-                            index.findIdByOffset(loc.type(), loc.offset()), null);
-                }
+                // Log recall hit for analytics only — recall_count is now managed
+                // exclusively by reinforce() to prevent inflation from passive retrieval.
+                // Previously this incremented recall_count for ALL returned results,
+                // making too many memories "immortal" via reconsolidation.
+                wal.append(WalEvent.EventType.RECALL_HIT,
+                        index.findIdByOffset(loc.type(), loc.offset()), null);
             }
         }
     }

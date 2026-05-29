@@ -5,10 +5,13 @@ import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.TierRouter;
+import com.spectrayan.spector.memory.cortex.WorkingMemoryStore;
 import com.spectrayan.spector.memory.dopamine.FlashbulbPolicy;
 import com.spectrayan.spector.memory.dopamine.SurpriseDetector;
 import com.spectrayan.spector.memory.index.MemoryIndex;
 import com.spectrayan.spector.memory.index.MemoryIndex.MemoryLocation;
+import com.spectrayan.spector.memory.neurodivergent.IcnuWeights;
+import com.spectrayan.spector.memory.neurodivergent.IngestionHints;
 import com.spectrayan.spector.memory.sync.MemoryWal;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
@@ -25,6 +28,8 @@ import org.slf4j.LoggerFactory;
  *   Step  1: Embed text via provider
  *   Step  2: Encode synaptic tags → 64-bit Bloom filter
  *   Step  3: Compute surprise → auto-set importance (Dopamine engine)
+ *            Now uses actual L2 distance to nearest WM record, not vector norm.
+ *   Step 3b: ICNU fusion — blend LLM hints (I/C/U) with native novelty (N)
  *   Step  4: Flashbulb check — extreme surprise gets full fidelity
  *   Step  5: Quantize vector to INT8 via calibrated ScalarQuantizer
  *   Step  6: Build cognitive header
@@ -54,8 +59,38 @@ public final class IngestionPipeline {
     private final MemoryIndex index;
     private final MemoryWal wal;
 
+    // ── Neurodivergent: Novelty routing & ICNU fusion ──
+    private final WorkingMemoryStore workingStore;  // nullable
+    private final IcnuWeights icnuWeights;
+
     /**
-     * Creates an ingestion pipeline with all required subsystems.
+     * Creates an ingestion pipeline with all subsystems including neurodivergent support.
+     *
+     * @param workingStore optional working memory store for ingest-time novelty scan (null = use vector norm fallback)
+     * @param icnuWeights  ICNU fusion weights (null = use {@link IcnuWeights#DEFAULT})
+     */
+    public IngestionPipeline(EmbeddingProvider embeddingProvider,
+                              ScalarQuantizer quantizer,
+                              SurpriseDetector surpriseDetector,
+                              FlashbulbPolicy flashbulbPolicy,
+                              TierRouter tierRouter,
+                              MemoryIndex index,
+                              MemoryWal wal,
+                              WorkingMemoryStore workingStore,
+                              IcnuWeights icnuWeights) {
+        this.embeddingProvider = embeddingProvider;
+        this.quantizer = quantizer;
+        this.surpriseDetector = surpriseDetector;
+        this.flashbulbPolicy = flashbulbPolicy;
+        this.tierRouter = tierRouter;
+        this.index = index;
+        this.wal = wal;
+        this.workingStore = workingStore;
+        this.icnuWeights = icnuWeights != null ? icnuWeights : IcnuWeights.DEFAULT;
+    }
+
+    /**
+     * Creates an ingestion pipeline without neurodivergent support (backward compatible).
      */
     public IngestionPipeline(EmbeddingProvider embeddingProvider,
                               ScalarQuantizer quantizer,
@@ -64,26 +99,31 @@ public final class IngestionPipeline {
                               TierRouter tierRouter,
                               MemoryIndex index,
                               MemoryWal wal) {
-        this.embeddingProvider = embeddingProvider;
-        this.quantizer = quantizer;
-        this.surpriseDetector = surpriseDetector;
-        this.flashbulbPolicy = flashbulbPolicy;
-        this.tierRouter = tierRouter;
-        this.index = index;
-        this.wal = wal;
+        this(embeddingProvider, quantizer, surpriseDetector, flashbulbPolicy,
+                tierRouter, index, wal, null, null);
     }
 
     /**
-     * Executes the full 10-step ingestion pipeline.
+     * Executes the full ingestion pipeline (backward compatible — no ICNU hints).
+     */
+    public void ingest(String id, String text, MemoryType type,
+                        String[] tags, MemorySource source) {
+        ingest(id, text, type, tags, source, null);
+    }
+
+    /**
+     * Executes the full ingestion pipeline with optional ICNU hints.
      *
      * @param id     unique memory identifier
      * @param text   the memory content
      * @param type   cognitive memory tier
      * @param tags   synaptic tag strings
      * @param source provenance source
+     * @param hints  optional LLM-provided ICNU hints (null = novelty-only)
      */
     public void ingest(String id, String text, MemoryType type,
-                        String[] tags, MemorySource source) {
+                        String[] tags, MemorySource source,
+                        IngestionHints hints) {
         // Step 1: Embed text via provider
         var embeddingResult = embeddingProvider.embed(text);
         float[] vector = embeddingResult.vector();
@@ -91,12 +131,45 @@ public final class IngestionPipeline {
         // Step 2: Encode synaptic tags
         long synapticTags = SynapticTagEncoder.encode(tags);
 
+        // Step 5 (early): Quantize vector to INT8 — needed for WM distance scan
+        byte[] quantized = quantizer.encode(vector);
+
         // Step 3: Compute surprise → auto-set importance (Dopamine engine)
-        float l2Norm = computeL2Norm(vector);
-        float importance = surpriseDetector.computeImportance(l2Norm);
+        // FIX: Use actual L2 distance to nearest working memory record,
+        // not vector norm (which is ~1.0 for normalized embeddings).
+        float nearestDist;
+        if (workingStore != null && workingStore.count() > 0) {
+            nearestDist = workingStore.nearestDistance(
+                    vector, quantizer.mins(), quantizer.scales());
+        } else {
+            // Fallback: use L2 norm (original behavior when no WM available)
+            nearestDist = computeL2Norm(vector);
+        }
+
+        float importance;
+        // Step 3b: ICNU fusion — blend LLM hints with native novelty
+        if (hints != null && !hints.isEmpty()) {
+            // Normalize novelty to [0, 1] for ICNU fusion
+            float rawNoveltyImportance = surpriseDetector.computeImportance(nearestDist);
+            float noveltyNorm = Math.clamp(rawNoveltyImportance / 10.0f, 0f, 1f);
+            importance = icnuWeights.fuse(hints, noveltyNorm);
+
+            // Gaming detection logging
+            if (hints.interest() == 1.0f && hints.challenge() == 1.0f
+                    && hints.urgency() == 1.0f) {
+                log.warn("ICNU anomaly: all-max hints for '{}' (I=1.0, C=1.0, U=1.0) — possible gaming", id);
+            }
+
+            log.debug("ICNU: id={}, I={}, C={}, N={}, U={}, fused={}",
+                    id, hints.interest(), hints.challenge(), noveltyNorm,
+                    hints.urgency(), importance);
+        } else {
+            // No hints: pure novelty-based importance (original behavior, but fixed)
+            importance = surpriseDetector.computeImportance(nearestDist);
+        }
 
         // Step 4: Flashbulb check — extreme surprise gets full fidelity
-        double zScore = surpriseDetector.stats().zScore(l2Norm);
+        double zScore = surpriseDetector.stats().zScore(nearestDist);
         var flashbulb = flashbulbPolicy.evaluate(zScore);
         byte flags = SynapticHeaderConstants.withMemoryType((byte) 0, type.ordinal());
         if (flashbulb.isFlashbulb()) {
@@ -104,10 +177,8 @@ public final class IngestionPipeline {
             flags = (byte) (flags | SynapticHeaderConstants.FLAG_PINNED);
         }
 
-        // Step 5: Quantize vector to INT8 via calibrated ScalarQuantizer
-        byte[] quantized = quantizer.encode(vector);
-
         // Step 6: Build cognitive header
+        float l2Norm = computeL2Norm(vector);
         CognitiveHeader header = new CognitiveHeader(
                 System.currentTimeMillis(), synapticTags, l2Norm, importance,
                 0, (short) 0, (byte) 0, flags);
@@ -121,7 +192,7 @@ public final class IngestionPipeline {
         // Step 9: WAL append
         wal.appendRemember(id, quantized);
 
-        log.debug("Ingested '{}' as {} (importance={:.2f}, {} tags, source={})",
+        log.debug("Ingested '{}' as {} (importance={}, {} tags, source={})",
                 id, type, importance, tags.length, source);
     }
 
@@ -134,3 +205,4 @@ public final class IngestionPipeline {
         return (float) Math.sqrt(sum);
     }
 }
+

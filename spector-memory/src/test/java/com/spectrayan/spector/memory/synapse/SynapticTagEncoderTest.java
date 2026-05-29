@@ -99,8 +99,10 @@ class SynapticTagEncoderTest {
             }
         }
 
-        // With 20 tags and k=3, expected FPR is ~2.3%. Allow up to 20% for hash variance.
+        // With 20 tags and k=3 (60 bit positions out of 64), saturation is near-total.
+        // Better hash independence distributes bits more uniformly, which can slightly
+        // increase FPR at high saturation. Allow up to 25% for this extreme case.
         double fpr = falsePositives / 1000.0;
-        assertThat(fpr).as("False positive rate with 20 tags").isLessThan(0.20);
+        assertThat(fpr).as("False positive rate with 20 tags").isLessThan(0.25);
     }
 }

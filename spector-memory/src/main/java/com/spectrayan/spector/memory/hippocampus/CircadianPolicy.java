@@ -21,7 +21,9 @@ public record CircadianPolicy(
         int volumeTrigger,
         Duration timeTrigger,
         float tombstoneThreshold,
-        float decayPruneThreshold
+        float decayPruneThreshold,
+        float interferenceThreshold,
+        float interferenceDecayFactor
 ) {
 
     /** Default policy: reflect after 100 memories or 1 hour, prune below 0.05 decay. */
@@ -29,7 +31,9 @@ public record CircadianPolicy(
             100,
             Duration.ofHours(1),
             0.30f,
-            0.05f
+            0.05f,
+            0.12f,
+            0.7f
     );
 
     /**
@@ -47,6 +51,8 @@ public record CircadianPolicy(
         private Duration timeTrigger = Duration.ofHours(1);
         private float tombstoneThreshold = 0.30f;
         private float decayPruneThreshold = 0.05f;
+        private float interferenceThreshold = 0.12f;
+        private float interferenceDecayFactor = 0.7f;
 
         /**
          * Number of new episodic memories that triggers a reflection cycle.
@@ -80,9 +86,21 @@ public record CircadianPolicy(
             return this;
         }
 
+        /**
+         * L2 distance threshold for near-duplicate interference detection (default: 0.12).
+         * Records within this distance compete during sleep — the older one decays.
+         */
+        public Builder interferenceThreshold(float t) { this.interferenceThreshold = t; return this; }
+
+        /**
+         * Importance decay factor for the older near-duplicate (default: 0.7 = 30% reduction).
+         */
+        public Builder interferenceDecayFactor(float f) { this.interferenceDecayFactor = f; return this; }
+
         public CircadianPolicy build() {
             return new CircadianPolicy(volumeTrigger, timeTrigger,
-                    tombstoneThreshold, decayPruneThreshold);
+                    tombstoneThreshold, decayPruneThreshold,
+                    interferenceThreshold, interferenceDecayFactor);
         }
     }
 }

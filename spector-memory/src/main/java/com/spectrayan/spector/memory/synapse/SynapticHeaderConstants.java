@@ -12,8 +12,8 @@ import java.lang.foreign.ValueLayout;
  *   [8B synaptic_tags]     Offset 8  — 64-bit Bloom filter of contextual markers
  *   [4B exact_norm]        Offset 16 — L2 norm for SIMD distance computation
  *   [4B importance]        Offset 20 — base importance (auto-set by Prediction Error engine)
- *   [4B centroid_id]       Offset 24 — IVF partition routing ID
- *   [2B recall_count]      Offset 28 — atomic LTP reinforcement counter (Reconsolidation)
+ *   [4B recall_count]      Offset 24 — LTP reinforcement counter (4-byte aligned for atomic CAS)
+ *   [2B centroid_id]       Offset 28 — IVF partition routing ID (max 65,535 centroids)
  *   [1B valence]           Offset 30 — signed INT8 emotion/reward (-128 to +127)
  *   [1B flags]             Offset 31 — bit field (tombstone, memory_type, consolidated, pinned)
  * </pre>
@@ -45,8 +45,8 @@ public final class SynapticHeaderConstants {
     public static final long OFFSET_SYNAPTIC_TAGS = 8L;
     public static final long OFFSET_EXACT_NORM    = 16L;
     public static final long OFFSET_IMPORTANCE    = 20L;
-    public static final long OFFSET_CENTROID_ID   = 24L;
-    public static final long OFFSET_RECALL_COUNT  = 28L;
+    public static final long OFFSET_RECALL_COUNT  = 24L;
+    public static final long OFFSET_CENTROID_ID   = 28L;
     public static final long OFFSET_VALENCE       = 30L;
     public static final long OFFSET_FLAGS         = 31L;
 
@@ -55,18 +55,20 @@ public final class SynapticHeaderConstants {
     public static final ValueLayout.OfLong  LAYOUT_SYNAPTIC_TAGS = ValueLayout.JAVA_LONG;
     public static final ValueLayout.OfFloat LAYOUT_EXACT_NORM    = ValueLayout.JAVA_FLOAT;
     public static final ValueLayout.OfFloat LAYOUT_IMPORTANCE    = ValueLayout.JAVA_FLOAT;
-    public static final ValueLayout.OfInt   LAYOUT_CENTROID_ID   = ValueLayout.JAVA_INT;
-    public static final ValueLayout.OfShort LAYOUT_RECALL_COUNT  = ValueLayout.JAVA_SHORT;
+    public static final ValueLayout.OfInt   LAYOUT_RECALL_COUNT  = ValueLayout.JAVA_INT;
+    public static final ValueLayout.OfShort LAYOUT_CENTROID_ID   = ValueLayout.JAVA_SHORT;
     public static final ValueLayout.OfByte  LAYOUT_VALENCE       = ValueLayout.JAVA_BYTE;
     public static final ValueLayout.OfByte  LAYOUT_FLAGS         = ValueLayout.JAVA_BYTE;
 
     // ── Atomic recall_count operations ──
-    // Note: In single-writer memory models (one agent per memory store),
-    // direct segment read-modify-write is safe. For multi-writer scenarios,
-    // use a higher-level synchronization mechanism.
+    // recall_count is now a 4-byte int at offset 24, naturally 4-byte aligned.
+    // This enables atomic CAS/getAndAdd via MemorySegment on JDK 24+.
+    // The widening from short (32K max) to int (2.1B max) also prevents
+    // overflow for long-lived memories under heavy reinforcement.
     //
     // JDK 22+ removed MethodHandles.memorySegmentViewVarHandle().
     // Direct segment accessors (get/set) are used instead.
+    // TODO: When targeting JDK 24+, use MemorySegment.getAndAdd() for atomicity.
 
     // ── Flags bitmasks ──
     /** Bit 0: Record has been logically deleted (tombstoned). */

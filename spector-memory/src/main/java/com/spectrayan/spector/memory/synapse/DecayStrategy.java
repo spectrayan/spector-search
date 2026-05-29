@@ -77,7 +77,7 @@ public final class DecayStrategy {
      * @param recallCount number of times this memory has been recalled
      * @return adjusted bucket index (clamped to 0)
      */
-    public static int adjustForReconsolidation(int rawBucket, short recallCount) {
+    public static int adjustForReconsolidation(int rawBucket, int recallCount) {
         int shift = recallCount / 3;
         return Math.max(0, rawBucket - shift);
     }
@@ -101,7 +101,7 @@ public final class DecayStrategy {
      * @param recallCount number of recalls
      * @return decay multiplier
      */
-    public static float computeDecay(long timestampMs, long nowMs, short recallCount) {
+    public static float computeDecay(long timestampMs, long nowMs, int recallCount) {
         int rawBucket = ageToBucket(timestampMs, nowMs);
         int adjusted = adjustForReconsolidation(rawBucket, recallCount);
         return decay(adjusted);

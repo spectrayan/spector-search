@@ -71,8 +71,8 @@ class ReflectDaemonClusteringTest {
                         (long) (i + 1) * 7, // synaptic tags
                         1.0f,                // exactNorm
                         2.0f,                // importance (> 1.0 so V1 fallback would also promote)
-                        centroidAssignments[i],  // centroid ID
-                        (short) 0,
+                        0,                   // recallCount
+                        (short) centroidAssignments[i],  // centroid ID
                         (byte) 0,
                         SynapticHeaderConstants.withMemoryType((byte) 0, MemoryType.EPISODIC.ordinal())
                 );
@@ -106,8 +106,9 @@ class ReflectDaemonClusteringTest {
                 CognitiveHeader header = new CognitiveHeader(
                         System.currentTimeMillis(),
                         0xFFL, 1.0f, 1.5f,
-                        5, // centroid 5
-                        (short) 0, (byte) 0,
+                        0, // recallCount
+                        (short) 5, // centroid 5
+                        (byte) 0,
                         SynapticHeaderConstants.withMemoryType((byte) 0, MemoryType.EPISODIC.ordinal())
                 );
                 episodicStore.append(header, makeVec(i));
@@ -170,7 +171,7 @@ class ReflectDaemonClusteringTest {
                 CognitiveHeader header = new CognitiveHeader(
                         System.currentTimeMillis(),
                         0L, 1.0f, 1.0f,
-                        1, (short) 0, (byte) 0,
+                        0, (short) 1, (byte) 0,
                         SynapticHeaderConstants.withMemoryType((byte) 0, MemoryType.EPISODIC.ordinal())
                 );
                 episodicStore.append(header, makeVec(i));
@@ -206,7 +207,7 @@ class ReflectDaemonClusteringTest {
                 CognitiveHeader header = new CognitiveHeader(
                         System.currentTimeMillis(),
                         0L, 1.0f, 1.0f,
-                        1, (short) 0, (byte) 0,
+                        0, (short) 1, (byte) 0,
                         SynapticHeaderConstants.withMemoryType((byte) 0, MemoryType.EPISODIC.ordinal())
                 );
                 episodicStore.append(header, makeVec(i));

@@ -1,5 +1,6 @@
 package com.spectrayan.spector.memory.cortex;
 
+import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
@@ -95,6 +96,13 @@ public final class WorkingMemoryStore extends AbstractTierStore {
         return MemoryType.WORKING;
     }
 
+    /**
+     * Returns the number of live records currently in working memory.
+     */
+    public int count() {
+        return count;
+    }
+
     @Override
     public long write(CognitiveHeader header, byte[] quantizedVec) {
         long offset = dataOffset() + (long) writeIndex * layout.stride();
@@ -173,6 +181,45 @@ public final class WorkingMemoryStore extends AbstractTierStore {
         long[] result = new long[matchCount];
         System.arraycopy(matches, 0, result, 0, matchCount);
         return result;
+    }
+
+    /**
+     * Scans the working memory buffer and returns the minimum L2 distance
+     * between the given query vector and any existing live record.
+     *
+     * <h3>Neurodivergent: Dopaminergic Novelty Routing</h3>
+     * <p>Used at ingestion time to compute novelty/surprise. If the new memory
+     * is very close to an existing working memory record (low L2 distance),
+     * it's "boring" — importance is suppressed. If it's far away, it's novel
+     * and importance is spiked (dopamine event).</p>
+     *
+     * <p>Cost: O(capacity × dims) — for a 100-slot WM with 768-dim vectors,
+     * this is ~0.5ms using SIMD acceleration.</p>
+     *
+     * @param queryVector the new embedding vector to compare (float32)
+     * @param mins        per-dimension minimum values from ScalarQuantizer calibration
+     * @param scales      per-dimension scale values from ScalarQuantizer calibration
+     * @return minimum L2 distance to any live record, or {@code Float.MAX_VALUE} if empty
+     */
+    public float nearestDistance(float[] queryVector, float[] mins, float[] scales) {
+        if (count == 0) return Float.MAX_VALUE;
+
+        float minDist = Float.MAX_VALUE;
+        for (int i = 0; i < count; i++) {
+            long offset = dataOffset() + (long) i * layout.stride();
+
+            // Skip tombstoned records
+            byte flags = layout.readFlags(segment, offset);
+            if (SynapticHeaderConstants.isTombstoned(flags)) continue;
+
+            // Compute calibrated L2 distance via SIMD kernel
+            float dist = SimilarityFunction.EUCLIDEAN.computeQuantizedFromSegment(
+                    queryVector, segment, layout.vectorOffset(offset),
+                    mins, scales, layout.quantizedVecBytes());
+
+            if (dist < minDist) minDist = dist;
+        }
+        return minDist;
     }
 }
 

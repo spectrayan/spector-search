@@ -50,8 +50,8 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
         segment.set(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS, header.synapticTags());
         segment.set(LAYOUT_EXACT_NORM,    offset + OFFSET_EXACT_NORM,    header.exactNorm());
         segment.set(LAYOUT_IMPORTANCE,    offset + OFFSET_IMPORTANCE,    header.importance());
-        segment.set(LAYOUT_CENTROID_ID,   offset + OFFSET_CENTROID_ID,   header.centroidId());
         segment.set(LAYOUT_RECALL_COUNT,  offset + OFFSET_RECALL_COUNT,  header.recallCount());
+        segment.set(LAYOUT_CENTROID_ID,   offset + OFFSET_CENTROID_ID,   header.centroidId());
         segment.set(LAYOUT_VALENCE,       offset + OFFSET_VALENCE,       header.valence());
         segment.set(LAYOUT_FLAGS,         offset + OFFSET_FLAGS,         header.flags());
     }
@@ -65,8 +65,8 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
                 segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS),
                 segment.get(LAYOUT_EXACT_NORM,    offset + OFFSET_EXACT_NORM),
                 segment.get(LAYOUT_IMPORTANCE,    offset + OFFSET_IMPORTANCE),
-                segment.get(LAYOUT_CENTROID_ID,   offset + OFFSET_CENTROID_ID),
                 segment.get(LAYOUT_RECALL_COUNT,  offset + OFFSET_RECALL_COUNT),
+                segment.get(LAYOUT_CENTROID_ID,   offset + OFFSET_CENTROID_ID),
                 segment.get(LAYOUT_VALENCE,       offset + OFFSET_VALENCE),
                 segment.get(LAYOUT_FLAGS,         offset + OFFSET_FLAGS)
         );
@@ -112,22 +112,31 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
     /**
      * Reads the recall count at the given record offset.
      */
-    public short readRecallCount(MemorySegment segment, long offset) {
+    public int readRecallCount(MemorySegment segment, long offset) {
         return segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
     }
 
     /**
      * Increments the recall count (reconsolidation / LTP reinforcement).
      *
-     * <p>Uses direct segment read-modify-write. This is safe in single-writer
-     * memory models (one agent per memory store). For multi-writer scenarios,
-     * wrap in external synchronization.</p>
+     * <h3>Semantic Note</h3>
+     * <p>As of the recall_count inflation fix, this is only called from
+     * {@code SpectorMemory.reinforce()}, meaning recall_count represents
+     * "times the agent explicitly found this useful" — not "times it appeared
+     * in search results." This produces more meaningful LTP adjustment.</p>
+     *
+     * <h3>Thread Safety</h3>
+     * <p>Uses a plain read-modify-write on the off-heap segment. {@code recall_count}
+     * is now a 4-byte {@code int} at a 4-byte-aligned offset (24), which enables
+     * atomic CAS/getAndAdd via {@code MemorySegment} on JDK 24+. Until then,
+     * the race condition is harmless: a lost increment shifts a decay bucket by
+     * only 0.33 positions (via {@code DecayStrategy.adjustForReconsolidation}).</p>
      *
      * @return the previous recall count value
      */
-    public short incrementRecallCount(MemorySegment segment, long offset) {
-        short current = segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
-        segment.set(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT, (short) (current + 1));
+    public int incrementRecallCount(MemorySegment segment, long offset) {
+        int current = segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
+        segment.set(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT, current + 1);
         return current;
     }
 
@@ -145,6 +154,18 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
     public void markConsolidated(MemorySegment segment, long offset) {
         byte flags = readFlags(segment, offset);
         segment.set(LAYOUT_FLAGS, offset + OFFSET_FLAGS, (byte) (flags | FLAG_CONSOLIDATED));
+    }
+
+    /**
+     * Sets the pinned flag (memory is exempt from decay and pruning).
+     *
+     * <p>Used by neurodivergent lossless consolidation (SYSTEMATIZER profile)
+     * to pin source episodes during REM sleep, preserving encyclopedic detail
+     * alongside the synthesized semantic fact.</p>
+     */
+    public void pin(MemorySegment segment, long offset) {
+        byte flags = readFlags(segment, offset);
+        segment.set(LAYOUT_FLAGS, offset + OFFSET_FLAGS, (byte) (flags | FLAG_PINNED));
     }
 
     /**
@@ -202,14 +223,17 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
 
     /**
      * Immutable record holding all 32-byte header fields.
+     *
+     * <p>Header v3: recall_count widened to int (4B, atomic-ready at offset 24),
+     * centroid_id narrowed to short (2B at offset 28, max 65,535 centroids).</p>
      */
     public record CognitiveHeader(
             long timestampMs,
             long synapticTags,
             float exactNorm,
             float importance,
-            int centroidId,
-            short recallCount,
+            int recallCount,
+            short centroidId,
             byte valence,
             byte flags
     ) {
@@ -217,10 +241,10 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
          * Creates a new header for initial ingestion with default recall count and valence.
          */
         public static CognitiveHeader create(long timestampMs, long synapticTags, float exactNorm,
-                                              float importance, int centroidId, MemoryType memoryType) {
+                                              float importance, short centroidId, MemoryType memoryType) {
             byte flags = SynapticHeaderConstants.withMemoryType((byte) 0, memoryType.ordinal());
             return new CognitiveHeader(timestampMs, synapticTags, exactNorm, importance,
-                    centroidId, (short) 0, (byte) 0, flags);
+                    0, centroidId, (byte) 0, flags);
         }
     }
 }

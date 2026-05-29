@@ -81,7 +81,7 @@ public final class TombstoneCompactor {
             if (SynapticHeaderConstants.isPinned(flags)) continue;
 
             long timestamp = layout.readTimestamp(segment, offset);
-            short recallCount = layout.readRecallCount(segment, offset);
+            int recallCount = layout.readRecallCount(segment, offset);
             float importance = layout.readImportance(segment, offset);
 
             float decay = DecayStrategy.computeDecay(timestamp, nowMs, recallCount);

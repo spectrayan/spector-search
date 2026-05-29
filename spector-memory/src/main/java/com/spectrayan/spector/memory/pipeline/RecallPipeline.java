@@ -4,10 +4,12 @@ import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.memory.CognitiveResult;
+import com.spectrayan.spector.memory.CognitiveResult.RetrievalMode;
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.RecallOptions;
 import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore.EpisodicPartition;
 import com.spectrayan.spector.memory.cortex.MemorySource;
+import com.spectrayan.spector.memory.cortex.SemanticRecallStrategy;
 import com.spectrayan.spector.memory.cortex.TierRouter;
 import com.spectrayan.spector.memory.habituation.HabituationPenalty;
 import com.spectrayan.spector.memory.index.MemoryIndex;
@@ -21,6 +23,7 @@ import com.spectrayan.spector.memory.synapse.CognitiveScorer;
 import com.spectrayan.spector.memory.synapse.CognitiveScorer.ScoredRecord;
 import com.spectrayan.spector.memory.synapse.DecayStrategy;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
+import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +34,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.spectrayan.spector.memory.cortex.EpisodicMemoryStore.EpisodicPartition.METADATA_HEADER_BYTES;
 
@@ -78,8 +82,18 @@ public final class RecallPipeline {
     private final MemoryWal wal;
     private final float[] calibrationMins;
     private final float[] calibrationScales;
+    private final SemanticRecallStrategy semanticRecallStrategy; // nullable
 
     private final List<RecallListener> listeners = new ArrayList<>();
+
+    // ── Neurodivergent: Lateral feedback tracking ──
+    // Maps memoryId → RetrievalMode for the most recent recall.
+    // Used by SpectorMemory.reinforce()/suppress() to feed LateralEvaluator.
+    // Entries expire implicitly via size cap (oldest evicted at 2000).
+    private final ConcurrentHashMap<String, RetrievalMode> recentRetrievalModes
+            = new ConcurrentHashMap<>();
+    private static final int RETRIEVAL_MODE_CACHE_MAX = 2000;
+    private RecallOptions lastRecallOptions; // for detecting hyperfocus mode
 
     /**
      * Creates a recall pipeline with all required subsystems.
@@ -93,6 +107,26 @@ public final class RecallPipeline {
                            MemoryWal wal,
                            float[] calibrationMins,
                            float[] calibrationScales) {
+        this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
+                prospectiveScheduler, wal, calibrationMins, calibrationScales, null);
+    }
+
+    /**
+     * Creates a recall pipeline with optional fused semantic recall.
+     *
+     * @param semanticRecallStrategy nullable — when provided, semantic recall uses
+     *                                HNSW vector search fused with cognitive scoring
+     */
+    public RecallPipeline(EmbeddingProvider embeddingProvider,
+                           TierRouter tierRouter,
+                           MemoryIndex index,
+                           SuppressionSet suppressionSet,
+                           HabituationPenalty habituationPenalty,
+                           ProspectiveScheduler prospectiveScheduler,
+                           MemoryWal wal,
+                           float[] calibrationMins,
+                           float[] calibrationScales,
+                           SemanticRecallStrategy semanticRecallStrategy) {
         this.embeddingProvider = embeddingProvider;
         this.tierRouter = tierRouter;
         this.index = index;
@@ -102,6 +136,7 @@ public final class RecallPipeline {
         this.wal = wal;
         this.calibrationMins = calibrationMins;
         this.calibrationScales = calibrationScales;
+        this.semanticRecallStrategy = semanticRecallStrategy;
     }
 
     /**
@@ -125,6 +160,7 @@ public final class RecallPipeline {
         if (options == null) options = RecallOptions.DEFAULT;
 
         log.debug("Recall query: '{}', topK={}", queryText, options.topK());
+        this.lastRecallOptions = options; // for RetrievalMode detection in headerToResult
 
         // Step 1: Embed query
         float[] queryVector = embeddingProvider.embed(queryText).vector();
@@ -166,13 +202,15 @@ public final class RecallPipeline {
         // Step 4: Filter suppressed memories (inhibition)
         allResults.removeIf(r -> suppressionSet.isSuppressed(r.id()));
 
-        // Step 5: Apply habituation penalty (anti-filter-bubble)
+        // Step 5: Apply habituation penalty + inhibition of return (anti-filter-bubble)
         for (int i = 0; i < allResults.size(); i++) {
             CognitiveResult r = allResults.get(i);
             float habPenalty = habituationPenalty.recordAndComputePenalty(r.id());
-            if (habPenalty < 1.0f) {
+            float iorPenalty = habituationPenalty.computeInhibitionOfReturn(r.id(), nowMs);
+            float combinedPenalty = Math.min(habPenalty, iorPenalty); // stronger suppression wins
+            if (combinedPenalty < 1.0f) {
                 allResults.set(i, new CognitiveResult(
-                        r.id(), r.text(), r.score() * habPenalty, r.importance(), r.ageDays(),
+                        r.id(), r.text(), r.score() * combinedPenalty, r.importance(), r.ageDays(),
                         r.recallCount(), r.valence(), r.memoryType(), r.source(),
                         r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay()));
             }
@@ -198,7 +236,24 @@ public final class RecallPipeline {
             }
         }
 
+        // Step 8: Record recall timestamps for Inhibition of Return
+        long recallTs = System.currentTimeMillis();
+        for (CognitiveResult r : allResults) {
+            habituationPenalty.recordRecall(r.id(), recallTs);
+        }
+
         log.debug("Recall returned {} results for '{}'", allResults.size(), queryText);
+
+        // Cache retrieval modes for lateral feedback (reinforce/suppress)
+        if (recentRetrievalModes.size() > RETRIEVAL_MODE_CACHE_MAX) {
+            recentRetrievalModes.clear(); // simple eviction — reset when full
+        }
+        for (CognitiveResult r : allResults) {
+            if (r.id() != null) {
+                recentRetrievalModes.put(r.id(), r.retrievalMode());
+            }
+        }
+
         return allResults;
     }
 
@@ -231,12 +286,18 @@ public final class RecallPipeline {
             }
         }
 
-        // Semantic Memory scan (header-only slab)
+        // Semantic Memory — fused HNSW+cognitive if strategy available, else header slab
         if (TierRouter.shouldScan(MemoryType.SEMANTIC, targetTypes)
                 && tierRouter.semantic().size() > 0) {
-            tasks.add(() -> scoreHeaderSlabToList(
-                    tierRouter.semantic().headerSlab(), tierRouter.semantic().size(),
-                    tierRouter.semantic().layout(), queryVector, options, nowMs));
+            if (semanticRecallStrategy != null && semanticRecallStrategy.isAvailable()) {
+                // Fused pipeline: HNSW search → cognitive re-ranking
+                tasks.add(() -> semanticRecallStrategy.recall(queryVector, options, nowMs));
+            } else {
+                // Fallback: header-only slab scan (with tag/valence filters)
+                tasks.add(() -> scoreHeaderSlabToList(
+                        tierRouter.semantic().headerSlab(), tierRouter.semantic().size(),
+                        tierRouter.semantic().layout(), queryVector, options, nowMs));
+            }
         }
 
         // Procedural Memory scan
@@ -273,9 +334,13 @@ public final class RecallPipeline {
         }
         if (TierRouter.shouldScan(MemoryType.SEMANTIC, targetTypes)
                 && tierRouter.semantic().size() > 0) {
-            results.addAll(scoreHeaderSlabToList(tierRouter.semantic().headerSlab(),
-                    tierRouter.semantic().size(), tierRouter.semantic().layout(),
-                    queryVector, options, nowMs));
+            if (semanticRecallStrategy != null && semanticRecallStrategy.isAvailable()) {
+                results.addAll(semanticRecallStrategy.recall(queryVector, options, nowMs));
+            } else {
+                results.addAll(scoreHeaderSlabToList(tierRouter.semantic().headerSlab(),
+                        tierRouter.semantic().size(), tierRouter.semantic().layout(),
+                        queryVector, options, nowMs));
+            }
         }
         if (TierRouter.shouldScan(MemoryType.PROCEDURAL, targetTypes)
                 && tierRouter.procedural().size() > 0) {
@@ -309,6 +374,11 @@ public final class RecallPipeline {
     private List<CognitiveResult> scoreHeaderSlabToList(MemorySegment headerSlab, int recordCount,
                                                           CognitiveRecordLayout layout, float[] queryVector,
                                                           RecallOptions options, long nowMs) {
+        long queryTagMask = options.synapticTagMask();
+        byte minValence = options.minValence();
+        byte maxValence = options.maxValence();
+        float tagRelevanceBoost = options.tagRelevanceBoost();
+
         List<CognitiveResult> results = new ArrayList<>();
         for (int i = 0; i < recordCount; i++) {
             long offset = (long) i * SynapticHeaderConstants.HEADER_BYTES;
@@ -317,16 +387,29 @@ public final class RecallPipeline {
             byte flags = header.flags();
             if (SynapticHeaderConstants.isTombstoned(flags)) continue;
 
+            // Phase 2: Synaptic tag gating (was missing for semantic tier)
+            if (queryTagMask != 0) {
+                if ((header.synapticTags() & queryTagMask) == 0) continue; // zero overlap → skip
+            }
+
+            // Phase 3: Valence filter (was missing for semantic tier)
+            byte valence = header.valence();
+            if (valence < minValence || valence > maxValence) continue;
+
             float importance = header.importance();
             if (importance < options.minImportance()) continue;
 
             long timestamp = header.timestampMs();
-            short recallCount = header.recallCount();
+            int recallCount = header.recallCount();
             int rawBucket = DecayStrategy.ageToBucket(timestamp, nowMs);
             int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, recallCount);
             float decay = DecayStrategy.decay(adjusted);
 
-            float score = options.beta() * importance * decay;
+            // Score with weighted tag relevance boost (consistent with CognitiveScorer)
+            float baseScore = options.beta() * importance * decay;
+            float tagOverlap = SynapticTagEncoder.overlapRatio(header.synapticTags(), queryTagMask);
+            float score = baseScore * (1.0f + tagOverlap * tagRelevanceBoost);
+
             results.add(headerToResult(new ScoredRecord(offset, score, i, header), header, MemoryType.SEMANTIC));
         }
         return results;
@@ -346,11 +429,43 @@ public final class RecallPipeline {
         float rawDecay = DecayStrategy.decay(rawBucket);
         float ltpDecay = DecayStrategy.decay(adjusted);
 
+        // Determine retrieval mode from scorer metadata
+        RetrievalMode mode;
+        if (sr.lateral()) {
+            mode = RetrievalMode.LATERAL;
+        } else if (lastRecallOptions != null && lastRecallOptions.hyperfocusMask() != 0) {
+            mode = RetrievalMode.HYPERFOCUS;
+        } else {
+            mode = RetrievalMode.STANDARD;
+        }
+
         return new CognitiveResult(
                 id != null ? id : "unknown-" + sr.index(),
                 text, sr.score(), header.importance(), ageDays,
                 header.recallCount(), header.valence(), type, source,
-                tags, rawDecay, ltpDecay
+                tags, rawDecay, ltpDecay, mode
         );
+    }
+
+    /**
+     * Returns whether the given memory was returned as a lateral result
+     * in a recent recall.
+     *
+     * @param memoryId the memory ID to check
+     * @return true if the memory was a lateral result, false otherwise
+     */
+    public boolean wasLateral(String memoryId) {
+        RetrievalMode mode = recentRetrievalModes.get(memoryId);
+        return mode == RetrievalMode.LATERAL;
+    }
+
+    /**
+     * Returns the retrieval mode for a recently recalled memory.
+     *
+     * @param memoryId the memory ID to check
+     * @return the retrieval mode, or null if not in cache
+     */
+    public RetrievalMode retrievalModeOf(String memoryId) {
+        return recentRetrievalModes.get(memoryId);
     }
 }

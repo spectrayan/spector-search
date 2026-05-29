@@ -46,7 +46,7 @@ public final class CrdtMergeStrategy {
             long timestampMs,
             long synapticTags,
             float importance,
-            short recallCount,
+            int recallCount,
             byte valence,
             byte flags
     ) {}
@@ -58,7 +58,7 @@ public final class CrdtMergeStrategy {
             long timestampMs,
             long synapticTags,
             float importance,
-            short recallCount,
+            int recallCount,
             byte valence,
             byte flags
     ) {}
@@ -77,7 +77,7 @@ public final class CrdtMergeStrategy {
         long mergedTimestamp = Math.max(local.timestampMs(), remote.timestampMs());
         long mergedTags = local.synapticTags() | remote.synapticTags(); // OR-merge
         float mergedImportance = Math.max(local.importance(), remote.importance()); // Max-merge
-        short mergedRecallCount = (short) Math.max(local.recallCount(), remote.recallCount()); // Max-merge
+        int mergedRecallCount = Math.max(local.recallCount(), remote.recallCount()); // Max-merge
         byte mergedValence = remoteIsNewer ? remote.valence() : local.valence(); // LWW
 
         // Flag merge: tombstone and consolidated/pinned are OR-merged

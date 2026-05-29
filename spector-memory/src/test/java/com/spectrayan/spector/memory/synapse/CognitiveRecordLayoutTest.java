@@ -35,8 +35,8 @@ class CognitiveRecordLayoutTest {
             long timestamp = System.currentTimeMillis();
             long tags = SynapticTagEncoder.encode("java", "performance");
             var header = new CognitiveRecordLayout.CognitiveHeader(
-                    timestamp, tags, 1.5f, 0.8f, 42,
-                    (short) 7, (byte) -50, (byte) 0x12
+                    timestamp, tags, 1.5f, 0.8f, 7,
+                    (short) 42, (byte) -50, (byte) 0x12
             );
 
             layout.writeHeader(segment, 0, header);
@@ -46,8 +46,8 @@ class CognitiveRecordLayoutTest {
             assertThat(readBack.synapticTags()).isEqualTo(tags);
             assertThat(readBack.exactNorm()).isEqualTo(1.5f);
             assertThat(readBack.importance()).isEqualTo(0.8f);
-            assertThat(readBack.centroidId()).isEqualTo(42);
-            assertThat(readBack.recallCount()).isEqualTo((short) 7);
+            assertThat(readBack.centroidId()).isEqualTo((short) 42);
+            assertThat(readBack.recallCount()).isEqualTo(7);
             assertThat(readBack.valence()).isEqualTo((byte) -50);
             assertThat(readBack.flags()).isEqualTo((byte) 0x12);
         }
@@ -61,7 +61,7 @@ class CognitiveRecordLayoutTest {
             long timestamp = 12345L;
             long tags = 0xDEAD_BEEF_CAFE_BABEL;
             var header = CognitiveRecordLayout.CognitiveHeader.create(
-                    timestamp, tags, 2.0f, 5.0f, 99, MemoryType.SEMANTIC
+                    timestamp, tags, 2.0f, 5.0f, (short) 99, MemoryType.SEMANTIC
             );
 
             layout.writeHeader(segment, 0, header);
@@ -80,7 +80,7 @@ class CognitiveRecordLayoutTest {
             MemorySegment segment = arena.allocate(layout.stride());
 
             var header = CognitiveRecordLayout.CognitiveHeader.create(
-                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC
+                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC
             );
             layout.writeHeader(segment, 0, header);
 
@@ -88,14 +88,14 @@ class CognitiveRecordLayoutTest {
             assertThat(layout.readRecallCount(segment, 0)).isZero();
 
             // Increment and check return value (old value)
-            short old1 = layout.incrementRecallCount(segment, 0);
+            int old1 = layout.incrementRecallCount(segment, 0);
             assertThat(old1).isZero();
-            assertThat(layout.readRecallCount(segment, 0)).isEqualTo((short) 1);
+            assertThat(layout.readRecallCount(segment, 0)).isEqualTo(1);
 
             // Increment again
-            short old2 = layout.incrementRecallCount(segment, 0);
-            assertThat(old2).isEqualTo((short) 1);
-            assertThat(layout.readRecallCount(segment, 0)).isEqualTo((short) 2);
+            int old2 = layout.incrementRecallCount(segment, 0);
+            assertThat(old2).isEqualTo(1);
+            assertThat(layout.readRecallCount(segment, 0)).isEqualTo(2);
         }
     }
 
@@ -105,7 +105,7 @@ class CognitiveRecordLayoutTest {
             MemorySegment segment = arena.allocate(layout.stride());
 
             var header = CognitiveRecordLayout.CognitiveHeader.create(
-                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC
+                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC
             );
             layout.writeHeader(segment, 0, header);
 
@@ -123,7 +123,7 @@ class CognitiveRecordLayoutTest {
             MemorySegment segment = arena.allocate(layout.stride());
 
             var header = CognitiveRecordLayout.CognitiveHeader.create(
-                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, MemoryType.EPISODIC
+                    System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, MemoryType.EPISODIC
             );
             layout.writeHeader(segment, 0, header);
 
@@ -140,7 +140,7 @@ class CognitiveRecordLayoutTest {
 
             for (MemoryType type : MemoryType.values()) {
                 var header = CognitiveRecordLayout.CognitiveHeader.create(
-                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, 0, type
+                        System.currentTimeMillis(), 0L, 1.0f, 1.0f, (short) 0, type
                 );
                 layout.writeHeader(segment, 0, header);
 
@@ -159,7 +159,7 @@ class CognitiveRecordLayoutTest {
 
             long initialTags = SynapticTagEncoder.encode("java");
             var header = CognitiveRecordLayout.CognitiveHeader.create(
-                    System.currentTimeMillis(), initialTags, 1.0f, 1.0f, 0, MemoryType.SEMANTIC
+                    System.currentTimeMillis(), initialTags, 1.0f, 1.0f, (short) 0, MemoryType.SEMANTIC
             );
             layout.writeHeader(segment, 0, header);
 

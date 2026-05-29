@@ -27,7 +27,15 @@ public final class SuppressionSet {
 
     private static final Logger log = LoggerFactory.getLogger(SuppressionSet.class);
 
+    /** String ID based suppression (primary). */
     private final Set<String> suppressed = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Offset-indexed suppression for hot-loop filtering.
+     * Key = packed {@code (type_ordinal << 48 | offset)} for O(1) lookup
+     * during scoring without requiring String ID resolution.
+     */
+    private final Set<Long> suppressedOffsets = ConcurrentHashMap.newKeySet();
 
     /**
      * Suppresses a memory by ID for the remainder of this session.
@@ -46,6 +54,33 @@ public final class SuppressionSet {
      */
     public void suppress(String memoryId) {
         suppress(memoryId, null);
+    }
+
+    /**
+     * Registers a suppressed memory's offset for hot-loop filtering.
+     *
+     * <p>Call this after {@link #suppress(String)} when the memory's
+     * location is known, to enable pre-scoring suppression checks.</p>
+     *
+     * @param typeOrdinal the memory type ordinal (e.g., MemoryType.EPISODIC.ordinal())
+     * @param offset      the byte offset of the record in its tier segment
+     */
+    public void registerOffset(int typeOrdinal, long offset) {
+        suppressedOffsets.add(packOffset(typeOrdinal, offset));
+    }
+
+    /**
+     * Checks if a memory at the given offset is suppressed.
+     *
+     * <p>O(1) lookup for use in scoring hot loops — avoids the String ID
+     * lookup required by {@link #isSuppressed(String)}.</p>
+     *
+     * @param typeOrdinal the memory type ordinal
+     * @param offset      the byte offset of the record
+     * @return true if the memory at this offset is suppressed
+     */
+    public boolean isSuppressedByOffset(int typeOrdinal, long offset) {
+        return suppressedOffsets.contains(packOffset(typeOrdinal, offset));
     }
 
     /**
@@ -88,6 +123,13 @@ public final class SuppressionSet {
     public void clear() {
         int count = suppressed.size();
         suppressed.clear();
+        suppressedOffsets.clear();
         log.debug("Suppression set cleared ({} entries)", count);
+    }
+
+    // ── Internal ──
+
+    private static long packOffset(int typeOrdinal, long offset) {
+        return ((long) typeOrdinal << 48) | (offset & 0x0000_FFFF_FFFF_FFFFL);
     }
 }

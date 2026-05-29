@@ -56,7 +56,14 @@ public final class SynapticTagEncoder {
     public static long encodeTag(String tag) {
         long h = murmurHash64(tag);
         long h1 = h;
-        long h2 = h >>> 32 | h << 32; // swap halves for second hash
+        // Golden ratio hash — produces an independent second hash without
+        // a separate hash function call. The half-swap (h >>> 32 | h << 32)
+        // previously used here is a weak construction that doesn't provide
+        // true independence. This uses φ * 2^64 multiplication + avalanche.
+        long h2 = h * 0x9e3779b97f4a7c15L;
+        h2 ^= h2 >>> 33;
+        h2 *= 0xc4ceb9fe1a85ec53L;
+        h2 ^= h2 >>> 33;
 
         long filter = 0L;
         for (int i = 0; i < K; i++) {
@@ -97,6 +104,30 @@ public final class SynapticTagEncoder {
      */
     public static int bitCount(long filter) {
         return Long.bitCount(filter);
+    }
+
+    /**
+     * Computes the overlap ratio between a record's tags and a query mask.
+     *
+     * <p>Returns the fraction of query tag bits that are also set in the record's
+     * Bloom filter. Used by {@code CognitiveScorer} for weighted tag relevance —
+     * partial matches score proportionally lower than full matches.</p>
+     *
+     * <ul>
+     *   <li>{@code 1.0} — all query bits present (full match)</li>
+     *   <li>{@code 0.5} — half the query bits present (partial match)</li>
+     *   <li>{@code 0.0} — no overlap (should have been skipped in Phase 2)</li>
+     * </ul>
+     *
+     * @param recordTags the record's 64-bit Bloom filter
+     * @param queryMask  the query's required tag bits
+     * @return overlap ratio in [0.0, 1.0], or 1.0 if queryMask is 0 (no filter)
+     */
+    public static float overlapRatio(long recordTags, long queryMask) {
+        if (queryMask == 0) return 1.0f;
+        int queryBits = Long.bitCount(queryMask);
+        int matchedBits = Long.bitCount(recordTags & queryMask);
+        return (float) matchedBits / queryBits;
     }
 
     // ── MurmurHash3-inspired 64-bit hash ──

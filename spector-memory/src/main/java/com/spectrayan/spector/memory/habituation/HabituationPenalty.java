@@ -34,20 +34,44 @@ public final class HabituationPenalty {
     /** Per-memory return counts for this session. */
     private final ConcurrentHashMap<String, AtomicInteger> returnCounts = new ConcurrentHashMap<>();
 
+    // ── Inhibition of Return (TTL-based refractory period) ──
+
+    /** Per-memory last-recall timestamps for IOR penalty. */
+    private final ConcurrentHashMap<String, Long> lastRecallTimestamps = new ConcurrentHashMap<>();
+
+    /** Inhibition of Return TTL in milliseconds (default: 5 minutes). */
+    private final long inhibitionTtlMs;
+
+    /** Minimum multiplier during IOR (default: 0.1 = 90% suppression). */
+    private final float inhibitionFloor;
+
     /**
      * Creates a habituation penalty calculator.
      *
      * @param decayRate habituation strength (default: 0.2, higher = faster habituation)
+     * @param inhibitionTtlMs IOR refractory period in millis (default: 300_000 = 5 minutes)
+     * @param inhibitionFloor minimum IOR multiplier (default: 0.1)
      */
-    public HabituationPenalty(float decayRate) {
+    public HabituationPenalty(float decayRate, long inhibitionTtlMs, float inhibitionFloor) {
         this.decayRate = decayRate;
+        this.inhibitionTtlMs = inhibitionTtlMs;
+        this.inhibitionFloor = inhibitionFloor;
     }
 
     /**
-     * Creates a habituation penalty with default rate (0.2).
+     * Creates a habituation penalty calculator with default IOR settings.
+     *
+     * @param decayRate habituation strength (default: 0.2, higher = faster habituation)
+     */
+    public HabituationPenalty(float decayRate) {
+        this(decayRate, 300_000L, 0.1f);
+    }
+
+    /**
+     * Creates a habituation penalty with all defaults (decayRate=0.2, TTL=5min, floor=0.1).
      */
     public HabituationPenalty() {
-        this(0.2f);
+        this(0.2f, 300_000L, 0.1f);
     }
 
     /**
@@ -92,10 +116,75 @@ public final class HabituationPenalty {
     }
 
     /**
-     * Clears all habituation data (typically at session end).
+     * Clears all habituation data and IOR timestamps (typically at session end).
      */
     public void clear() {
         returnCounts.clear();
+        lastRecallTimestamps.clear();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // INHIBITION OF RETURN — TTL-based refractory period
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Records a recall timestamp for Inhibition of Return tracking.
+     *
+     * <p>Call this after a memory is returned in a recall result. The timestamp
+     * is used to compute the IOR penalty on subsequent recalls.</p>
+     *
+     * @param memoryId the recalled memory's ID
+     * @param nowMs    current time in epoch millis
+     */
+    public void recordRecall(String memoryId, long nowMs) {
+        lastRecallTimestamps.put(memoryId, nowMs);
+    }
+
+    /**
+     * Computes the Inhibition of Return penalty for a memory.
+     *
+     * <h3>Biological Analog: Refractory Period</h3>
+     * <p>After a neuron fires, it enters a refractory period where it cannot
+     * fire again at full strength. This prevents the brain from getting stuck
+     * in activation loops. The penalty recovers linearly from {@code inhibitionFloor}
+     * to {@code 1.0} over the TTL duration.</p>
+     *
+     * <pre>
+     *   Just recalled → 0.1x (strong suppression)
+     *   2.5 min later → 0.55x (recovering)
+     *   5+ min later  → 1.0x (fully recovered)
+     * </pre>
+     *
+     * @param memoryId the memory to check
+     * @param nowMs    current time in epoch millis
+     * @return multiplier in [{@code inhibitionFloor}, 1.0]
+     */
+    public float computeInhibitionOfReturn(String memoryId, long nowMs) {
+        Long lastRecall = lastRecallTimestamps.get(memoryId);
+        if (lastRecall == null) return 1.0f;
+
+        long ageMs = nowMs - lastRecall;
+        if (ageMs >= inhibitionTtlMs) {
+            lastRecallTimestamps.remove(memoryId); // cleanup expired
+            return 1.0f;
+        }
+
+        // Linear recovery: inhibitionFloor → 1.0 over TTL
+        return inhibitionFloor + (1.0f - inhibitionFloor) * ((float) ageMs / inhibitionTtlMs);
+    }
+
+    /**
+     * Returns the IOR TTL in milliseconds.
+     */
+    public long inhibitionTtlMs() {
+        return inhibitionTtlMs;
+    }
+
+    /**
+     * Returns the number of memories with active IOR timestamps.
+     */
+    public int iorTrackedCount() {
+        return lastRecallTimestamps.size();
     }
 
     /**

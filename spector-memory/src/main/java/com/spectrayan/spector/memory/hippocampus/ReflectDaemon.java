@@ -75,6 +75,11 @@ public final class ReflectDaemon {
     private final EmbeddingProvider embeddingProvider;
     private final int minClusterSize;
 
+    // ── Neurodivergent: Lossless Consolidation ──
+    private final boolean pinSourceEpisodes;
+    private final int pinnedQuota;
+    private int pinnedCount = 0; // tracks pinned records across cycles
+
     /**
      * Creates a ReflectDaemon with full V3 capabilities.
      *
@@ -86,13 +91,25 @@ public final class ReflectDaemon {
      */
     public ReflectDaemon(CircadianPolicy policy, CentroidRouter centroidRouter,
                           TextGenerationProvider textGenerator, EmbeddingProvider embeddingProvider,
-                          int minClusterSize) {
+                          int minClusterSize, boolean pinSourceEpisodes, int pinnedQuota) {
         this.policy = policy;
         this.compactor = new TombstoneCompactor(policy.tombstoneThreshold());
         this.centroidRouter = centroidRouter;
         this.textGenerator = textGenerator;
         this.embeddingProvider = embeddingProvider;
         this.minClusterSize = minClusterSize;
+        this.pinSourceEpisodes = pinSourceEpisodes;
+        this.pinnedQuota = pinnedQuota;
+    }
+
+    /**
+     * Creates a ReflectDaemon with full V3 capabilities (no lossless consolidation).
+     */
+    public ReflectDaemon(CircadianPolicy policy, CentroidRouter centroidRouter,
+                          TextGenerationProvider textGenerator, EmbeddingProvider embeddingProvider,
+                          int minClusterSize) {
+        this(policy, centroidRouter, textGenerator, embeddingProvider,
+                minClusterSize, false, 10_000);
     }
 
     /**
@@ -289,6 +306,13 @@ public final class ReflectDaemon {
             int centroidId = entry.getKey();
             log.debug("REM: Processing cluster {} ({} records)", centroidId, clusterIndices.size());
 
+            // Step 2.5: Proactive Interference — decay near-duplicates within cluster
+            int degraded = applyProactiveInterference(partition, clusterIndices);
+            if (degraded > 0) {
+                log.debug("REM: Cluster {} — {} near-duplicates had importance decayed",
+                        centroidId, degraded);
+            }
+
             // Step 3: Compute common synaptic tags (bitmap AND across cluster)
             long commonTags = ~0L; // start with all bits set
             float maxImportance = -1f;
@@ -338,6 +362,13 @@ public final class ReflectDaemon {
                 for (int idx : clusterIndices) {
                     long offset = partition.recordOffset(idx);
                     layout.markConsolidated(segment, offset);
+
+                    // Neurodivergent: Lossless consolidation — pin source episodes
+                    // to preserve encyclopedic detail alongside the semantic fact.
+                    if (pinSourceEpisodes && pinnedCount < pinnedQuota) {
+                        layout.pin(segment, offset);
+                        pinnedCount++;
+                    }
                 }
 
                 log.debug("REM: Cluster {} consolidated ({} records → 1 semantic fact, importance={})",
@@ -346,6 +377,110 @@ public final class ReflectDaemon {
         }
 
         return totalPromoted;
+    }
+
+    // ── Proactive Interference ──
+
+    /** Maximum records to compare per cluster (bounds O(N²) cost). */
+    private static final int MAX_INTERFERENCE_CANDIDATES = 20;
+
+    /**
+     * Proactive Interference — competitive degradation of near-duplicate memories.
+     *
+     * <h3>Biological Analog</h3>
+     * <p>New memories overwrite old similar ones (retroactive interference). In the
+     * brain, similar memories compete for the same neural pathways. The newer,
+     * more recently encoded memory wins, and the older one fades.</p>
+     *
+     * <h3>Implementation</h3>
+     * <p>Within each centroid cluster, finds pairs of records within
+     * {@code interferenceThreshold} L2 distance. For each pair, the older
+     * record's importance is multiplied by {@code interferenceDecayFactor}
+     * (default: 0.7 = 30% reduction per cycle). This is less violent than
+     * halving recall_count — the old memory fades naturally via importance
+     * decay rather than losing its entire recall history.</p>
+     *
+     * <h3>Performance</h3>
+     * <p>Caps comparisons at the top-{@value #MAX_INTERFERENCE_CANDIDATES}
+     * records by importance (descending) to bound the O(N²/cluster) cost.
+     * For a cluster of 50 records, this reduces comparisons from 1,225 to 190.</p>
+     *
+     * @param partition       the episodic partition being processed
+     * @param clusterIndices  indices of records in this centroid cluster
+     * @return count of records whose importance was decayed
+     */
+    private int applyProactiveInterference(EpisodicPartition partition,
+                                            List<Integer> clusterIndices) {
+        if (clusterIndices.size() < 2) return 0;
+
+        CognitiveRecordLayout layout = partition.layout();
+        var segment = partition.segment();
+        float threshold = policy.interferenceThreshold();
+        float decayFactor = policy.interferenceDecayFactor();
+
+        // Select top candidates by importance (cap at MAX_INTERFERENCE_CANDIDATES)
+        List<Integer> candidates;
+        if (clusterIndices.size() <= MAX_INTERFERENCE_CANDIDATES) {
+            candidates = clusterIndices;
+        } else {
+            // Sort a copy by importance descending, take top N
+            candidates = new ArrayList<>(clusterIndices);
+            candidates.sort((a, b) -> {
+                float ia = layout.readImportance(segment, partition.recordOffset(a));
+                float ib = layout.readImportance(segment, partition.recordOffset(b));
+                return Float.compare(ib, ia); // descending
+            });
+            candidates = candidates.subList(0, MAX_INTERFERENCE_CANDIDATES);
+        }
+
+        int degradedCount = 0;
+
+        for (int i = 0; i < candidates.size(); i++) {
+            long offsetA = partition.recordOffset(candidates.get(i));
+            CognitiveHeader headerA = layout.readHeader(segment, offsetA);
+            if (SynapticHeaderConstants.isTombstoned(headerA.flags())) continue;
+
+            for (int j = i + 1; j < candidates.size(); j++) {
+                long offsetB = partition.recordOffset(candidates.get(j));
+                CognitiveHeader headerB = layout.readHeader(segment, offsetB);
+                if (SynapticHeaderConstants.isTombstoned(headerB.flags())) continue;
+
+                // Compute L2 distance between quantized vectors.
+                // Read A's quantized bytes → dequantize to float[] → compare against B.
+                // This allocates a float[] per pair, acceptable since this runs during sleep.
+                int vecBytes = layout.quantizedVecBytes();
+                float[] vecA = new float[vecBytes];
+                long vecOffsetA = layout.vectorOffset(offsetA);
+                for (int d = 0; d < vecBytes; d++) {
+                    vecA[d] = (segment.get(java.lang.foreign.ValueLayout.JAVA_BYTE, vecOffsetA + d) & 0xFF);
+                }
+                // Use identity calibration (both vectors quantized the same way)
+                float[] identityMins = com.spectrayan.spector.memory.synapse.IdentityCalibration.mins(vecBytes);
+                float[] identityScales = com.spectrayan.spector.memory.synapse.IdentityCalibration.scales(vecBytes);
+                float dist = com.spectrayan.spector.core.similarity.SimilarityFunction.EUCLIDEAN
+                        .computeQuantizedFromSegment(vecA, segment, layout.vectorOffset(offsetB),
+                                identityMins, identityScales, vecBytes);
+
+                if (dist <= threshold) {
+                    // Near-duplicate: decay the OLDER one's importance
+                    long tsA = headerA.timestampMs();
+                    long tsB = headerB.timestampMs();
+
+                    long olderOffset = tsA <= tsB ? offsetA : offsetB;
+                    float olderImportance = layout.readImportance(segment, olderOffset);
+                    float decayed = olderImportance * decayFactor;
+
+                    layout.writeImportance(segment, olderOffset, decayed);
+                    degradedCount++;
+
+                    log.trace("Proactive interference: decayed importance at offset {} " +
+                            "from {} → {} (L2={}, threshold={})",
+                            olderOffset, olderImportance, decayed, dist, threshold);
+                }
+            }
+        }
+
+        return degradedCount;
     }
 
     /**
@@ -414,8 +549,8 @@ public final class ReflectDaemon {
                 commonTags != 0 ? commonTags : episodicHeader.synapticTags(),
                 episodicHeader.exactNorm(),
                 episodicHeader.importance(),
-                episodicHeader.centroidId(),
                 episodicHeader.recallCount(),
+                episodicHeader.centroidId(),
                 episodicHeader.valence(),
                 semanticFlags);
     }
@@ -464,6 +599,12 @@ public final class ReflectDaemon {
 
             // Mark the episodic original as consolidated
             layout.markConsolidated(segment, offset);
+
+            // Neurodivergent: Lossless consolidation — pin promoted source
+            if (pinSourceEpisodes && pinnedCount < pinnedQuota) {
+                layout.pin(segment, offset);
+                pinnedCount++;
+            }
 
             log.debug("REM: Promoted episodic record {} to semantic (importance={})",
                     bestIndex, maxImportance);

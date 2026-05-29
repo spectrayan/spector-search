@@ -4,6 +4,7 @@ import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.memory.RecallOptions;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 
+
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -53,9 +54,17 @@ public final class CognitiveScorer {
      *
      * <p>Carries the full {@link CognitiveHeader} to avoid a second off-heap read
      * during result assembly (P8 performance optimization).</p>
+     *
+     * @param lateral true if this record came from the lateral retrieval heap
      */
-    public record ScoredRecord(long offset, float score, int index, CognitiveHeader header)
+    public record ScoredRecord(long offset, float score, int index, CognitiveHeader header, boolean lateral)
             implements Comparable<ScoredRecord> {
+
+        /** Standard (non-lateral) constructor for backward compatibility. */
+        public ScoredRecord(long offset, float score, int index, CognitiveHeader header) {
+            this(offset, score, index, header, false);
+        }
+
         @Override
         public int compareTo(ScoredRecord other) {
             return Float.compare(this.score, other.score); // min-heap for top-K
@@ -133,14 +142,30 @@ public final class CognitiveScorer {
         byte maxValence = options.maxValence();
         float alpha = options.alpha();
         float beta = options.beta();
+        float tagRelevanceBoost = options.tagRelevanceBoost();
+
+        // ── Neurodivergent: Hyperfocus parameters ──
+        long hyperfocusMask = options.hyperfocusMask();
+        float hyperfocusBoost = options.hyperfocusBoost();
+
+        // ── Neurodivergent: Lateral retrieval parameters ──
+        boolean lateralMode = options.lateralMode();
+        float lateralDistanceThreshold = options.lateralDistanceThreshold();
+        int lateralMaxResults = options.lateralMaxResults();
+        float lateralMinTagOverlap = options.lateralMinTagOverlap();
 
         // Resolve calibration: use identity transform if not calibrated
         int dims = queryVector.length;
         float[] effectiveMins = mins != null ? mins : IdentityCalibration.mins(dims);
         float[] effectiveScales = scales != null ? scales : IdentityCalibration.scales(dims);
 
-        // Min-heap for top-K tracking
+        // Min-heap for top-K tracking (standard results)
         PriorityQueue<ScoredRecord> heap = new PriorityQueue<>(topK + 1);
+
+        // Lateral heap: separate collection for cross-domain candidates
+        PriorityQueue<ScoredRecord> lateralHeap = lateralMode
+                ? new PriorityQueue<>(lateralMaxResults + 1)
+                : null;
 
         int stride = layout.stride();
 
@@ -152,9 +177,18 @@ public final class CognitiveScorer {
             if (isTombstoned(flags)) continue;
 
             // ── Phase 2: Synaptic tag gating (~1 cycle) ──
-            if (queryTagMask != 0) {
-                long recordTags = segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS);
-                if ((recordTags & queryTagMask) != queryTagMask) continue;
+            // Neurodivergent: Hyperfocus uses STRICT equality (all mask bits must match).
+            // Standard mode uses containment (any overlap passes).
+            long recordTags = 0;
+            if (hyperfocusMask != 0) {
+                // Hyperfocus: strict equality gate — reject anything that doesn't
+                // match ALL focus tags. This creates a "tunnel" that blocks off-topic noise.
+                recordTags = segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS);
+                if ((recordTags & hyperfocusMask) != hyperfocusMask) continue;
+            } else if (queryTagMask != 0) {
+                // Standard: broadened containment — skip only on zero overlap
+                recordTags = segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS);
+                if ((recordTags & queryTagMask) == 0) continue;
             }
 
             // ── Phase 3: Valence filter (~2 cycles) ──
@@ -166,9 +200,17 @@ public final class CognitiveScorer {
             if (importance < minImportance) continue;
 
             long timestamp = segment.get(LAYOUT_TIMESTAMP, offset + OFFSET_TIMESTAMP);
-            short recallCount = segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
+            int recallCount = segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
             int rawBucket = DecayStrategy.ageToBucket(timestamp, nowMs);
             int adjustedBucket = DecayStrategy.adjustForReconsolidation(rawBucket, recallCount);
+
+            // Neurodivergent: Hyperfocus — clamp decay to 1.0 (zero time effect)
+            // for memories that match the focus mask.
+            boolean focusMatch = hyperfocusMask != 0
+                    && (recordTags & hyperfocusMask) == hyperfocusMask;
+            if (focusMatch) {
+                adjustedBucket = 0; // time ceases to exist for this topic
+            }
 
             // Skip if too old AND low importance (pinned memories are exempt)
             if (adjustedBucket >= DecayStrategy.MAX_BUCKET
@@ -181,21 +223,61 @@ public final class CognitiveScorer {
             float l2dist = SimilarityFunction.EUCLIDEAN.computeQuantizedFromSegment(
                     queryVector, segment, layout.vectorOffset(offset),
                     effectiveMins, effectiveScales, layout.quantizedVecBytes());
-            float similarity = 1.0f / (1.0f + l2dist);
 
-            // ── Phase 6: Fused cognitive score (~7 cycles) ──
+            // ── Phase 6: Fused cognitive score with weighted tag relevance (~7 cycles) ──
+            float tagOverlap = SynapticTagEncoder.overlapRatio(recordTags, queryTagMask);
+
+            // Neurodivergent: Lateral retrieval — collect tag-matched but
+            // semantically distant candidates into a separate heap.
+            if (lateralMode && l2dist > lateralDistanceThreshold
+                    && tagOverlap >= lateralMinTagOverlap) {
+                // Lateral scoring: bounded [0,1] via 1/(1 + 1/l2dist)
+                // Higher L2 distance → higher lateral score (inverted relationship)
+                float lateralSimilarity = 1.0f / (1.0f + 1.0f / l2dist);
+                float decay = DecayStrategy.decay(adjustedBucket);
+                float lateralScore = lateralSimilarity * tagOverlap * importance * decay;
+
+                // Build header for lateral candidate
+                long synapticTags = recordTags;
+                float exactNorm = segment.get(LAYOUT_EXACT_NORM, offset + OFFSET_EXACT_NORM);
+                short centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
+                CognitiveHeader header = new CognitiveHeader(
+                        timestamp, synapticTags, exactNorm, importance,
+                        recallCount, centroidId, valence, flags);
+
+                if (lateralHeap.size() < lateralMaxResults) {
+                    lateralHeap.offer(new ScoredRecord(offset, lateralScore, i, header, true));
+                } else if (lateralScore > lateralHeap.peek().score()) {
+                    lateralHeap.poll();
+                    lateralHeap.offer(new ScoredRecord(offset, lateralScore, i, header, true));
+                }
+                // Lateral candidates are NOT also added to the standard heap.
+                // They are blended post-loop.
+                continue;
+            }
+
+            // Standard scoring path
+            float similarity = 1.0f / (1.0f + l2dist);
             float decay = DecayStrategy.decay(adjustedBucket);
-            float finalScore = alpha * similarity + beta * importance * decay;
+            float baseScore = alpha * similarity + beta * importance * decay;
+
+            // Weighted tag relevance: partial matches get proportional boost
+            float finalScore = baseScore * (1.0f + tagOverlap * tagRelevanceBoost);
+
+            // Neurodivergent: Hyperfocus — post-score boost for focus-matched memories
+            if (focusMatch && hyperfocusBoost != 1.0f) {
+                finalScore *= hyperfocusBoost;
+            }
 
             // Build header from already-read fields + 2 remaining (avoids double-read)
-            long synapticTags = queryTagMask != 0
-                    ? segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS)
+            long synapticTags = queryTagMask != 0 || hyperfocusMask != 0
+                    ? recordTags  // already read in Phase 2
                     : 0;
             float exactNorm = segment.get(LAYOUT_EXACT_NORM, offset + OFFSET_EXACT_NORM);
-            int centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
+            short centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
             CognitiveHeader header = new CognitiveHeader(
                     timestamp, synapticTags, exactNorm, importance,
-                    centroidId, recallCount, valence, flags);
+                    recallCount, centroidId, valence, flags);
 
             // Insert into top-K min-heap
             if (heap.size() < topK) {
@@ -206,8 +288,11 @@ public final class CognitiveScorer {
             }
         }
 
-        // Extract results sorted by descending score
+        // Merge standard + lateral results
         List<ScoredRecord> results = new ArrayList<>(heap);
+        if (lateralHeap != null && !lateralHeap.isEmpty()) {
+            results.addAll(lateralHeap);
+        }
         results.sort(Comparator.comparing(ScoredRecord::score).reversed());
         return results;
     }
