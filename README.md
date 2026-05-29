@@ -156,7 +156,7 @@ Spector Memory is a biologically-inspired cognitive memory engine that gives AI 
 - **🗜️ IVF-PQ Index** — Inverted file with product quantization for 32× memory compression at billion scale
 - **🤖 LLM Re-ranking** — Listwise relevance scoring via Ollama for precision-critical retrieval
 - **🖥️ GPU Acceleration** — CUDA kernel loader + SIMD batch similarity via Panama FFM
-- **🌐 Distributed Search** — gRPC-based coordinator/shard fan-out with consistent hash partitioning
+- **🌐 Distributed Search** — gRPC-based coordinator/shard fan-out with consistent hash partitioning (unified in `spector-node`)
 - **🧬 Embedding SPI** — Pluggable embedding providers (Ollama included out-of-the-box)
 - **📄 Chunked Ingestion** — Text, token-level, and streaming chunkers for large document support
 - **🤖 MCP Server** — Built-in Model Context Protocol server for AI agent integration
@@ -165,62 +165,110 @@ Spector Memory is a biologically-inspired cognitive memory engine that gives AI 
 
 ## 🏗 Architecture
 
-```
-spector-search/
-├── spector-core/           # SIMD kernels (DotProduct, Cosine, Euclidean, VectorOps)
-├── spector-commons/        # Config system, text chunkers, tokenizer, content extractor
-├── spector-storage/        # Panama MemorySegment stores (InMemory + Mmap + Quantized)
-├── spector-index/          # HNSW + IVF-PQ vector indexes + BM25 keyword index
-│   ├── hnsw/               # HNSW graph-based ANN index (standard + quantized INT8/INT4/INT2)
-│   ├── ivf/                # IVF inverted file index + quantized IVF-PQ
-│   ├── pq/                 # Product quantizer (K-Means++, ADC)
-│   ├── text/               # BM25 keyword scoring + analyzers
-│   └── fuzz/               # Index fuzz testing framework
-├── spector-query/          # Hybrid orchestrator + RRF fusion + LLM re-ranking
-├── spector-embed-api/      # EmbeddingProvider SPI
-├── spector-embed-ollama/   # Ollama embedding provider implementation
-├── spector-memory/         # 🧠 Cognitive Memory — biologically-inspired AI agent memory
-│   ├── cortex/             # 4-tier stores (Working, Episodic, Semantic, Procedural)
-│   ├── synapse/            # 32-byte synaptic header + 6-phase SIMD scorer
-│   ├── dopamine/           # Surprise detection + flashbulb policy
-│   ├── hippocampus/        # Sleep consolidation + tombstone compaction
-│   ├── hebbian/            # Associative learning (co-activation)
-│   └── pipeline/           # Ingestion + recall pipelines
-├── spector-gpu/            # GPU acceleration (Panama FFM + CUDA)
-├── spector-engine/         # Search engine facade + lifecycle
-├── spector-runtime/        # Unified application context (engine + memory + config)
-├── spector-ingestion/      # Generic file ingestion pipeline (CLI + API)
-├── spector-rag/            # Zero-dependency Retrieval-Augmented Generation pipeline
-├── spector-server/         # REST API (Javalin + virtual threads)
-├── spector-mcp/            # MCP Server — Agent-native search + memory integration
-├── spector-cluster/        # Distributed gRPC search (coordinator + shards)
-├── spector-client/         # Developer-facing Java SDK client
-├── spector-cli/            # Terminal-based admin CLI (spectorctl)
-├── spector-spring/         # Spring Boot starter and Spring AI integration
-├── spector-bench/          # JMH benchmarks
-└── spector-dist/           # Single fat JAR distribution (all modules)
+```mermaid
+graph LR
+    subgraph "🔬 Foundation"
+        core["spector-core<br/><i>SIMD kernels</i>"]
+        commons["spector-commons<br/><i>Chunkers, tokenizer</i>"]
+        config["spector-config<br/><i>SpectorConfig + YAML</i>"]
+        storage["spector-storage<br/><i>Panama MemorySegment</i>"]
+    end
+
+    subgraph "🧠 Intelligence"
+        embedApi["spector-embed-api<br/><i>Embedding SPI</i>"]
+        embedOllama["spector-embed-ollama<br/><i>Ollama provider</i>"]
+        index["spector-index<br/><i>HNSW + IVF-PQ + BM25</i>"]
+        query["spector-query<br/><i>Hybrid + RRF + rerank</i>"]
+        gpu["spector-gpu<br/><i>CUDA via Panama FFM</i>"]
+    end
+
+    subgraph "⚡ Engine"
+        rag["spector-rag<br/><i>RAG pipeline</i>"]
+        engine["spector-engine<br/><i>Search facade</i>"]
+        ingestion["spector-ingestion<br/><i>File ingest pipeline</i>"]
+        memory["spector-memory<br/><i>Cognitive memory 🧠</i>"]
+    end
+
+    subgraph "🌐 Runtime & Interfaces"
+        runtime["spector-runtime<br/><i>Composition root</i>"]
+        node["spector-node<br/><i>Armeria: REST + gRPC + SSE</i>"]
+        mcp["spector-mcp<br/><i>MCP Server (stdio)</i>"]
+        cli["spector-cli<br/><i>spectorctl</i>"]
+        client["spector-client<br/><i>Java SDK</i>"]
+        spring["spector-spring<br/><i>Spring AI</i>"]
+    end
+
+    subgraph "📦 Distribution"
+        metrics["spector-metrics<br/><i>Prometheus + JVM</i>"]
+        bench["spector-bench<br/><i>JMH benchmarks</i>"]
+        dist["spector-dist<br/><i>Fat JAR</i>"]
+    end
 ```
 
 ### Module Dependency Graph
 
+```mermaid
+graph TD
+    node["🌐 node"] --> runtime["⚡ runtime"]
+    node --> mcp["🤖 mcp"]
+    node --> metrics["📈 metrics"]
+    mcp --> runtime
+    mcp --> ingestion["📥 ingestion"]
+    cli["🖥️ cli"] --> runtime
+    cli --> client["📦 client"]
+
+    runtime --> engine["⚡ engine"]
+    runtime --> memory["🧠 memory"]
+    runtime --> ingestion
+
+    engine --> query["🔍 query"]
+    engine --> rag["🤖 rag"]
+    engine --> ingestion
+    engine --> index["📊 index"]
+    engine --> storage["💾 storage"]
+    engine --> embedapi["🧬 embed-api"]
+    engine -.-> gpu["🎮 gpu"]
+
+    memory --> index
+    memory --> storage
+    memory --> ingestion
+    memory --> embedapi
+    memory --> core["🔬 core"]
+
+    metrics --> engine
+    metrics --> memory
+
+    ingestion --> config["⚙️ config"]
+    ingestion --> embedapi
+
+    rag --> query
+    rag --> index
+    rag --> storage
+    rag --> embedapi
+
+    query --> index
+    index --> storage
+    index --> config
+    storage --> config
+    storage --> core
+    config --> core
+
+    embedapi --> commons["📄 commons"]
+    gpu --> core
+    gpu --> storage
+
+    dist["📦 dist"] --> mcp
+    dist --> cli
+    dist --> runtime
+
+    spring["🌱 spring"] --> engine
+    spring --> memory
+    spring --> metrics
+    bench["🧪 bench"] --> engine
+    bench --> memory
 ```
-runtime   → engine + memory         # Unified context (the brain)
-cluster   → engine  → query → index → core
-                    → index → storage → core
-server    → runtime                  # REST API
-mcp       → runtime                  # MCP agent server
-ingestion → engine                   # File ingestion pipeline
-client    → server (HTTP)
-cli       → server (HTTP)
-spring    → engine
-rag       → engine
-memory    → engine, core, embed-api  # Cognitive Memory module
-engine    → gpu (optional)
-engine    → commons
-engine    → embed-api
-gpu       → core, storage
-dist      → mcp + ingestion + runtime  # Fat JAR
-```
+
+> **Legend:** Solid arrows = compile dependency. Dotted arrow (`gpu`) = optional dependency.
 
 ---
 
@@ -550,8 +598,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 | spector-embed-ollama | 7 | Ollama provider, fallback behavior |
 | spector-gpu | 14 | GPU detection, SIMD batch similarity, CUDA launcher |
 | spector-engine | 12 | End-to-end ingestion, IVF-PQ auto-training |
-| spector-server | 6 | REST API endpoints |
-| spector-cluster | 5 | Shard routing, hash consistency |
+| spector-node | 11 | REST endpoints, shard routing, hash consistency |
 | spector-mcp | 15 | MCP tool registry, tool handlers, schema builder |
 | **Total** | **685+** | **All passing ✅** |
 

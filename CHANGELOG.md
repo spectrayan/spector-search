@@ -51,19 +51,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **spector-engine:** Document deletion support (`delete()` method)
 - **spector-engine:** Auto-embed ingestion, chunked ingestion, and streaming file ingestion
 - **spector-engine:** IVF-PQ auto-training with buffered vector accumulation
-- **spector-server:** Javalin REST API with virtual threads
-- **spector-server:** CORS support via bundled plugin
-- **spector-server:** Optional API key authentication (`X-API-Key` header)
-- **spector-server:** Auto-embed ingest endpoint (`/api/v1/ingest/auto`)
-- **spector-server:** Bulk ingest endpoint (`/api/v1/ingest/bulk`)
-- **spector-server:** Document deletion endpoint (`DELETE /api/v1/documents/{id}`)
-- **spector-server:** Metrics endpoint (`/api/v1/metrics`)
-- **spector-server:** Vector dimension validation on ingest
-- **spector-cluster:** gRPC-based distributed search with coordinator/shard fan-out
-- **spector-cluster:** `ClusterCoordinator` with parallel shard queries and result merging
-- **spector-cluster:** `RemoteShardClient` with TLS support (mutual TLS optional)
-- **spector-cluster:** `ShardNode` gRPC server wrapping a local SpectorEngine
-- **spector-cluster:** `ClusterConfig` with consistent hash and range partitioning
+- **spector-node:** Armeria REST API with virtual threads
+- **spector-node:** CORS support via bundled plugin
+- **spector-node:** Optional API key authentication (`X-API-Key` header)
+- **spector-node:** Auto-embed ingest endpoint (`/api/v1/ingest/auto`)
+- **spector-node:** Bulk ingest endpoint (`/api/v1/ingest/bulk`)
+- **spector-node:** Document deletion endpoint (`DELETE /api/v1/documents/{id}`)
+- **spector-node:** Metrics endpoint (`/api/v1/metrics`)
+- **spector-node:** Vector dimension validation on ingest
+- **spector-node:** gRPC-based distributed search with coordinator/shard fan-out
+- **spector-node:** `ClusterCoordinator` with parallel shard queries and result merging
+- **spector-node:** `RemoteShardClient` with TLS support (mutual TLS optional)
+- **spector-node:** `ShardNode` gRPC server wrapping a local SpectorEngine
+- **spector-node:** `ClusterConfig` with consistent hash and range partitioning
 - **spector-bench:** JMH benchmarks for SIMD kernels, HNSW, BM25, ingestion, IVF-PQ, concurrency
 - **spector-bench:** `PerformanceTestRunner` for comprehensive latency/throughput reporting
 - 316+ tests across all modules, all passing

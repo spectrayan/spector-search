@@ -293,8 +293,8 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 | Site | Module | Pattern | Benefit |
 |------|--------|---------|---------|
 | `HybridSearchOrchestrator` | spector-query | 2-way fan-out (keyword ∥ vector) | Auto-cancel sibling on failure |
-| `ClusterCoordinator` | spector-cluster | N-way shard fan-out | Auto-cancel all on shard failure |
-| `DistributedQueryCoordinator` | spector-cluster | N-way with timeout + partial results | Clean timeout via `awaitAll()` + `withTimeout()` |
+| `ClusterCoordinator` | spector-node | N-way shard fan-out | Auto-cancel all on shard failure |
+| `DistributedQueryCoordinator` | spector-node | N-way with timeout + partial results | Clean timeout via `awaitAll()` + `withTimeout()` |
 | `ParallelEmbeddingPipeline` | spector-embed-api | N-way batch embedding | Scope-per-call, no executor lifecycle |
 | `ParallelPqTrainer` | spector-index | M-way K-Means subspace training | All-or-nothing structured scope |
 | `BM25Index` | spector-index | Parallel term scoring | Auto-cancel with sequential fallback |

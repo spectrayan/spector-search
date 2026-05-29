@@ -211,7 +211,7 @@ java \
   --enable-native-access=ALL-UNNAMED \
   -XX:+UseZGC -XX:+ZGenerational \
   -Xmx4g -Xms4g \
-  -jar spector-server.jar
+  -jar spector-node.jar
 ```
 
 ---
@@ -233,7 +233,7 @@ java \
 **Yes.** Set an API key at server startup:
 
 ```bash
-mvn exec:java -pl spector-server \
+mvn exec:java -pl spector-node \
   -Dexec.args="7070 384 my-secret-key"
 ```
 

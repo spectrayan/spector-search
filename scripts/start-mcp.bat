@@ -7,7 +7,7 @@ REM ═════════════════════════�
 
 set SPECTOR_HOME=%~dp0..
 set JAR=%SPECTOR_HOME%\spector-dist\target\spector.jar
-set CONFIG=%SPECTOR_HOME%\spector.yml
+set CONFIG=%SPECTOR_HOME%\spector-local.yml
 
 if not exist "%JAR%" (
     echo [ERROR] Fat JAR not found: %JAR%

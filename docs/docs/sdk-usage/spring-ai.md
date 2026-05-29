@@ -88,7 +88,7 @@ public class VectorStoreConfig {
     @Bean
     public SpectorClient spectorClient() {
         return SpectorClient.builder()
-            .host("spector-server.internal")
+            .host("spector-node.internal")
             .port(7070)
             .apiKey("my-api-key")
             .build();

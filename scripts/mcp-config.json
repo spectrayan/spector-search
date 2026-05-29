@@ -3,11 +3,17 @@
     "spector-search": {
       "command": "java",
       "args": [
-        "--add-modules", "jdk.incubator.vector",
+        "--add-modules",
+        "jdk.incubator.vector",
         "--enable-native-access=ALL-UNNAMED",
+        "-XX:+UseCompactObjectHeaders",
+        "-XX:+UnlockDiagnosticVMOptions",
+        "-XX:+UseVectorizedMismatch",
         "--enable-preview",
-        "-jar", "/path/to/spector-dist/target/spector.jar",
-        "--config", "/path/to/spector.yml"
+        "-jar",
+        "/path/to/spector-dist/target/spector.jar",
+        "--config",
+        "/path/to/spector-local.yml"
       ]
     }
   }
