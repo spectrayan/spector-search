@@ -1,9 +1,12 @@
 package com.spectrayan.spector.engine;
 
+
+import com.spectrayan.spector.config.SpectorConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
+import com.spectrayan.spector.config.IndexType;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 

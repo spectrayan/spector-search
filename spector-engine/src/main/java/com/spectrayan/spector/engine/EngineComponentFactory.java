@@ -1,5 +1,11 @@
 package com.spectrayan.spector.engine;
 
+
+
+
+import com.spectrayan.spector.storage.VectorStoreFactory;
+import com.spectrayan.spector.index.VectorIndexFactory;
+import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.gpu.GpuBatchSimilarity;
 import com.spectrayan.spector.gpu.GpuCapability;
 import com.spectrayan.spector.index.BM25Index;
@@ -10,9 +16,9 @@ import com.spectrayan.spector.query.ranking.LlmReranker;
 import com.spectrayan.spector.query.ranking.Reranker;
 import com.spectrayan.spector.storage.DocumentStore;
 import com.spectrayan.spector.storage.InMemoryVectorStore;
-import com.spectrayan.spector.storage.PersistenceMode;
+import com.spectrayan.spector.config.PersistenceMode;
 import com.spectrayan.spector.storage.VectorStore;
-import com.spectrayan.spector.commons.config.PersistenceFiles;
+import com.spectrayan.spector.config.PersistenceFiles;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,7 +85,9 @@ public class EngineComponentFactory {
         boolean loadedFromDisk = false;
 
         // ── Try loading from disk ──
-        if (config.persistenceMode() == PersistenceMode.DISK) {
+        // Skip disk index if forceWritable is set (e.g., during ingestion)
+        // because DiskHnswIndex is read-only (memory-mapped).
+        if (config.persistenceMode() == PersistenceMode.DISK && !config.forceWritable()) {
             Path indexFile = persistenceFiles.resolveIndex(config.dataDirectory());
             if (Files.exists(indexFile)) {
                 try {
@@ -115,6 +123,9 @@ public class EngineComponentFactory {
                 vs = null; ds = null; vi = null; ki = null;
             }
         } else {
+            if (config.forceWritable()) {
+                log.info("forceWritable=true — skipping disk index, creating fresh writable index");
+            }
             vs = null; ds = null; vi = null; ki = null;
         }
 

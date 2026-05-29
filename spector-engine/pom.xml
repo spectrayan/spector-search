@@ -21,6 +21,10 @@
         </dependency>
         <dependency>
             <groupId>com.spectrayan</groupId>
+            <artifactId>spector-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
             <artifactId>spector-storage</artifactId>
         </dependency>
         <dependency>

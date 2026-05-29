@@ -1,28 +1,22 @@
 package com.spectrayan.spector.engine;
 
-import com.spectrayan.spector.commons.ContentExtractor;
-import com.spectrayan.spector.commons.StreamingChunker;
-import com.spectrayan.spector.commons.TextChunker;
-import com.spectrayan.spector.commons.TokenChunker;
-import com.spectrayan.spector.core.similarity.SimilarityFunction;
+import com.spectrayan.spector.config.IndexType;
+import com.spectrayan.spector.config.PersistenceFiles;
+import com.spectrayan.spector.config.PersistenceMode;
+import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.core.simd.SimdCapability;
+import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.gpu.GpuBatchSimilarity;
-import com.spectrayan.spector.index.BM25Index;
+import com.spectrayan.spector.index.VectorIndex;
 import com.spectrayan.spector.index.DiskHnswWriter;
 import com.spectrayan.spector.index.HnswIndex;
-import com.spectrayan.spector.index.KeywordIndex;
-import com.spectrayan.spector.index.ScoredResult;
-import com.spectrayan.spector.index.VectorIndex;
-import com.spectrayan.spector.index.ivf.IvfPqIndex;
-import com.spectrayan.spector.index.spectrum.SpectorIndex;
 import com.spectrayan.spector.query.HybridSearchOrchestrator;
+import com.spectrayan.spector.index.KeywordIndex;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 import com.spectrayan.spector.query.ranking.Reranker;
-import com.spectrayan.spector.storage.Document;
 import com.spectrayan.spector.storage.DocumentStore;
-import com.spectrayan.spector.storage.PersistenceMode;
 import com.spectrayan.spector.storage.VectorStore;
 
 import org.slf4j.Logger;
@@ -39,6 +33,9 @@ import java.nio.file.Path;
  * optional GPU acceleration, and optional LLM re-ranking.
  * Provides a simple API for document ingestion and search.</p>
  *
+ * <p>Delegates to {@link EngineIngestion} for ingestion and
+ * {@link EngineSearch} for search operations.</p>
+ *
  * <h3>Construction</h3>
  * <p>Use the fluent {@link Builder} for clean engine construction:</p>
  * <pre>{@code
@@ -52,21 +49,12 @@ import java.nio.file.Path;
  *       .build();
  * }</pre>
  *
- * <h3>Legacy Construction</h3>
- * <pre>{@code
- *   try (var engine = new SpectorEngine(config)) {
- *       engine.ingest("doc-1", "Hello world", embedding);
- *       SearchResponse response = engine.search(
- *           SearchQuery.hybrid("hello", queryEmbedding, 10));
- *   }
- * }</pre>
- *
  * <h3>Design Patterns</h3>
  * <ul>
  *   <li><b>Facade</b> — unified API over 6+ subsystems</li>
  *   <li><b>Builder</b> — fluent construction via {@link Builder}</li>
  *   <li><b>Abstract Factory</b> — component assembly via {@link EngineComponentFactory}</li>
- *   <li><b>Factory Method</b> — index/store creation via {@link VectorIndexFactory}/{@link VectorStoreFactory}</li>
+ *   <li><b>Delegation</b> — ingestion → {@link EngineIngestion}, search → {@link EngineSearch}</li>
  * </ul>
  */
 public class SpectorEngine implements AutoCloseable {
@@ -78,33 +66,20 @@ public class SpectorEngine implements AutoCloseable {
     private final DocumentStore documentStore;
     private final VectorIndex vectorIndex;
     private final KeywordIndex keywordIndex;
-    private final HybridSearchOrchestrator orchestrator;
     private final EmbeddingProvider embeddingProvider; // nullable
-    private final GpuBatchSimilarity gpuBatchSimilarity; // nullable
     private final Reranker reranker; // nullable
-    private final com.spectrayan.spector.commons.config.PersistenceFiles persistenceFiles;
+    private final GpuBatchSimilarity gpuBatchSimilarity; // nullable
+    private final PersistenceFiles persistenceFiles;
     private volatile boolean closed;
 
-    // IVF-PQ training state — buffers vectors until enough for training
-    private java.util.List<float[]> ivfTrainingBuffer;
-    private java.util.List<String> ivfTrainingIds;
-    private java.util.List<String> ivfTrainingContents;
-    private volatile boolean ivfTrained;
-
-    // Spectrum training state — same pattern as IVF-PQ
-    private java.util.List<float[]> spectrumTrainingBuffer;
-    private java.util.List<String> spectrumTrainingIds;
-    private java.util.List<String> spectrumTrainingContents;
-    private volatile boolean spectrumTrained;
+    // Delegates
+    private final EngineIngestion ingestion;
+    private final EngineSearch search;
 
     // ─────────────── Construction ───────────────
 
     /**
      * Creates and initializes a new engine with the given configuration.
-     *
-     * <p>Components are assembled by {@link EngineComponentFactory} which
-     * uses {@link VectorIndexFactory} and {@link VectorStoreFactory} to
-     * create the appropriate implementations based on configuration.</p>
      *
      * @param config the engine configuration
      */
@@ -133,9 +108,8 @@ public class SpectorEngine implements AutoCloseable {
                          EngineComponentFactory factory) {
         this.config = config;
         this.embeddingProvider = provider;
-        this.persistenceFiles = com.spectrayan.spector.commons.config.PersistenceFiles.DEFAULTS;
+        this.persistenceFiles = PersistenceFiles.DEFAULTS;
         this.closed = false;
-        this.ivfTrained = false;
 
         log.info("Initializing SpectorEngine: dims={}, capacity={}, similarity={}, " +
                         "quantization={}, persistence={}, indexType={}, embedding={}, " +
@@ -158,29 +132,14 @@ public class SpectorEngine implements AutoCloseable {
         this.gpuBatchSimilarity = components.gpuBatch() instanceof GpuBatchSimilarity gpu
                 ? gpu : null;
 
-        // ── IVF-PQ training buffer initialization ──
-        if (config.indexType() == IndexType.IVF_PQ) {
-            int minTrainingSamples = Math.max(config.effectiveNlist() * 40, 256);
-            this.ivfTrainingBuffer = new java.util.ArrayList<>(minTrainingSamples);
-            this.ivfTrainingIds = new java.util.ArrayList<>(minTrainingSamples);
-            this.ivfTrainingContents = new java.util.ArrayList<>(minTrainingSamples);
-            log.info("IVF-PQ index created (untrained). Will auto-train after {} vectors.",
-                    minTrainingSamples);
-        }
-
-        // ── Spectrum training buffer initialization ──
-        if (config.indexType() == IndexType.SPECTRUM) {
-            int minTrainingSamples = Math.max(config.effectiveSpectrumNCentroids() * 40, 256);
-            this.spectrumTrainingBuffer = new java.util.ArrayList<>(minTrainingSamples);
-            this.spectrumTrainingIds = new java.util.ArrayList<>(minTrainingSamples);
-            this.spectrumTrainingContents = new java.util.ArrayList<>(minTrainingSamples);
-            log.info("Spectrum index created (untrained). Will auto-train after {} vectors.",
-                    minTrainingSamples);
-        }
-
         // ── Wire orchestrator with optional re-ranker ──
-        this.orchestrator = new HybridSearchOrchestrator(
+        var orchestrator = new HybridSearchOrchestrator(
                 keywordIndex, vectorIndex, reranker, documentStore);
+
+        // ── Create delegates ──
+        this.ingestion = new EngineIngestion(config, vectorStore, documentStore,
+                vectorIndex, keywordIndex, embeddingProvider);
+        this.search = new EngineSearch(config, orchestrator, embeddingProvider, gpuBatchSimilarity);
 
         log.info("SpectorEngine initialized successfully");
     }
@@ -190,376 +149,142 @@ public class SpectorEngine implements AutoCloseable {
         this(SpectorConfig.DEFAULT);
     }
 
-    /**
-     * Returns a new fluent {@link Builder} for constructing an engine.
-     *
-     * @return a new builder
-     */
+    /** Returns a new fluent {@link Builder} for constructing an engine. */
     public static Builder builder() {
         return new Builder();
     }
 
-    // ─────────────── Ingestion ───────────────
+    // ─────────────── Ingestion (delegated) ───────────────
 
-    /**
-     * Ingests a single document with its text content and vector embedding.
-     *
-     * @param id       unique document identifier
-     * @param content  text content for keyword search
-     * @param vector   embedding vector for semantic search
-     */
+    /** Ingests a single document with its text content and vector embedding. */
     public void ingest(String id, String content, float[] vector) {
         ensureOpen();
-
-        // IVF-PQ auto-training: buffer vectors until we have enough to train
-        if (config.indexType() == IndexType.IVF_PQ && !ivfTrained) {
-            ivfTrainingBuffer.add(vector.clone());
-            ivfTrainingIds.add(id);
-            ivfTrainingContents.add(content);
-
-            int minSamples = Math.max(config.effectiveNlist() * 40, 256);
-            if (ivfTrainingBuffer.size() >= minSamples) {
-                trainAndFlushIvfPq();
-            } else {
-                // Still buffering — store document metadata for keyword search
-                documentStore.put(Document.of(id, content));
-                keywordIndex.index(id, content);
-                return;
-            }
-            return;
-        }
-
-        // Spectrum auto-training: buffer vectors until we have enough to train
-        if (config.indexType() == IndexType.SPECTRUM && !spectrumTrained) {
-            spectrumTrainingBuffer.add(vector.clone());
-            spectrumTrainingIds.add(id);
-            spectrumTrainingContents.add(content);
-
-            int minSamples = Math.max(config.effectiveSpectrumNCentroids() * 40, 256);
-            if (spectrumTrainingBuffer.size() >= minSamples) {
-                trainAndFlushSpectrum();
-            } else {
-                // Still buffering — store document metadata for keyword search
-                documentStore.put(Document.of(id, content));
-                keywordIndex.index(id, content);
-                return;
-            }
-            return;
-        }
-
-        // Normal ingestion path
-        int storeIndex = vectorStore.put(id, vector);
-        documentStore.put(Document.of(id, content));
-        vectorIndex.add(id, storeIndex, vector);
-        keywordIndex.index(id, content);
+        ingestion.ingest(id, content, vector);
     }
 
-    /**
-     * Ingests a document with title, content, and vector.
-     *
-     * @param id       unique document identifier
-     * @param title    document title
-     * @param content  text content for keyword search
-     * @param vector   embedding vector for semantic search
-     */
+    /** Ingests a document with title, content, and vector. */
     public void ingest(String id, String title, String content, float[] vector) {
         ensureOpen();
-
-        int storeIndex = vectorStore.put(id, vector);
-        documentStore.put(Document.of(id, title, content));
-        vectorIndex.add(id, storeIndex, vector);
-        keywordIndex.index(id, title + " " + content);
+        ingestion.ingest(id, title, content, vector);
     }
 
-    /**
-     * Ingests a batch of documents.
-     *
-     * @param ids      document IDs
-     * @param contents text contents
-     * @param vectors  embedding vectors
-     */
+    /** Ingests a batch of documents. */
     public void ingestBatch(String[] ids, String[] contents, float[][] vectors) {
         ensureOpen();
-        for (int i = 0; i < ids.length; i++) {
-            ingest(ids[i], contents[i], vectors[i]);
-        }
+        ingestion.ingestBatch(ids, contents, vectors);
     }
 
-    /**
-     * Deletes a document by ID from all indexes.
-     *
-     * <p>Removes the document from the document store and keyword index.
-     * Note: vector index entries are not removed (HNSW does not support
-     * point deletion); they become orphaned and will not appear in
-     * results because the document store lookup will return null.</p>
-     *
-     * @param id document identifier to delete
-     * @return true if the document existed and was removed
-     */
+    /** Deletes a document by ID from all indexes. */
     public boolean delete(String id) {
         ensureOpen();
-        Document removed = documentStore.remove(id);
-        if (removed != null) {
-            keywordIndex.remove(id);
-            log.debug("Deleted document '{}'", id);
-            return true;
-        }
-        return false;
+        return ingestion.delete(id);
     }
 
-    // ─────────────── Large Document Ingestion ───────────────
-
-    /**
-     * Ingests a large document by splitting it into overlapping chunks.
-     *
-     * @param id            document ID
-     * @param content       full document text
-     * @param vectorProvider function mapping chunk text to an embedding vector
-     * @return number of chunks ingested
-     */
+    /** Ingests a large document by splitting it into overlapping chunks. */
     public int ingestChunked(String id, String content,
                              java.util.function.Function<String, float[]> vectorProvider) {
-        return ingestChunked(id, content, vectorProvider, new TextChunker());
+        ensureOpen();
+        return ingestion.ingestChunked(id, content, vectorProvider);
     }
 
-    /**
-     * Ingests a large document with a custom chunker configuration.
-     *
-     * @param id            document ID
-     * @param content       full document text
-     * @param vectorProvider function mapping chunk text to an embedding vector
-     * @param chunker       configured TextChunker
-     * @return number of chunks ingested
-     */
+    /** Ingests a large document with a custom chunker configuration. */
     public int ingestChunked(String id, String content,
                              java.util.function.Function<String, float[]> vectorProvider,
-                             TextChunker chunker) {
+                             com.spectrayan.spector.commons.TextChunker chunker) {
         ensureOpen();
-
-        // Store the full document metadata
-        documentStore.put(Document.of(id, content));
-
-        var chunks = chunker.chunk(id, content);
-        for (var chunk : chunks) {
-            float[] vector = vectorProvider.apply(chunk.text());
-            int storeIndex = vectorStore.put(chunk.chunkId(), vector);
-            vectorIndex.add(chunk.chunkId(), storeIndex, vector);
-            keywordIndex.index(chunk.chunkId(), chunk.text());
-        }
-
-        log.info("Ingested '{}' as {} chunks (chunkSize={}, overlap={})",
-                id, chunks.size(), chunker.chunkSize(), chunker.overlap());
-        return chunks.size();
+        return ingestion.ingestChunked(id, content, vectorProvider, chunker);
     }
 
-    /**
-     * Ingests structured content (XML, JSON, Java objects) by extracting text.
-     *
-     * @param id            document ID
-     * @param content       structured content (XML, JSON, or plain text)
-     * @param vector        embedding vector (for the extracted text)
-     */
+    /** Ingests structured content (XML, JSON, Java objects) by extracting text. */
     public void ingestStructured(String id, String content, float[] vector) {
-        String extracted = ContentExtractor.extract(content);
-        ingest(id, extracted, vector);
+        ensureOpen();
+        ingestion.ingestStructured(id, content, vector);
     }
 
-    /**
-     * Ingests a large file using streaming chunking with bounded memory.
-     *
-     * @param path           path to the text file
-     * @param documentId     parent document ID
-     * @param vectorProvider function mapping chunk text to an embedding vector
-     * @param chunkSize      target chunk size in characters
-     * @param overlap        overlap between chunks in characters
-     * @return number of chunks ingested
-     * @throws java.io.IOException if the file cannot be read
-     */
+    /** Ingests a large file using streaming chunking with bounded memory. */
     public int ingestFile(java.nio.file.Path path, String documentId,
                           java.util.function.Function<String, float[]> vectorProvider,
                           int chunkSize, int overlap) throws java.io.IOException {
         ensureOpen();
-        int count = 0;
-
-        try (var stream = StreamingChunker.chunkFile(path, documentId, chunkSize, overlap)) {
-            var iter = stream.iterator();
-            while (iter.hasNext()) {
-                var chunk = iter.next();
-                float[] vector = vectorProvider.apply(chunk.text());
-                int storeIndex = vectorStore.put(chunk.chunkId(), vector);
-                vectorIndex.add(chunk.chunkId(), storeIndex, vector);
-                keywordIndex.index(chunk.chunkId(), chunk.text());
-                count++;
-            }
-        }
-
-        log.info("Streaming-ingested file '{}' as {} chunks (chunkSize={}, overlap={})",
-                path.getFileName(), count, chunkSize, overlap);
-        return count;
+        return ingestion.ingestFile(path, documentId, vectorProvider, chunkSize, overlap);
     }
 
-    /**
-     * Ingests a large document using token-level chunking for precise token limits.
-     *
-     * @param id            document ID
-     * @param content       full document text
-     * @param vectorProvider function mapping chunk text to an embedding vector
-     * @param maxTokens     maximum tokens per chunk
-     * @param overlapTokens overlap tokens between chunks
-     * @return number of chunks ingested
-     */
+    /** Ingests a large document using token-level chunking. */
     public int ingestTokenChunked(String id, String content,
                                   java.util.function.Function<String, float[]> vectorProvider,
                                   int maxTokens, int overlapTokens) {
         ensureOpen();
-
-        var chunker = new TokenChunker(maxTokens, overlapTokens);
-        documentStore.put(Document.of(id, content));
-
-        var chunks = chunker.chunk(id, content);
-        for (var chunk : chunks) {
-            float[] vector = vectorProvider.apply(chunk.text());
-            int storeIndex = vectorStore.put(chunk.chunkId(), vector);
-            vectorIndex.add(chunk.chunkId(), storeIndex, vector);
-            keywordIndex.index(chunk.chunkId(), chunk.text());
-        }
-
-        log.info("Token-chunked '{}' into {} chunks (maxTokens={}, overlap={})",
-                id, chunks.size(), maxTokens, overlapTokens);
-        return chunks.size();
+        return ingestion.ingestTokenChunked(id, content, vectorProvider, maxTokens, overlapTokens);
     }
 
-    // ─────────────── Auto-Embed Ingestion ───────────────
-
-    /**
-     * Ingests a document with automatic embedding generation.
-     * Requires an {@link EmbeddingProvider} to be configured.
-     *
-     * @param id      unique document identifier
-     * @param content text content
-     * @throws IllegalStateException if no embedding provider is configured
-     */
+    /** Ingests a document with automatic embedding generation. */
     public void ingest(String id, String content) {
         ensureOpen();
-        requireEmbeddingProvider();
-        float[] vector = embeddingProvider.embed(content).vector();
-        ingest(id, content, vector);
+        ingestion.ingest(id, content);
     }
 
-    /**
-     * Ingests a document with title and automatic embedding.
-     *
-     * @param id      unique document identifier
-     * @param title   document title
-     * @param content text content
-     */
+    /** Ingests a document with title and automatic embedding. */
     public void ingest(String id, String title, String content) {
         ensureOpen();
-        requireEmbeddingProvider();
-        float[] vector = embeddingProvider.embed(title + " " + content).vector();
-        ingest(id, title, content, vector);
+        ingestion.ingest(id, title, content);
     }
 
-    /**
-     * Auto-embed chunked ingestion for large documents.
-     *
-     * @param id      document ID
-     * @param content full document text
-     * @return number of chunks ingested
-     */
+    /** Auto-embed chunked ingestion for large documents. */
     public int ingestChunkedAuto(String id, String content) {
-        requireEmbeddingProvider();
-        return ingestChunked(id, content, text -> embeddingProvider.embed(text).vector());
+        ensureOpen();
+        return ingestion.ingestChunkedAuto(id, content);
     }
 
-    /**
-     * Auto-embed file ingestion with streaming.
-     *
-     * @param path       path to the text file
-     * @param documentId parent document ID
-     * @param chunkSize  target chunk size in characters
-     * @param overlap    overlap between chunks
-     * @return number of chunks ingested
-     * @throws java.io.IOException if the file cannot be read
-     */
+    /** Auto-embed file ingestion with streaming. */
     public int ingestFileAuto(java.nio.file.Path path, String documentId,
                               int chunkSize, int overlap) throws java.io.IOException {
-        requireEmbeddingProvider();
-        return ingestFile(path, documentId,
-                text -> embeddingProvider.embed(text).vector(), chunkSize, overlap);
+        ensureOpen();
+        return ingestion.ingestFileAuto(path, documentId, chunkSize, overlap);
     }
 
-    // ─────────────── Search ───────────────
+    // ─────────────── Search (delegated) ───────────────
 
-    /**
-     * Executes a search query.
-     *
-     * @param query the search query
-     * @return the search response
-     */
+    /** Executes a search query. */
     public SearchResponse search(SearchQuery query) {
         ensureOpen();
-        return orchestrator.search(query);
+        return search.search(query);
     }
 
     /** Convenience: keyword search. */
     public SearchResponse keywordSearch(String text, int topK) {
-        return search(SearchQuery.keyword(text, topK));
+        ensureOpen();
+        return search.keywordSearch(text, topK);
     }
 
     /** Convenience: vector search. */
     public SearchResponse vectorSearch(float[] vector, int topK) {
-        return search(SearchQuery.vector(vector, topK));
+        ensureOpen();
+        return search.vectorSearch(vector, topK);
     }
 
     /** Convenience: hybrid search. */
     public SearchResponse hybridSearch(String text, float[] vector, int topK) {
-        return search(SearchQuery.hybrid(text, vector, topK));
+        ensureOpen();
+        return search.hybridSearch(text, vector, topK);
     }
 
-    /**
-     * Auto-embed search: embeds the query text and performs hybrid search.
-     *
-     * @param text query text
-     * @param topK max results
-     * @return search response
-     */
+    /** Auto-embed search: embeds the query text and performs hybrid search. */
     public SearchResponse search(String text, int topK) {
         ensureOpen();
-        requireEmbeddingProvider();
-        float[] queryVector = embeddingProvider.embed(text).vector();
-        return hybridSearch(text, queryVector, topK);
+        return search.search(text, topK);
     }
 
     // ─────────────── GPU-Accelerated Batch Operations ───────────────
 
-    /**
-     * Computes batch cosine similarities using GPU if available, CPU SIMD otherwise.
-     *
-     * @param query    query vector
-     * @param database flat database vectors (N × D)
-     * @param n        number of database vectors
-     * @param dims     vector dimensionality
-     * @return array of N similarity scores
-     */
+    /** Computes batch cosine similarities using GPU if available, CPU SIMD otherwise. */
     public float[] batchCosineSimilarity(float[] query, float[] database, int n, int dims) {
         ensureOpen();
-        if (gpuBatchSimilarity != null) {
-            return gpuBatchSimilarity.batchCosineSimilarity(query, database, n, dims);
-        }
-        // CPU SIMD fallback
-        float[] results = new float[n];
-        for (int i = 0; i < n; i++) {
-            float[] vec = new float[dims];
-            System.arraycopy(database, i * dims, vec, 0, dims);
-            results[i] = config.similarityFunction().compute(query, vec);
-        }
-        return results;
+        return search.batchCosineSimilarity(query, database, n, dims);
     }
 
     /** Returns whether GPU acceleration is active. */
     public boolean isGpuActive() {
-        return gpuBatchSimilarity != null;
+        return search.isGpuActive();
     }
 
     // ─────────────── Accessors ───────────────
@@ -575,6 +300,9 @@ public class SpectorEngine implements AutoCloseable {
 
     /** Returns the vector store. */
     public VectorStore vectorStore() { return vectorStore; }
+
+    /** Returns the underlying vector index (for ANN pre-filtering by Memory). */
+    public VectorIndex index() { return vectorIndex; }
 
     /** Returns the embedding provider, or null if none configured. */
     public EmbeddingProvider embeddingProvider() { return embeddingProvider; }
@@ -629,7 +357,7 @@ public class SpectorEngine implements AutoCloseable {
                     }
                 }
 
-                orchestrator.close();
+                search.orchestrator().close();
                 vectorIndex.close();
                 keywordIndex.close();
                 vectorStore.close();
@@ -647,93 +375,12 @@ public class SpectorEngine implements AutoCloseable {
         if (closed) throw new IllegalStateException("SpectorEngine is closed");
     }
 
-    private void requireEmbeddingProvider() {
-        if (embeddingProvider == null) {
-            throw new IllegalStateException(
-                    "No EmbeddingProvider configured. Use SpectorEngine(config, provider) or supply vectors manually.");
-        }
-    }
-
-    /**
-     * Trains the IVF-PQ index on buffered vectors and flushes all buffered documents into the index.
-     */
-    private void trainAndFlushIvfPq() {
-        if (!(vectorIndex instanceof IvfPqIndex ivfPq)) return;
-
-        float[][] trainingData = ivfTrainingBuffer.toArray(float[][]::new);
-        log.info("Auto-training IVF-PQ with {} vectors...", trainingData.length);
-        ivfPq.train(trainingData);
-
-        // Flush all buffered vectors into the index
-        for (int i = 0; i < ivfTrainingBuffer.size(); i++) {
-            float[] vec = ivfTrainingBuffer.get(i);
-            String id = ivfTrainingIds.get(i);
-            String content = ivfTrainingContents.get(i);
-
-            int storeIndex = vectorStore.put(id, vec);
-            documentStore.put(Document.of(id, content));
-            vectorIndex.add(id, storeIndex, vec);
-            keywordIndex.index(id, content);
-        }
-
-        // Clear buffers
-        ivfTrainingBuffer = null;
-        ivfTrainingIds = null;
-        ivfTrainingContents = null;
-        ivfTrained = true;
-        log.info("IVF-PQ training complete. {} vectors indexed.", ivfPq.size());
-    }
-
-    /**
-     * Trains the Spectrum index on buffered vectors and flushes all buffered documents.
-     */
-    private void trainAndFlushSpectrum() {
-        if (!(vectorIndex instanceof SpectorIndex spectrumIdx)) return;
-
-        float[][] trainingData = spectrumTrainingBuffer.toArray(float[][]::new);
-        log.info("Auto-training Spectrum with {} vectors...", trainingData.length);
-        spectrumIdx.train(trainingData);
-
-        // Flush all buffered vectors into the index
-        for (int i = 0; i < spectrumTrainingBuffer.size(); i++) {
-            float[] vec = spectrumTrainingBuffer.get(i);
-            String bufferedId = spectrumTrainingIds.get(i);
-            String content = spectrumTrainingContents.get(i);
-
-            int storeIndex = vectorStore.put(bufferedId, vec);
-            documentStore.put(Document.of(bufferedId, content));
-            vectorIndex.add(bufferedId, storeIndex, vec);
-            keywordIndex.index(bufferedId, content);
-        }
-
-        // Clear buffers
-        spectrumTrainingBuffer = null;
-        spectrumTrainingIds = null;
-        spectrumTrainingContents = null;
-        spectrumTrained = true;
-        log.info("Spectrum training complete. {} vectors indexed.", spectrumIdx.size());
-    }
-
     // ═════════════════════════════════════════════════════════════════
     //  Builder Pattern
     // ═════════════════════════════════════════════════════════════════
 
     /**
      * Fluent builder for constructing {@link SpectorEngine} instances.
-     *
-     * <p>Provides a readable, type-safe API for configuring the engine:</p>
-     * <pre>{@code
-     *   SpectorEngine engine = SpectorEngine.builder()
-     *       .dimensions(768)
-     *       .capacity(500_000)
-     *       .similarity(SimilarityFunction.DOT_PRODUCT)
-     *       .quantization(QuantizationType.SCALAR_INT8)
-     *       .persistence(PersistenceMode.DISK, Path.of("/data"))
-     *       .gpu(true)
-     *       .reranker("http://localhost:11434", "llama3.2", 30)
-     *       .embeddingProvider(new OllamaEmbeddingProvider(...))
-     *       .build();
-     * }</pre>
      */
     public static final class Builder {
 
@@ -743,149 +390,28 @@ public class SpectorEngine implements AutoCloseable {
 
         Builder() {}
 
-        /** Sets vector dimensionality (default: 384). */
-        public Builder dimensions(int dims) {
-            this.config = config.withDimensions(dims);
-            return this;
-        }
+        public Builder dimensions(int dims) { this.config = config.withDimensions(dims); return this; }
+        public Builder capacity(int capacity) { this.config = config.withCapacity(capacity); return this; }
+        public Builder similarity(SimilarityFunction sf) { this.config = config.withSimilarityFunction(sf); return this; }
+        public Builder quantization(com.spectrayan.spector.core.quantization.QuantizationType qt) { this.config = config.withQuantization(qt); return this; }
+        public Builder vasq() { this.config = config.withVasq(); return this; }
+        public Builder vasq(int oversamplingFactor) { this.config = config.withVasq(oversamplingFactor); return this; }
+        public Builder vasq4() { this.config = config.withVasq4(); return this; }
+        public Builder vasq4(int oversamplingFactor) { this.config = config.withVasq4(oversamplingFactor); return this; }
+        public Builder persistence(PersistenceMode mode, Path directory) { this.config = config.withPersistence(mode, directory); return this; }
+        public Builder ivfPq() { this.config = config.withIvfPq(); return this; }
+        public Builder ivfPq(int nlist, int nprobe, int subspaces) { this.config = config.withIvfPq(nlist, nprobe, subspaces); return this; }
+        public Builder spectrum() { this.config = config.withSpectrum(); return this; }
+        public Builder spectrum(int nCentroids, int nProbe, int shardThreshold) { this.config = config.withSpectrum(nCentroids, nProbe, shardThreshold); return this; }
+        public Builder gpu(boolean enabled) { this.config = config.withGpu(enabled); return this; }
+        public Builder reranker(String ollamaUrl, String model) { this.config = config.withReranker(ollamaUrl, model); return this; }
+        public Builder reranker(String ollamaUrl, String model, int maxCandidates) { this.config = config.withReranker(ollamaUrl, model, maxCandidates); return this; }
+        public Builder embeddingProvider(EmbeddingProvider provider) { this.embeddingProvider = provider; return this; }
+        public Builder componentFactory(EngineComponentFactory factory) { this.componentFactory = factory; return this; }
+        public Builder config(SpectorConfig config) { this.config = config; return this; }
+        public SpectorConfig config() { return this.config; }
 
-        /** Sets max document capacity (default: 100,000). */
-        public Builder capacity(int capacity) {
-            this.config = config.withCapacity(capacity);
-            return this;
-        }
-
-        /** Sets the similarity function (default: COSINE). */
-        public Builder similarity(SimilarityFunction sf) {
-            this.config = config.withSimilarityFunction(sf);
-            return this;
-        }
-
-        /** Sets quantization type (default: NONE). */
-        public Builder quantization(com.spectrayan.spector.core.quantization.QuantizationType qt) {
-            this.config = config.withQuantization(qt);
-            return this;
-        }
-
-        /**
-         * Enables VASQ (FWHT-rotated INT8) quantization with the default oversampling factor (3).
-         *
-         * <p>Equivalent to {@code quantization(QuantizationType.VASQ)} plus sensible
-         * oversampling defaults. VASQ auto-calibrates from the first batch of inserted
-         * vectors; no pre-calibration step is required.</p>
-         */
-        public Builder vasq() {
-            this.config = config.withVasq();
-            return this;
-        }
-
-        /**
-         * Enables VASQ quantization with an explicit oversampling factor.
-         *
-         * @param oversamplingFactor number of extra candidates to retrieve before rescoring (≥ 1)
-         */
-        public Builder vasq(int oversamplingFactor) {
-            this.config = config.withVasq(oversamplingFactor);
-            return this;
-        }
-
-        /**
-         * Enables VASQ-4 (FWHT-rotated INT4, nibble-packed) quantization with default oversampling (3).
-         *
-         * <p>VASQ-4 provides ~2× additional compression over VASQ-8 (6–8× vs float32).
-         * Auto-calibrates with tighter clipping (2.5σ) for optimal use of 15 quantization levels.</p>
-         */
-        public Builder vasq4() {
-            this.config = config.withVasq4();
-            return this;
-        }
-
-        /**
-         * Enables VASQ-4 quantization with an explicit oversampling factor.
-         *
-         * @param oversamplingFactor number of extra candidates before rescoring (≥ 1; 3 recommended)
-         */
-        public Builder vasq4(int oversamplingFactor) {
-            this.config = config.withVasq4(oversamplingFactor);
-            return this;
-        }
-
-        /** Sets persistence mode and data directory. */
-        public Builder persistence(PersistenceMode mode, Path directory) {
-            this.config = config.withPersistence(mode, directory);
-            return this;
-        }
-
-        /** Switches to IVF-PQ index with auto parameters. */
-        public Builder ivfPq() {
-            this.config = config.withIvfPq();
-            return this;
-        }
-
-        /** Switches to IVF-PQ index with explicit parameters. */
-        public Builder ivfPq(int nlist, int nprobe, int subspaces) {
-            this.config = config.withIvfPq(nlist, nprobe, subspaces);
-            return this;
-        }
-
-        /** Switches to Spectrum index with auto parameters. */
-        public Builder spectrum() {
-            this.config = config.withSpectrum();
-            return this;
-        }
-
-        /** Switches to Spectrum index with explicit parameters. */
-        public Builder spectrum(int nCentroids, int nProbe, int shardThreshold) {
-            this.config = config.withSpectrum(nCentroids, nProbe, shardThreshold);
-            return this;
-        }
-
-        /** Enables or disables GPU acceleration. */
-        public Builder gpu(boolean enabled) {
-            this.config = config.withGpu(enabled);
-            return this;
-        }
-
-        /** Enables LLM re-ranking with default max candidates. */
-        public Builder reranker(String ollamaUrl, String model) {
-            this.config = config.withReranker(ollamaUrl, model);
-            return this;
-        }
-
-        /** Enables LLM re-ranking with explicit max candidates. */
-        public Builder reranker(String ollamaUrl, String model, int maxCandidates) {
-            this.config = config.withReranker(ollamaUrl, model, maxCandidates);
-            return this;
-        }
-
-        /** Sets the embedding provider for auto-embed ingestion and search. */
-        public Builder embeddingProvider(EmbeddingProvider provider) {
-            this.embeddingProvider = provider;
-            return this;
-        }
-
-        /** Sets a custom component factory (for testing). */
-        public Builder componentFactory(EngineComponentFactory factory) {
-            this.componentFactory = factory;
-            return this;
-        }
-
-        /** Sets the full config directly (advanced). */
-        public Builder config(SpectorConfig config) {
-            this.config = config;
-            return this;
-        }
-
-        /** Returns the current config being built (for inspection and testing). */
-        public SpectorConfig config() {
-            return this.config;
-        }
-
-        /**
-         * Builds and returns a fully initialized {@link SpectorEngine}.
-         *
-         * @return a new engine instance
-         */
+        /** Builds and returns a fully initialized {@link SpectorEngine}. */
         public SpectorEngine build() {
             EngineComponentFactory factory = componentFactory != null
                     ? componentFactory : new EngineComponentFactory();
