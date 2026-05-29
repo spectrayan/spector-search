@@ -239,6 +239,75 @@ public abstract class AbstractHnswIndex implements VectorIndex {
         }
     }
 
+    /**
+     * Bulk-loads a pre-built node with its existing graph connections.
+     *
+     * <p>Used for restoring a persisted HNSW index into writable mode.
+     * Unlike {@link #add}, this does <b>not</b> rebuild connections — it directly
+     * sets the neighbor arrays from the persisted graph structure. This is O(1)
+     * per node vs O(log N) for a normal add, enabling fast startup.</p>
+     *
+     * <p>Must be called in node-index order (0, 1, 2, ...) to preserve the graph
+     * structure. After all nodes are loaded, call {@link #restoreGraphState} to
+     * set the entry point and max level.</p>
+     *
+     * @param id                 document ID
+     * @param storeIndex         VectorStore index for this node
+     * @param vector             the float32 vector (stored via subclass hook)
+     * @param level              the HNSW level for this node
+     * @param layer0Neighbors    layer-0 neighbor indices
+     * @param upperLayerNeighbors upper-layer neighbor arrays (may be empty/null)
+     */
+    public void addPrebuilt(String id, int storeIndex, float[] vector,
+                            int level, int[] layer0Neighbors, int[][] upperLayerNeighbors) {
+        writeLock.lock();
+        try {
+            if (nodeCount >= capacity) {
+                throw new IllegalStateException("Index is full: capacity=" + capacity);
+            }
+
+            int nodeIdx = nodeCount;
+
+            // Store node metadata
+            ids[nodeIdx] = id;
+            storeIndices[nodeIdx] = storeIndex;
+            nodeLevels[nodeIdx] = level;
+            neighbors[nodeIdx] = layer0Neighbors != null ? layer0Neighbors : EMPTY_NEIGHBORS;
+            if (level > 0 && upperLayerNeighbors != null) {
+                this.upperNeighbors[nodeIdx] = upperLayerNeighbors;
+            } else if (level > 0) {
+                this.upperNeighbors[nodeIdx] = new int[level][];
+                for (int l = 0; l < level; l++) {
+                    this.upperNeighbors[nodeIdx][l] = EMPTY_NEIGHBORS;
+                }
+            }
+
+            // Delegate vector storage to subclass
+            storeVector(nodeIdx, vector);
+
+            nodeCount++;
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    /**
+     * Restores the graph entry point and max level after bulk-loading via
+     * {@link #addPrebuilt}.
+     *
+     * @param entryPoint the HNSW entry point node index
+     * @param maxLevel   the HNSW maximum level
+     */
+    public void restoreGraphState(int entryPoint, int maxLevel) {
+        writeLock.lock();
+        try {
+            this.entryPoint = entryPoint;
+            this.maxLevel = maxLevel;
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
     @Override
     public ScoredResult[] search(float[] query, int k) {
         if (query.length != dimensions) {

@@ -213,10 +213,10 @@ public class DiskHnswIndex implements VectorIndex {
         return candidates;
     }
 
-    // ─────────────── Mmap accessors ───────────────
+    // ─────────────── Mmap accessors (package-private for bulk copy) ───────────────
 
     /** Reads a vector from the mmap'd vector data region. */
-    private float[] readVector(int nodeIdx) {
+    public float[] readVector(int nodeIdx) {
         int dims = header.dimensions();
         float[] vector = new float[dims];
         long offset = header.vectorDataOffset() + (long) nodeIdx * dims * Float.BYTES;
@@ -225,7 +225,7 @@ public class DiskHnswIndex implements VectorIndex {
     }
 
     /** Reads neighbor indices from the mmap'd graph data region. */
-    private int[] readNeighbors(int nodeIdx, int layer) {
+    public int[] readNeighbors(int nodeIdx, int layer) {
         long blockOffset = header.graphDataOffset()
                 + (long) nodeIdx * header.graphBlockSize();
 
@@ -257,6 +257,28 @@ public class DiskHnswIndex implements VectorIndex {
             neighbors[i] = segment.get(IndexFileFormat.INT_U, pos + (long) i * 4);
         }
         return neighbors;
+    }
+
+    /** Reads the HNSW level for the given node from the graph block. */
+    public int readLevel(int nodeIdx) {
+        long blockOffset = header.graphDataOffset()
+                + (long) nodeIdx * header.graphBlockSize();
+        return segment.get(IndexFileFormat.INT_U, blockOffset);
+    }
+
+    /** Returns the ID for the given node. */
+    public String getId(int nodeIdx) {
+        return ids[nodeIdx];
+    }
+
+    /** Returns the HNSW entry point node index. */
+    public int entryPoint() {
+        return header.entryPoint();
+    }
+
+    /** Returns the HNSW maximum level. */
+    public int maxLevel() {
+        return header.maxLevel();
     }
 
     private float distance(float[] query, int nodeIdx) {
