@@ -3,6 +3,7 @@ package com.spectrayan.spector.memory.sync;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
@@ -16,6 +17,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.zip.CRC32;
+import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
+import java.util.zip.Inflater;
 
 /**
  * Append-only Write-Ahead Log for memory events.
@@ -54,7 +59,10 @@ public final class MemoryWal implements AutoCloseable {
     static final int WAL_MAGIC = 0x53504543;
 
     /** WAL format version. */
-    static final int WAL_VERSION = 1;
+    static final int WAL_VERSION = 2;
+
+    /** Record magic for Version 2: 'W' and 'A' (0x5741) */
+    static final short RECORD_MAGIC = 0x5741;
 
     /** File header size: 4B magic + 4B version = 8 bytes. */
     static final int FILE_HEADER_BYTES = 8;
@@ -64,6 +72,9 @@ public final class MemoryWal implements AutoCloseable {
 
     private final Path walDir;
     private final long maxChunkBytes;
+    private final boolean compressionEnabled;
+    private final int compressionThreshold;
+    private final boolean fsyncPerWrite;
     private final AtomicLong sequenceCounter;
     private final ReentrantLock writeLock = new ReentrantLock();
 
@@ -77,33 +88,50 @@ public final class MemoryWal implements AutoCloseable {
     private int chunkIndex;
 
     /**
-     * Opens or creates a file-backed WAL.
+     * Opens or creates a file-backed WAL with custom configurations.
      *
-     * <p>If the WAL directory already contains chunk files, they are replayed
-     * to recover state (sequence counter, in-memory event cache).</p>
+     * @param walDir               directory for WAL chunk files
+     * @param maxChunkBytes        maximum bytes per chunk before rolling (default: 8MB)
+     * @param compressionEnabled   whether text/payload compression is enabled
+     * @param compressionThreshold byte threshold above which payload compression is triggered
+     * @param fsyncPerWrite        whether to physically fsync the disk on every individual write
+     */
+    public MemoryWal(Path walDir, long maxChunkBytes, boolean compressionEnabled, int compressionThreshold, boolean fsyncPerWrite) {
+        this.walDir = walDir;
+        this.maxChunkBytes = maxChunkBytes;
+        this.compressionEnabled = compressionEnabled;
+        this.compressionThreshold = compressionThreshold;
+        this.fsyncPerWrite = fsyncPerWrite;
+        this.sequenceCounter = new AtomicLong(0);
+
+        if (walDir != null) {
+            try {
+                Files.createDirectories(walDir);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Cannot create WAL directory: " + walDir, e);
+            }
+
+            // Recover state from existing chunk files
+            recoverFromDisk();
+
+            // Open (or create) the active chunk
+            openActiveChunk();
+
+            log.info("MemoryWal opened: dir={}, chunks={}, recovered={} events, hwm={}, compression={}, fsyncPerWrite={}",
+                    walDir, chunkIndex + 1, events.size(), sequenceCounter.get(), compressionEnabled, fsyncPerWrite);
+        } else {
+            log.info("MemoryWal opened: in-memory mode");
+        }
+    }
+
+    /**
+     * Opens or creates a file-backed WAL with default compaction configurations.
      *
      * @param walDir        directory for WAL chunk files
      * @param maxChunkBytes maximum bytes per chunk before rolling (default: 8MB)
      */
     public MemoryWal(Path walDir, long maxChunkBytes) {
-        this.walDir = walDir;
-        this.maxChunkBytes = maxChunkBytes;
-        this.sequenceCounter = new AtomicLong(0);
-
-        try {
-            Files.createDirectories(walDir);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Cannot create WAL directory: " + walDir, e);
-        }
-
-        // Recover state from existing chunk files
-        recoverFromDisk();
-
-        // Open (or create) the active chunk
-        openActiveChunk();
-
-        log.info("MemoryWal opened: dir={}, chunks={}, recovered={} events, hwm={}",
-                walDir, chunkIndex + 1, events.size(), sequenceCounter.get());
+        this(walDir, maxChunkBytes, false, 1024, false);
     }
 
     /**
@@ -112,17 +140,14 @@ public final class MemoryWal implements AutoCloseable {
      * @param walDir directory for WAL chunk files
      */
     public MemoryWal(Path walDir) {
-        this(walDir, DEFAULT_MAX_CHUNK_BYTES);
+        this(walDir, DEFAULT_MAX_CHUNK_BYTES, false, 1024, false);
     }
 
     /**
      * Creates an in-memory WAL (no file persistence).
      */
     public MemoryWal() {
-        this.walDir = null;
-        this.maxChunkBytes = Long.MAX_VALUE;
-        this.sequenceCounter = new AtomicLong(0);
-        log.info("MemoryWal opened: in-memory mode");
+        this(null, Long.MAX_VALUE, false, 1024, false);
     }
 
     /**
@@ -279,7 +304,11 @@ public final class MemoryWal implements AutoCloseable {
 
         try {
             List<Path> chunks = findChunkFiles();
-            chunkIndex = chunks.size(); // next chunk index
+            int maxIdx = -1;
+            for (Path chunk : chunks) {
+                maxIdx = Math.max(maxIdx, parseChunkIndex(chunk.getFileName().toString()));
+            }
+            chunkIndex = maxIdx + 1; // next chunk index
 
             for (Path chunk : chunks) {
                 readChunkFile(chunk, events);
@@ -292,11 +321,12 @@ public final class MemoryWal implements AutoCloseable {
                     .orElse(0L);
             sequenceCounter.set(maxSeq);
 
+        } catch (WalCorruptionException e) {
+            log.error("Fatal WAL corruption detected during recovery: {}", e.getMessage());
+            throw new UncheckedIOException(e);
         } catch (IOException e) {
-            log.error("WAL recovery failed — starting fresh: {}", e.getMessage());
-            events.clear();
-            sequenceCounter.set(0);
-            chunkIndex = 0;
+            log.error("WAL recovery failed: {}", e.getMessage());
+            throw new UncheckedIOException("Failed to recover WAL from disk", e);
         }
     }
 
@@ -342,31 +372,70 @@ public final class MemoryWal implements AutoCloseable {
 
     /**
      * Serializes and writes a single event to the active FileChannel.
-     *
-     * <p>Binary format:
-     * {@code [4B record_length][8B sequence][1B type_ordinal][4B id_len][N id_bytes][8B timestamp_epoch_ms][4B payload_len][N payload]}</p>
      */
     private void writeEventToChannel(WalEvent event) throws IOException {
         byte[] idBytes = event.memoryId().getBytes(StandardCharsets.UTF_8);
-        byte[] payload = event.payload();
+        byte[] rawPayload = event.payload();
+        byte[] payload = rawPayload;
+        byte flags = 0;
 
-        // Calculate record length (excludes the 4B length prefix itself)
-        int recordLen = 8 + 1 + 4 + idBytes.length + 8 + 4 + payload.length;
+        if (compressionEnabled && rawPayload.length > compressionThreshold) {
+            payload = compress(rawPayload);
+            flags |= 1; // Bit 0: Compressed
+        }
 
-        ByteBuffer buf = ByteBuffer.allocate(4 + recordLen);
-        buf.putInt(recordLen);
-        buf.putLong(event.sequence());
+        int idLen = idBytes.length;
+        int payloadLen = payload.length;
+        int totalVarLen = idLen + payloadLen;
+        int paddingLen = (8 - (totalVarLen % 8)) % 8;
+        int recordSize = 40 + totalVarLen + paddingLen;
+
+        ByteBuffer buf = ByteBuffer.allocate(recordSize);
+
+        // Offset 0-7: Metadata Block
+        buf.putShort(RECORD_MAGIC);
+        buf.put((byte) WAL_VERSION);
+        buf.put(flags);
         buf.put((byte) event.type().ordinal());
-        buf.putInt(idBytes.length);
-        buf.put(idBytes);
-        buf.putLong(event.timestamp().toEpochMilli());
-        buf.putInt(payload.length);
-        buf.put(payload);
-        buf.flip();
+        buf.putShort((short) idLen);
+        buf.put((byte) 0); // Reserved byte
 
+        // Offset 8-15: Sequence Number
+        buf.putLong(event.sequence());
+
+        // Offset 16-23: Timestamp
+        buf.putLong(event.timestamp().toEpochMilli());
+
+        // Offset 24-27: Payload Length
+        buf.putInt(payloadLen);
+
+        // Offset 28-31: Payload CRC32
+        int payloadCrc = calculateCrc32(payload);
+        buf.putInt(payloadCrc);
+
+        // Offset 32-35: Reserved field
+        buf.putInt(0);
+
+        // Offset 36-39: Compute Header CRC over the first 36 bytes of the header
+        int headerCrc = calculateCrc32(buf, 36);
+        buf.putInt(headerCrc);
+
+        // Variable segments
+        buf.put(idBytes);
+        buf.put(payload);
+
+        // Alignment padding to 8-byte boundaries
+        for (int i = 0; i < paddingLen; i++) {
+            buf.put((byte) 0);
+        }
+
+        buf.flip();
         activeChannel.write(buf);
-        activeChannel.force(false); // metadata update not needed per-write
-        activeChunkBytes += 4 + recordLen;
+
+        if (fsyncPerWrite) {
+            activeChannel.force(false); // metadata update not needed per-write
+        }
+        activeChunkBytes += recordSize;
     }
 
     /**
@@ -387,7 +456,8 @@ public final class MemoryWal implements AutoCloseable {
      * Reads all events from a single WAL chunk file.
      */
     private void readChunkFile(Path chunkPath, List<WalEvent> out) throws IOException {
-        try (FileChannel ch = FileChannel.open(chunkPath, StandardOpenOption.READ)) {
+        // Open with READ and WRITE to support auto-repair of torn writes during recovery
+        try (FileChannel ch = FileChannel.open(chunkPath, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
             long fileSize = ch.size();
             if (fileSize < FILE_HEADER_BYTES) return; // too small, skip
 
@@ -412,8 +482,8 @@ public final class MemoryWal implements AutoCloseable {
 
             // Read events
             while (ch.position() < fileSize) {
-                WalEvent event = readEventFromChannel(ch, chunkPath);
-                if (event == null) break; // truncated record — stop
+                WalEvent event = readEventFromChannel(ch, chunkPath, version);
+                if (event == null) break; // torn-write truncation was triggered, stop
                 out.add(event);
             }
         }
@@ -424,43 +494,107 @@ public final class MemoryWal implements AutoCloseable {
      *
      * @return the deserialized event, or null if the record is truncated
      */
-    private WalEvent readEventFromChannel(FileChannel ch, Path source) throws IOException {
-        // Read record length
-        ByteBuffer lenBuf = ByteBuffer.allocate(4);
-        int bytesRead = ch.read(lenBuf);
-        if (bytesRead < 4) return null; // truncated
-        lenBuf.flip();
-        int recordLen = lenBuf.getInt();
+    private WalEvent readEventFromChannel(FileChannel ch, Path source, int fileVersion) throws IOException {
+        if (fileVersion != WAL_VERSION) {
+            throw new WalCorruptionException("Unsupported file version: " + fileVersion + " (expected " + WAL_VERSION + ")");
+        }
 
-        if (recordLen <= 0 || ch.position() + recordLen > ch.size()) {
-            log.warn("Truncated WAL record at position {} in {}", ch.position() - 4, source);
+        long startPos = ch.position();
+        if (ch.size() - startPos < 40) {
+            if (ch.size() - startPos > 0) {
+                handleTornWrite(source, ch, startPos);
+            }
+            return null; // EOF
+        }
+
+        // Read 40-byte header
+        ByteBuffer headerBuf = ByteBuffer.allocate(40);
+        int bytesRead = ch.read(headerBuf);
+        if (bytesRead < 40) {
+            handleTornWrite(source, ch, startPos);
+            return null;
+        }
+        headerBuf.flip();
+
+        // Offset 0-1: Record Magic
+        short magic = headerBuf.getShort();
+        if (magic != RECORD_MAGIC) {
+            handleMiddleLogCorruption(source, ch, startPos, "Record magic mismatch: expected 0x5741, got 0x" + Integer.toHexString(magic & 0xFFFF));
             return null;
         }
 
-        // Read full record
-        ByteBuffer recBuf = ByteBuffer.allocate(recordLen);
-        bytesRead = ch.read(recBuf);
-        if (bytesRead < recordLen) {
-            log.warn("Incomplete WAL record at position {} in {}", ch.position() - bytesRead, source);
+        // Offset 2-7: Metadata
+        byte recVersion = headerBuf.get();
+        byte flags = headerBuf.get();
+        byte typeOrd = headerBuf.get();
+        int idLen = headerBuf.getShort() & 0xFFFF;
+        byte reserved = headerBuf.get();
+
+        // Offset 8-15: Sequence Number
+        long sequence = headerBuf.getLong();
+
+        // Offset 16-23: Timestamp
+        long timestampMs = headerBuf.getLong();
+
+        // Offset 24-27: Payload Length
+        int payloadLen = headerBuf.getInt();
+
+        // Offset 28-31: Payload CRC
+        int payloadCrc = headerBuf.getInt();
+
+        // Offset 32-35: Reserved field
+        int reserved4 = headerBuf.getInt();
+
+        // Offset 36-39: Header CRC
+        int headerCrc = headerBuf.getInt();
+
+        // Verify Header CRC-32C
+        int computedHeaderCrc = calculateCrc32(headerBuf, 36);
+        if (headerCrc != computedHeaderCrc) {
+            handleMiddleLogCorruption(source, ch, startPos, "Header CRC mismatch: expected " + headerCrc + ", got " + computedHeaderCrc);
             return null;
         }
-        recBuf.flip();
 
-        long sequence = recBuf.getLong();
-        byte typeOrdinal = recBuf.get();
-        int idLen = recBuf.getInt();
+        // Variable segments
+        int totalVarLen = idLen + payloadLen;
+        int paddingLen = (8 - (totalVarLen % 8)) % 8;
+        int expectedRecordSize = totalVarLen + paddingLen;
+
+        if (ch.position() + expectedRecordSize > ch.size()) {
+            handleTornWrite(source, ch, startPos);
+            return null;
+        }
+
+        ByteBuffer varBuf = ByteBuffer.allocate(expectedRecordSize);
+        bytesRead = ch.read(varBuf);
+        if (bytesRead < expectedRecordSize) {
+            handleTornWrite(source, ch, startPos);
+            return null;
+        }
+        varBuf.flip();
+
         byte[] idBytes = new byte[idLen];
-        recBuf.get(idBytes);
-        long timestampMs = recBuf.getLong();
-        int payloadLen = recBuf.getInt();
-        byte[] payload = new byte[payloadLen];
-        recBuf.get(payload);
+        varBuf.get(idBytes);
+        byte[] payloadBytes = new byte[payloadLen];
+        varBuf.get(payloadBytes);
 
-        WalEvent.EventType type = WalEvent.EventType.values()[typeOrdinal];
+        // Verify Payload CRC-32C
+        int computedPayloadCrc = calculateCrc32(payloadBytes);
+        if (payloadCrc != computedPayloadCrc) {
+            handleMiddleLogCorruption(source, ch, startPos, "Payload CRC mismatch: expected " + payloadCrc + ", got " + computedPayloadCrc);
+            return null;
+        }
+
+        // Decompress payload if necessary
+        if ((flags & 1) != 0) {
+            payloadBytes = decompress(payloadBytes);
+        }
+
+        WalEvent.EventType type = WalEvent.EventType.values()[typeOrd];
         String memoryId = new String(idBytes, StandardCharsets.UTF_8);
         Instant timestamp = Instant.ofEpochMilli(timestampMs);
 
-        return new WalEvent(sequence, type, memoryId, timestamp, payload);
+        return new WalEvent(sequence, type, memoryId, timestamp, payloadBytes);
     }
 
     /**
@@ -483,5 +617,159 @@ public final class MemoryWal implements AutoCloseable {
      */
     static String chunkFileName(int index) {
         return String.format("wal-%06d.bin", index);
+    }
+
+    /**
+     * Truncates historical closed WAL chunk files where the maximum sequence
+     * number in the chunk is less than or equal to the snapshot High-Water Mark.
+     *
+     * @param snapshotHwm the sequence number up to which all mutations are persisted
+     */
+    public void truncateBefore(long snapshotHwm) {
+        if (walDir == null) return;
+
+        writeLock.lock();
+        try {
+            List<Path> chunks = findChunkFiles();
+            for (Path chunk : chunks) {
+                // Never truncate/delete the active chunk
+                if (chunk.equals(activeChunkPath)) {
+                    continue;
+                }
+
+                long maxSeqInChunk;
+                try {
+                    maxSeqInChunk = getMaxSequenceInChunk(chunk);
+                } catch (IOException e) {
+                    log.error("Failed to read maximum sequence in chunk " + chunk + " during truncation", e);
+                    continue;
+                }
+
+                if (maxSeqInChunk <= snapshotHwm) {
+                    try {
+                        Files.delete(chunk);
+                        log.info("Truncated WAL chunk {} (maxSeq={} <= snapshotHwm={})", chunk.getFileName(), maxSeqInChunk, snapshotHwm);
+                    } catch (IOException e) {
+                        log.warn("Failed to delete WAL chunk {}: {}", chunk, e.getMessage());
+                    }
+                } else {
+                    // Once we encounter a chunk with sequence > snapshotHwm, stop truncating
+                    break;
+                }
+            }
+
+            // Also clean up in-memory cache events to prevent memory bloating
+            events.removeIf(e -> e.sequence() <= snapshotHwm);
+
+        } catch (IOException e) {
+            log.error("WAL truncation failed", e);
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    long getMaxSequenceInChunk(Path chunkPath) throws IOException {
+        try (FileChannel ch = FileChannel.open(chunkPath, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+            long fileSize = ch.size();
+            if (fileSize < FILE_HEADER_BYTES) return 0L;
+
+            ByteBuffer headerBuf = ByteBuffer.allocate(FILE_HEADER_BYTES);
+            ch.read(headerBuf);
+            headerBuf.flip();
+            int magic = headerBuf.getInt();
+            int version = headerBuf.getInt();
+
+            if (magic != WAL_MAGIC || version != WAL_VERSION) {
+                return 0L;
+            }
+
+            long maxSeq = 0L;
+            while (ch.position() < fileSize) {
+                WalEvent event = readEventFromChannel(ch, chunkPath, version);
+                if (event == null) break;
+                maxSeq = Math.max(maxSeq, event.sequence());
+            }
+            return maxSeq;
+        }
+    }
+
+    private static int parseChunkIndex(String filename) {
+        try {
+            // filename format: wal-XXXXXX.bin
+            String numPart = filename.substring(4, 10);
+            return Integer.parseInt(numPart);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private void handleTornWrite(Path path, FileChannel fc, long startPos) throws IOException {
+        log.warn("Torn WAL record detected in {} at position {}. Truncating file to recovery boundary.", path, startPos);
+        fc.truncate(startPos);
+        fc.force(true);
+    }
+
+    private void handleMiddleLogCorruption(Path path, FileChannel fc, long startPos, String reason) throws IOException {
+        log.error("Fatal mid-log corruption in {} at position {}: {}. Triggering quarantine.", path, startPos, reason);
+        fc.close();
+
+        Path quarantineDir = path.getParent().resolve(".quarantine");
+        Files.createDirectories(quarantineDir);
+        Path quarantinedPath = quarantineDir.resolve(path.getFileName());
+        Files.move(path, quarantinedPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        log.warn("Quarantined corrupted WAL chunk {} to {}", path, quarantinedPath);
+
+        throw new WalCorruptionException("Fatal WAL corruption: " + reason + " at position " + startPos + " in file " + path);
+    }
+
+    private byte[] compress(byte[] data) {
+        Deflater deflater = new Deflater();
+        deflater.setInput(data);
+        deflater.finish();
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream(data.length);
+        byte[] buffer = new byte[1024];
+        while (!deflater.finished()) {
+            int count = deflater.deflate(buffer);
+            bos.write(buffer, 0, count);
+        }
+        deflater.end();
+        return bos.toByteArray();
+    }
+
+    private byte[] decompress(byte[] data) throws IOException {
+        Inflater inflater = new Inflater();
+        inflater.setInput(data);
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream(data.length * 2);
+        byte[] buffer = new byte[1024];
+        try {
+            while (!inflater.finished()) {
+                int count = inflater.inflate(buffer);
+                bos.write(buffer, 0, count);
+            }
+        } catch (DataFormatException e) {
+            throw new IOException("Failed to decompress WAL payload", e);
+        } finally {
+            inflater.end();
+        }
+        return bos.toByteArray();
+    }
+
+    private static int calculateCrc32(byte[] bytes) {
+        CRC32 crc = new CRC32();
+        crc.update(bytes);
+        return (int) crc.getValue();
+    }
+
+    private static int calculateCrc32(ByteBuffer buf, int length) {
+        CRC32 crc = new CRC32();
+        int originalPosition = buf.position();
+        buf.position(0);
+        byte[] temp = new byte[length];
+        buf.get(temp);
+        buf.position(originalPosition);
+        crc.update(temp);
+        return (int) crc.getValue();
     }
 }

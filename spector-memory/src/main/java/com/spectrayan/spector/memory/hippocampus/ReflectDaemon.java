@@ -178,6 +178,14 @@ public final class ReflectDaemon {
                     episodicStore.partitionCount());
 
             List<EpisodicPartition> allPartitions = episodicStore.partitions();
+            
+            // Native POSIX Optimization: advise sequential access on all episodic segments before scan
+            for (EpisodicPartition partition : allPartitions) {
+                if (partition.segment() != null && partition.segment().isMapped()) {
+                    com.spectrayan.spector.commons.concurrent.NativeOsMemory.advise(partition.segment(), com.spectrayan.spector.commons.concurrent.NativeOsMemory.MADV_SEQUENTIAL);
+                }
+            }
+
             try {
                 // Parallel prune: each partition scanned on its own Virtual Thread
                 List<Callable<Integer>> pruneTasks = new ArrayList<>(allPartitions.size());
@@ -208,6 +216,11 @@ public final class ReflectDaemon {
                         if (compacted != null) {
                             episodicStore.replacePartition(key, partition, compacted);
                             totalCompacted++;
+
+                            // Native POSIX Optimization: Immediately release old partition segment page cache
+                            if (partition.segment() != null && partition.segment().isMapped()) {
+                                com.spectrayan.spector.commons.concurrent.NativeOsMemory.advise(partition.segment(), com.spectrayan.spector.commons.concurrent.NativeOsMemory.MADV_DONTNEED);
+                            }
                         }
                     }
                 }
@@ -242,6 +255,13 @@ public final class ReflectDaemon {
             Duration elapsed = Duration.between(start, Instant.now());
             log.info("Reflection complete: consolidated={}, tombstoned={}, compacted={}, duration={}ms",
                     totalConsolidated, totalTombstoned, totalCompacted, elapsed.toMillis());
+
+            // Native POSIX Optimization: Release page-cache for all episodic segments once sleep consolidation is fully complete
+            for (EpisodicPartition partition : allPartitions) {
+                if (partition.segment() != null && partition.segment().isMapped()) {
+                    com.spectrayan.spector.commons.concurrent.NativeOsMemory.advise(partition.segment(), com.spectrayan.spector.commons.concurrent.NativeOsMemory.MADV_DONTNEED);
+                }
+            }
 
             return new ReflectReport(totalConsolidated, totalTombstoned,
                     totalCompacted, elapsed);

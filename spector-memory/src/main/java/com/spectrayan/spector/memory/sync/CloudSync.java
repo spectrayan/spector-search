@@ -3,6 +3,16 @@ package com.spectrayan.spector.memory.sync;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -65,12 +75,20 @@ public final class CloudSync {
      */
     public void importEvents(List<WalEvent> remoteEvents, EventReplayHandler replayHandler) {
         int applied = 0;
-        for (WalEvent event : remoteEvents) {
-            if (event.sequence() > remoteHighWaterMark.get()) {
-                replayHandler.replay(event);
-                remoteHighWaterMark.set(event.sequence());
-                applied++;
+        try {
+            for (WalEvent event : remoteEvents) {
+                if (event.sequence() > remoteHighWaterMark.get()) {
+                    replayHandler.replay(event);
+                    remoteHighWaterMark.set(event.sequence());
+                    applied++;
+                }
             }
+        } catch (Exception e) {
+            if (e instanceof WalCorruptionException || e.getCause() instanceof WalCorruptionException) {
+                log.error("WAL Corruption detected during event replication! Triggering cold bootstrap sync...", e);
+                throw new RuntimeException("WAL Corruption triggered bootstrap", e);
+            }
+            throw e;
         }
         log.info("Imported {} events from remote (new hwm={})",
                 applied, remoteHighWaterMark.get());
@@ -149,17 +167,139 @@ public final class CloudSync {
     public void importEvents(List<WalEvent> remoteEvents, EventReplayHandler replayHandler,
                               boolean crdtEnabled) {
         int applied = 0;
-        for (WalEvent event : remoteEvents) {
-            if (event.sequence() > remoteHighWaterMark.get()) {
-                // V3: CRDT merge would resolve field-level conflicts here
-                // The actual merge happens at the header level in the replay handler
-                replayHandler.replay(event);
-                remoteHighWaterMark.set(event.sequence());
-                applied++;
+        try {
+            for (WalEvent event : remoteEvents) {
+                if (event.sequence() > remoteHighWaterMark.get()) {
+                    // V3: CRDT merge would resolve field-level conflicts here
+                    // The actual merge happens at the header level in the replay handler
+                    replayHandler.replay(event);
+                    remoteHighWaterMark.set(event.sequence());
+                    applied++;
+                }
             }
+        } catch (Exception e) {
+            if (e instanceof WalCorruptionException || e.getCause() instanceof WalCorruptionException) {
+                log.error("WAL Corruption detected during CRDT event replication! Triggering cold bootstrap sync...", e);
+                throw new RuntimeException("WAL Corruption triggered bootstrap", e);
+            }
+            throw e;
         }
         log.info("Imported {} events from remote (crdt={}, new hwm={})",
                 applied, crdtEnabled, remoteHighWaterMark.get());
+    }
+
+    // ── REST/HTTP Cold Bootstrap Sync Utilities (V2 Upgrade) ──
+
+    /**
+     * Recursively packages the entire source directory into a Zip stream.
+     *
+     * @param sourceDir the source directory path
+     * @param os the target output stream
+     * @throws IOException if zipping fails
+     */
+    public static void zipDirectory(Path sourceDir, java.io.OutputStream os) throws IOException {
+        try (var zos = new java.util.zip.ZipOutputStream(os)) {
+            Files.walk(sourceDir)
+                .filter(path -> !Files.isDirectory(path))
+                .forEach(path -> {
+                    String zipPath = sourceDir.relativize(path).toString().replace('\\', '/');
+                    try {
+                        zos.putNextEntry(new java.util.zip.ZipEntry(zipPath));
+                        Files.copy(path, zos);
+                        zos.closeEntry();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
+        } catch (UncheckedIOException e) {
+            throw e.getCause();
+        }
+    }
+
+    /**
+     * Cleans the target directory and unpacks a Zip stream into it, with Zip Slip security checks.
+     *
+     * @param is the zip input stream
+     * @param targetDir the target extraction directory path
+     * @throws IOException if unzipping fails
+     */
+    public static void unzipDirectory(java.io.InputStream is, Path targetDir) throws IOException {
+        if (Files.exists(targetDir)) {
+            try (var stream = Files.walk(targetDir)) {
+                stream.sorted(Comparator.reverseOrder())
+                      .forEach(p -> {
+                          try {
+                              Files.delete(p);
+                          } catch (IOException e) {
+                              // ignore
+                          }
+                      });
+            }
+        }
+
+        if (is == null) {
+            return;
+        }
+
+        Files.createDirectories(targetDir);
+
+        try (var zis = new java.util.zip.ZipInputStream(is)) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path entryPath = targetDir.resolve(entry.getName());
+                // Prevent Zip Slip vulnerability
+                if (!entryPath.normalize().startsWith(targetDir.normalize())) {
+                    throw new IOException("Bad zip entry path: " + entry.getName());
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    Files.copy(zis, entryPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                zis.closeEntry();
+            }
+        }
+    }
+
+    /**
+     * Downloads a snapshot zip from the leader node and restores the local directory.
+     *
+     * @param leaderUrl the leader's base URL (e.g. "http://localhost:7070")
+     * @param localDir the local off-heap persistence directory
+     * @return the leader's snapshot high-water mark (HWM)
+     * @throws Exception if bootstrap fails
+     */
+    public static long bootstrapFromLeader(String leaderUrl, Path localDir) throws Exception {
+        log.info("Initiating REST/HTTP Cold Bootstrap from Leader: {} to local directory: {}", leaderUrl, localDir);
+
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(leaderUrl + "/api/v2/memory/snapshot"))
+                .timeout(Duration.ofSeconds(60))
+                .GET()
+                .build();
+
+        HttpResponse<java.io.InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+        if (response.statusCode() != 200) {
+            throw new IOException("Failed to download snapshot from leader. HTTP Status: " + response.statusCode());
+        }
+
+        String hwmHeader = response.headers().firstValue("X-Snapshot-HWM").orElse("0");
+        long leaderHwm = Long.parseLong(hwmHeader);
+
+        log.info("Leader snapshot HWM is: {}. Unpacking snapshot zip...", leaderHwm);
+
+        try (java.io.InputStream is = response.body()) {
+            unzipDirectory(is, localDir);
+        }
+
+        log.info("Cold Bootstrap successful! Local directory restored to Leader's state up to HWM {}", leaderHwm);
+        return leaderHwm;
     }
 
     /**

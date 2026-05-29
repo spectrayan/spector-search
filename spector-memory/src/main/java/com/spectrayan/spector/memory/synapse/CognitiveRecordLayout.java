@@ -126,18 +126,14 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
      * in search results." This produces more meaningful LTP adjustment.</p>
      *
      * <h3>Thread Safety</h3>
-     * <p>Uses a plain read-modify-write on the off-heap segment. {@code recall_count}
-     * is now a 4-byte {@code int} at a 4-byte-aligned offset (24), which enables
-     * atomic CAS/getAndAdd via {@code MemorySegment} on JDK 24+. Until then,
-     * the race condition is harmless: a lost increment shifts a decay bucket by
-     * only 0.33 positions (via {@code DecayStrategy.adjustForReconsolidation}).</p>
+     * <p>Uses a thread-safe atomic getAndAdd operation via the {@link java.lang.invoke.VarHandle}
+     * view over the off-heap segment. This guarantees atomicity and zero race conditions
+     * under heavy concurrent reinforcement workloads on modern multicore CPUs.</p>
      *
      * @return the previous recall count value
      */
     public int incrementRecallCount(MemorySegment segment, long offset) {
-        int current = segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
-        segment.set(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT, current + 1);
-        return current;
+        return (int) VAR_HANDLE_RECALL_COUNT.getAndAdd(segment, offset + OFFSET_RECALL_COUNT, 1);
     }
 
     /**

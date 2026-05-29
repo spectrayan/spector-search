@@ -60,15 +60,9 @@ public final class SynapticHeaderConstants {
     public static final ValueLayout.OfByte  LAYOUT_VALENCE       = ValueLayout.JAVA_BYTE;
     public static final ValueLayout.OfByte  LAYOUT_FLAGS         = ValueLayout.JAVA_BYTE;
 
-    // ── Atomic recall_count operations ──
-    // recall_count is now a 4-byte int at offset 24, naturally 4-byte aligned.
-    // This enables atomic CAS/getAndAdd via MemorySegment on JDK 24+.
-    // The widening from short (32K max) to int (2.1B max) also prevents
-    // overflow for long-lived memories under heavy reinforcement.
-    //
-    // JDK 22+ removed MethodHandles.memorySegmentViewVarHandle().
-    // Direct segment accessors (get/set) are used instead.
-    // TODO: When targeting JDK 24+, use MemorySegment.getAndAdd() for atomicity.
+    // ── VarHandle view for atomic access ──
+    /** VarHandle for atomic updates to the recall_count field. */
+    public static final java.lang.invoke.VarHandle VAR_HANDLE_RECALL_COUNT = LAYOUT_RECALL_COUNT.varHandle();
 
     // ── Flags bitmasks ──
     /** Bit 0: Record has been logically deleted (tombstoned). */
