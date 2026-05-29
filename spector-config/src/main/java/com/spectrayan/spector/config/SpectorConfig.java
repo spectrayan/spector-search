@@ -97,7 +97,7 @@ public record SpectorConfig(
                 spectrum.nCentroids(),
                 spectrum.nProbe(),
                 spectrum.shardThreshold(),
-                false  // forceWritable defaults to false
+                engine.forceWritable()  // from spector.engine.force-writable
         );
     }
 

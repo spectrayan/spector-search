@@ -55,7 +55,8 @@ public final class SpectorConfigFactory {
             String persistenceMode,
             Path dataDirectory,
             boolean gpuEnabled,
-            int oversamplingFactor
+            int oversamplingFactor,
+            boolean forceWritable
     ) {}
 
     /**
@@ -69,9 +70,10 @@ public final class SpectorConfigFactory {
                 props.getString("spector.engine.index-type", "HNSW"),
                 props.getString("spector.engine.quantization", "NONE"),
                 props.getString("spector.engine.persistence-mode", "IN_MEMORY"),
-                props.getPath("spector.engine.data-directory", Path.of(".spector-data")),
+                props.getPath("spector.engine.data-directory", Path.of(".spector", "index")),
                 props.getBoolean("spector.engine.gpu-enabled", false),
-                props.getInt("spector.engine.oversampling-factor", 0)
+                props.getInt("spector.engine.oversampling-factor", 0),
+                props.getBoolean("spector.engine.force-writable", false)
         );
     }
 
@@ -274,7 +276,7 @@ public final class SpectorConfigFactory {
         return new MemoryDefaults(
                 props.getBoolean("spector.memory.enabled", false),
                 props.getString("spector.memory.persistence-mode", "DISK"),
-                props.getPath("spector.memory.persistence-path", Path.of(".spector-memory")),
+                props.getPath("spector.memory.persistence-path", Path.of(".spector", "memory")),
                 props.getInt("spector.memory.dimensions", 384),
                 props.getInt("spector.memory.capacity", 100_000),
                 props.getBoolean("spector.memory.decay-enabled", true),
