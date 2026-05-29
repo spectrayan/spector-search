@@ -133,7 +133,7 @@ public FlashbulbDecision evaluate(float zScore, float baseImportance) {
 The surprise detection happens at **Step 3** of the ingestion pipeline:
 
 ```java
-// In IngestionPipeline.ingest()
+// In CognitiveIngestionTarget.ingestCognitive()
 
 // Step 1: Embed
 float[] vector = embeddingProvider.embed(text).vector();

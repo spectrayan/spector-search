@@ -98,10 +98,10 @@ public boolean replacePartition(String key,
 
 ## Circadian Trigger
 
-The ReflectDaemon runs on a configurable schedule. During ingestion, the `IngestionPipeline` checks if it's time for a consolidation cycle:
+The ReflectDaemon runs on a configurable schedule. During ingestion, the `CognitiveIngestionTarget` checks if it's time for a consolidation cycle:
 
 ```java
-// In IngestionPipeline — after each write
+// In CognitiveIngestionTarget — after each write
 private void checkCircadianTrigger() {
     long now = System.currentTimeMillis();
     if (now - lastReflectMs > reflectIntervalMs) {

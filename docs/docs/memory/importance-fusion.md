@@ -92,7 +92,7 @@ var hints = new IngestionHints(
 );
 
 // Novelty is computed automatically from working memory
-ingestionPipeline.ingest(id, text, type, tags, source, hints);
+cognitiveTarget.ingestCognitive(id, text, type, tags, source, hints);
 ```
 
 ### Safety Features

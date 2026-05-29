@@ -17,19 +17,22 @@ Spector Memory is organized around a **biological metaphor** where each Java pac
 | `TierStore` interface | Add new memory tiers | Implement the interface + register in `TierRouter` — no other changes needed |
 | `AbstractTierStore` | Common tier lifecycle | Extend for new off-heap tier stores with Arena/segment management |
 | `RecallListener` | Post-recall hooks | Add async listeners for co-activation tracking, logging, metrics |
-| `IngestionPipeline` / `RecallPipeline` | Discrete processing steps | Each step is independently testable and replaceable |
+| `CognitiveIngestionTarget` / `RecallPipeline` | Discrete processing steps | Each step is independently testable and replaceable |
 
 ---
 
 ## Data Flow: Ingestion
 
-The 10-step ingestion pipeline transforms raw text into an off-heap cognitive record:
+The ingestion pipeline is split across two layers:
+
+- **`IngestionPipeline`** (in `spector-ingestion`) — handles step 1 (embed) and chunking for large documents
+- **`CognitiveIngestionTarget`** (in `spector-memory`) — handles steps 2–9 (synaptic encoding → WAL)
 
 ```mermaid
 sequenceDiagram
     participant App as Application
     participant SM as SpectorMemory
-    participant IP as IngestionPipeline
+    participant CT as CognitiveIngestionTarget
     participant EP as EmbeddingProvider
     participant SD as SurpriseDetector
     participant FP as FlashbulbPolicy
@@ -39,42 +42,46 @@ sequenceDiagram
     participant WAL as MemoryWal
 
     App->>SM: remember(id, text, type, tags)
-    SM->>IP: ingest(id, text, type, tags)
+    SM->>CT: ingestCognitive(id, text, vector, type, tags, ...)
     
-    Note over IP: Step 1: Embed
-    IP->>EP: embed(text)
-    EP-->>IP: float[4096]
+    Note over CT: Step 1: Embed (done by unified IngestionPipeline)
+    Note over CT: or via CognitiveIngestionTarget.ingestCognitive()
+    CT->>EP: embed(text)
+    EP-->>CT: float[4096]
     
-    Note over IP: Step 2: Encode tags
-    IP->>IP: SynapticTagEncoder.encode(tags) → 64-bit Bloom
+    Note over CT: Step 2: Encode tags
+    CT->>CT: SynapticTagEncoder.encode(tags) → 64-bit Bloom
     
-    Note over IP: Step 3: Surprise detection
-    IP->>SD: computeImportance(l2Norm)
-    SD-->>IP: importance (0.0 – 1.0)
+    Note over CT: Step 3: Surprise detection
+    CT->>SD: computeImportance(l2Norm)
+    SD-->>CT: importance (0.0 – 1.0)
     
-    Note over IP: Step 4: Flashbulb check
-    IP->>FP: evaluate(zScore)
-    FP-->>IP: flashbulb? → pin + max importance
+    Note over CT: Step 4: Flashbulb check
+    CT->>FP: evaluate(zScore)
+    FP-->>CT: flashbulb? → pin + max importance
     
-    Note over IP: Step 5: Quantize
-    IP->>SQ: encode(float[]) → byte[]
+    Note over CT: Step 5: Quantize
+    CT->>SQ: encode(float[]) → byte[]
     
-    Note over IP: Step 6: Build header
-    IP->>IP: CognitiveHeader(timestamp, tags, importance, ...)
+    Note over CT: Step 6: Build header
+    CT->>CT: CognitiveHeader(timestamp, tags, importance, ...)
     
-    Note over IP: Step 7: Route & write
-    IP->>TR: write(type, header, quantized)
-    TR-->>IP: byte offset
+    Note over CT: Step 7: Route & write
+    CT->>TR: write(type, header, quantized)
+    TR-->>CT: byte offset
     
-    Note over IP: Step 8: Index
-    IP->>MI: register(id, location, text, source, tags)
+    Note over CT: Step 8: Index
+    CT->>MI: register(id, location, text, source, tags)
     
-    Note over IP: Step 9: WAL
-    IP->>WAL: appendRemember(id, quantized)
+    Note over CT: Step 9: WAL
+    CT->>WAL: appendRemember(id, quantized)
     
-    Note over IP: Step 10: Circadian check
-    IP->>IP: triggerReflectIfDue()
+    Note over CT: Step 10: Circadian check
+    CT->>CT: triggerReflectIfDue()
 ```
+
+> [!NOTE]
+> When ingestion comes through the unified `IngestionPipeline` (e.g., file ingestion), embedding (step 1) is handled by the pipeline itself. `CognitiveIngestionTarget.ingest()` receives a pre-embedded vector and executes steps 2–9. When called via `SpectorMemory.remember()`, `CognitiveIngestionTarget.ingestCognitive()` handles embedding internally.
 
 ---
 
@@ -139,17 +146,17 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    SM[SpectorMemory<br/>Façade] --> IP[pipeline/<br/>IngestionPipeline]
+    SM[SpectorMemory<br/>Façade] --> CT[pipeline/<br/>CognitiveIngestionTarget]
     SM --> RP[pipeline/<br/>RecallPipeline]
     SM --> TR[cortex/<br/>TierRouter]
     SM --> MI[index/<br/>MemoryIndex]
     
-    IP --> EP[embed-api/<br/>EmbeddingProvider]
-    IP --> SQ[core/<br/>ScalarQuantizer]
-    IP --> SD[dopamine/<br/>SurpriseDetector]
-    IP --> TR
-    IP --> MI
-    IP --> WAL[sync/<br/>MemoryWal]
+    CT --> EP[embed-api/<br/>EmbeddingProvider]
+    CT --> SQ[core/<br/>ScalarQuantizer]
+    CT --> SD[dopamine/<br/>SurpriseDetector]
+    CT --> TR
+    CT --> MI
+    CT --> WAL[sync/<br/>MemoryWal]
     
     RP --> EP
     RP --> CS[synapse/<br/>CognitiveScorer]

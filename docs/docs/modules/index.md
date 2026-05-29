@@ -48,6 +48,8 @@ graph TD
     ingestion --> config
     ingestion --> embedApi
 
+    engine --> ingestion
+    memory --> ingestion
     memory --> core
     memory --> embedApi
     memory --> idx
@@ -73,7 +75,7 @@ graph TD
 ```
 
 > [!IMPORTANT]
-> **Key change:** `spector-ingestion` is now a **pure utility** (file discovery, chunking). It does NOT depend on `engine` or `runtime`. Instead, `spector-runtime` depends on `spector-ingestion` and routes ingested content through its mode-aware `IngestionHandler`.
+> **Architecture:** `spector-ingestion` defines the `IngestionPipeline` and `IngestionTarget` interface. Both `spector-engine` and `spector-memory` depend on it to implement their `IngestionTarget`. `SpectorRuntime` is the composition root that wires everything together.
 
 ---
 
@@ -94,13 +96,13 @@ graph TD
     runtime["⚡ SpectorRuntime<br/><i>Composition Root</i>"]
 
     runtime --> sh["SearchHandler<br/><i>mode-aware search</i>"]
-    runtime --> ih["IngestionHandler<br/><i>mode-aware ingestion</i>"]
+    runtime --> ih["IngestionHandler<br/><i>delegates to IngestionPipeline</i>"]
 
     sh --> engine["SpectorEngine"]
     sh --> memory["SpectorMemory"]
-    ih --> engine
-    ih --> memory
-    ih --> ingestion["FileIngestionService<br/><i>file discovery + chunking</i>"]
+    ih --> pipeline["IngestionPipeline<br/><i>chunk → embed → store</i>"]
+    pipeline --> engineTarget["EngineIngestionTarget<br/><i>SEARCH mode</i>"]
+    pipeline --> memTarget["CognitiveIngestionTarget<br/><i>MEMORY mode</i>"]
 ```
 
 **SpectorRuntime** is a thin composition root — it creates and wires subsystems but contains no business logic. Each handler owns its domain:
@@ -108,7 +110,7 @@ graph TD
 | Handler | Responsibility | Routes to |
 |---------|---------------|-----------|
 | `SearchHandler` | Mode-aware search | Engine (SEARCH mode) or Memory (MEMORY mode) |
-| `IngestionHandler` | Mode-aware ingestion (text, file, directory) | Engine or Memory + FileIngestionService |
+| `IngestionHandler` | Delegates to unified `IngestionPipeline` | Pipeline → `EngineIngestionTarget` or `CognitiveIngestionTarget` |
 
 ---
 
@@ -144,14 +146,14 @@ graph TD
 |:---|:---|
 | [spector-rag](spector-rag.md) | RAG pipeline — retrieval-augmented generation |
 | [spector-engine](spector-engine.md) | Search engine — orchestrates index + RAG + storage |
-| [spector-ingestion](spector-ingestion.md) | Ingestion utilities — file discovery, chunking, title extraction (pure utility, no engine dependency) |
+| [spector-ingestion](spector-ingestion.md) | Unified ingestion pipeline — `IngestionPipeline` (builder), `IngestionTarget` interface, `FileDiscoveryService` |
 | [spector-memory](spector-memory.md) | Cognitive memory — biologically-inspired agent memory |
 
 ### Runtime Layer
 
 | Module | Description |
 |:---|:---|
-| [spector-runtime](spector-runtime.md) | Composition root — wires engine + memory + ingestion, exposes `SearchHandler` and `IngestionHandler` |
+| [spector-runtime](spector-runtime.md) | Composition root — wires engine + memory + ingestion pipeline, exposes `SearchHandler` and `IngestionHandler` |
 | [spector-mcp](spector-mcp.md) | MCP server — Model Context Protocol integration via stdio |
 | [spector-server](spector-server.md) | HTTP server — REST API endpoints + SSE streaming |
 

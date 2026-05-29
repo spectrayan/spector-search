@@ -58,7 +58,7 @@ public long write(MemoryType type, CognitiveHeader header, byte[] quantized) {
 }
 ```
 
-> Adding a new tier (e.g., `FLASH` for ultra-fast scratch memory) requires only: (1) implement `TierStore`, (2) register in `TierRouter`. No changes needed in `SpectorMemory`, `RecallPipeline`, or `IngestionPipeline`.
+> Adding a new tier (e.g., `FLASH` for ultra-fast scratch memory) requires only: (1) implement `TierStore`, (2) register in `TierRouter`. No changes needed in `SpectorMemory`, `RecallPipeline`, or `CognitiveIngestionTarget`.
 
 ---
 

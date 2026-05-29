@@ -37,7 +37,7 @@ Spector Memory maps every major cognitive subsystem from neuroscience to a dedic
 ```mermaid
 graph TB
     subgraph "🧠 Spector Memory"
-        SM[SpectorMemory<br/>Façade] --> IP[IngestionPipeline<br/>10-step remember]
+        SM[SpectorMemory<br/>Façade] --> CT[CognitiveIngestionTarget<br/>Cognitive remember]
         SM --> RP[RecallPipeline<br/>Parallel recall]
         
         subgraph "Cortex — Tier Stores"
@@ -65,7 +65,7 @@ graph TB
             TC[TombstoneCompactor<br/>Synaptic Pruning]
         end
         
-        IP --> TR
+        CT --> TR
         RP --> CS
         RP --> TR
     end

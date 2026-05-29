@@ -85,6 +85,8 @@ graph TD
 
     memory --> core["🔬 core"]
     memory --> embedapi
+    engine --> ingestion["📥 ingestion"]
+    memory --> ingestion
 
     ingestion --> config
     ingestion --> embedapi
@@ -115,14 +117,16 @@ graph TD
 | `cluster → engine → query → index → storage → core` | Main data path |
 | `server → runtime` | REST API entry point |
 | `mcp → runtime` | MCP agent entry point (in-process, zero network) |
-| `runtime → ingestion` | File discovery + chunking utility |
+| `runtime → ingestion` | Unified pipeline: chunk → embed → store |
+| `engine → ingestion` | `EngineIngestionTarget` implements `IngestionTarget` |
+| `memory → ingestion` | `CognitiveIngestionTarget` implements `IngestionTarget` |
 | `engine → rag` | RAG context assembly pipeline |
 | `engine → gpu` | Optional GPU acceleration |
 | `memory → core, embed-api` | Cognitive memory module |
 | `dist → mcp + cli + runtime` | Fat JAR distribution |
 
 > [!IMPORTANT]
-> No circular dependencies. `spector-ingestion` is a pure utility (file discovery, chunking) with no dependency on engine or runtime. `SpectorRuntime` is the single composition root — all entry points go through it.
+> No circular dependencies. `spector-ingestion` defines the `IngestionPipeline` and `IngestionTarget` interface. `spector-engine` and `spector-memory` both depend on it to implement their targets. `SpectorRuntime` is the single composition root — all entry points go through it.
 
 ---
 
@@ -133,39 +137,35 @@ sequenceDiagram
     participant Client as 👤 Client (CLI/MCP/REST)
     participant Runtime as ⚡ SpectorRuntime
     participant Handler as 📥 IngestionHandler
-    participant Service as 📁 FileIngestionService
-    participant Engine as 🔧 SpectorEngine
-    participant Embed as 🧠 EmbeddingProvider
-    participant BM25 as 📝 BM25 Index
-    participant HNSW as 🧠 HNSW Index
+    participant Pipeline as 🔄 IngestionPipeline
+    participant Embed as 🧠 ParallelEmbeddingPipeline
+    participant Target as 💾 IngestionTarget
     participant Store as 💾 Storage (mmap)
 
     Client->>Runtime: runtime.ingestion().ingest(dir, pattern)
-    Runtime->>Handler: Mode-aware routing
-    Handler->>Service: discover(rootDir, pattern)
-    Service-->>Handler: List<Path> files
+    Runtime->>Handler: Pre-configured pipeline + target
+    Handler->>Handler: FileDiscoveryService.discover()
     loop Each file
-        Handler->>Handler: Read + chunk content
-        Handler->>Engine: engine.ingest(id, content)
-        Engine->>Embed: Embed text (virtual thread)
-        Embed-->>Engine: Vector
-        par Parallel indexing via virtual threads
-            Engine->>BM25: Tokenize + update inverted index
-            Engine->>HNSW: Insert vector into graph
-            Engine->>Store: Persist vector (zero-copy mmap)
+        Handler->>Pipeline: pipeline.ingest(id, content)
+        Pipeline->>Pipeline: TextChunker.chunk(content)
+        Pipeline->>Embed: embed(chunkTexts) via virtual threads
+        Embed-->>Pipeline: List<vector>
+        loop Each chunk
+            Pipeline->>Target: target.ingest(id, text, vector)
+            Target->>Store: VectorStore + VectorIndex + KeywordIndex
         end
     end
     Store-->>Client: ✅ Indexed
 ```
 
 1. **Client** calls `runtime.ingestion().ingest()` — all entry points use this
-2. **IngestionHandler** routes based on mode (SEARCH → engine, MEMORY → cognitive memory)
-3. **FileIngestionService** handles file discovery and chunking (pure utility)
-4. **Engine** handles embedding, BM25 indexing, HNSW insertion, and storage
-5. In MEMORY mode, content routes to **SpectorMemory** instead of the engine
+2. **IngestionHandler** delegates to a pre-configured `IngestionPipeline`
+3. **IngestionPipeline** handles chunking (from config) and parallel embedding
+4. **IngestionTarget** receives pre-embedded chunks — `EngineIngestionTarget` for SEARCH, `CognitiveIngestionTarget` for MEMORY
+5. Each target handles its own downstream storage (VectorStore/HNSW or Quantize/TierRoute/WAL)
 
 > [!TIP]
-> `FileIngestionService` can be used independently for file discovery and chunking without any engine or runtime dependency.
+> `FileDiscoveryService` can be used independently for file discovery without any engine or runtime dependency.
 
 ---
 
