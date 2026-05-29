@@ -23,7 +23,7 @@ class SpectorConfigFactoryTest {
         assertThat(engine.indexType()).isEqualTo("HNSW");
         assertThat(engine.quantization()).isEqualTo("NONE");
         assertThat(engine.persistenceMode()).isEqualTo("IN_MEMORY");
-        assertThat(engine.dataDirectory()).isEqualTo(Path.of(".spector-data"));
+        assertThat(engine.dataDirectory()).isEqualTo(Path.of(".spector", "index"));
         assertThat(engine.gpuEnabled()).isFalse();
         assertThat(engine.oversamplingFactor()).isEqualTo(0);
     }
@@ -126,7 +126,7 @@ class SpectorConfigFactoryTest {
 
         assertThat(memory.enabled()).isFalse();
         assertThat(memory.persistenceMode()).isEqualTo("DISK");
-        assertThat(memory.persistencePath()).isEqualTo(Path.of(".spector-memory"));
+        assertThat(memory.persistencePath()).isEqualTo(Path.of(".spector", "memory"));
         assertThat(memory.dimensions()).isEqualTo(384);
         assertThat(memory.capacity()).isEqualTo(100_000);
         assertThat(memory.decayEnabled()).isTrue();

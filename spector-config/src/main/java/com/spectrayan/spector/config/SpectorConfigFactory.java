@@ -55,8 +55,7 @@ public final class SpectorConfigFactory {
             String persistenceMode,
             Path dataDirectory,
             boolean gpuEnabled,
-            int oversamplingFactor,
-            boolean forceWritable
+            int oversamplingFactor
     ) {}
 
     /**
@@ -72,8 +71,7 @@ public final class SpectorConfigFactory {
                 props.getString("spector.engine.persistence-mode", "IN_MEMORY"),
                 props.getPath("spector.engine.data-directory", Path.of(".spector", "index")),
                 props.getBoolean("spector.engine.gpu-enabled", false),
-                props.getInt("spector.engine.oversampling-factor", 0),
-                props.getBoolean("spector.engine.force-writable", false)
+                props.getInt("spector.engine.oversampling-factor", 0)
         );
     }
 

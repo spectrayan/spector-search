@@ -72,19 +72,6 @@ public final class SpectorRuntime implements AutoCloseable {
      * @return initialized runtime (caller must close)
      */
     public static SpectorRuntime from(SpectorProperties props, EmbeddingProvider embedder) {
-        return from(props, embedder, false);
-    }
-
-    /**
-     * Creates a runtime with optional writable index support.
-     *
-     * @param props         hierarchical configuration
-     * @param embedder      embedding provider
-     * @param forceWritable if true, creates a fresh writable index (for ingestion)
-     * @return initialized runtime (caller must close)
-     */
-    public static SpectorRuntime from(SpectorProperties props, EmbeddingProvider embedder,
-                                       boolean forceWritable) {
         SpectorMode mode = SpectorConfigFactory.mode(props);
 
         // ── Read memory config early (needed to configure engine in MEMORY mode) ──
@@ -93,15 +80,10 @@ public final class SpectorRuntime implements AutoCloseable {
 
         // ── Engine ──
         SpectorConfig engineConfig = SpectorConfig.from(props);
-        if (forceWritable) {
-            engineConfig = engineConfig.withForceWritable(true);
-        }
         // In MEMORY mode the engine provides the shared HNSW index for semantic
         // recall. Use DISK persistence so the HNSW graph + VectorStore survive
         // restarts. Point engine data to .spector/index (sibling of memory path).
         // Use the memory config's capacity so the HNSW can hold all semantic vectors.
-        // force-writable must be set in spector.yml (or via CLI) so the HNSW is
-        // writable at runtime — DiskHnswIndex is read-only.
         if (mode == SpectorMode.MEMORY && memoryEnabled) {
             java.nio.file.Path indexDir = memoryConfig.persistencePath()
                     .resolveSibling("index");
@@ -110,10 +92,10 @@ public final class SpectorRuntime implements AutoCloseable {
                     .withCapacity(memoryConfig.capacity());
         }
         SpectorEngine engine = new SpectorEngine(engineConfig, embedder);
-        log.info("[Runtime] Engine: dims={}, index={}, persistence={}, dataDir={}, mode={}, writable={}",
+        log.info("[Runtime] Engine: dims={}, index={}, persistence={}, dataDir={}, mode={}",
                 engineConfig.dimensions(), engineConfig.indexType(),
                 engineConfig.persistenceMode(), engineConfig.dataDirectory(),
-                mode, engineConfig.forceWritable());
+                mode);
 
         // ── Memory (opt-in or auto-enabled in MEMORY mode) ──
         SpectorMemory memory = null;

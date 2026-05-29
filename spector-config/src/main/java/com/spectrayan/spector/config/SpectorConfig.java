@@ -49,8 +49,7 @@ public record SpectorConfig(
         int oversamplingFactor,
         int spectrumNCentroids,
         int spectrumNProbe,
-        int spectrumShardThreshold,
-        boolean forceWritable
+        int spectrumShardThreshold
 ) {
     /** Default: 384-dim embeddings, 100K capacity, cosine similarity, HNSW, no quantization, in-memory. */
     public static final SpectorConfig DEFAULT =
@@ -58,7 +57,7 @@ public record SpectorConfig(
                     QuantizationType.NONE, PersistenceMode.IN_MEMORY, null,
                     IndexType.HNSW, 0, 0, 0,
                     false, false, null, null, 20, 0,
-                    0, 0, 0, false);
+                    0, 0, 0);
 
     /**
      * Creates a {@link SpectorConfig} from hierarchical properties.
@@ -96,8 +95,7 @@ public record SpectorConfig(
                 engine.oversamplingFactor(),
                 spectrum.nCentroids(),
                 spectrum.nProbe(),
-                spectrum.shardThreshold(),
-                engine.forceWritable()  // from spector.engine.force-writable
+                spectrum.shardThreshold()
         );
     }
 
@@ -108,7 +106,7 @@ public record SpectorConfig(
                 QuantizationType.NONE, PersistenceMode.IN_MEMORY, null,
                 IndexType.HNSW, 0, 0, 0,
                 false, false, null, null, 20, 0,
-                0, 0, 0, false);
+                0, 0, 0);
     }
 
     /** Pre-quantization constructor (HNSW, in-memory). */
@@ -120,7 +118,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 IndexType.HNSW, 0, 0, 0,
                 false, false, null, null, 20, 0,
-                0, 0, 0, false);
+                0, 0, 0);
     }
 
     /** Pre-IVF-PQ constructor (no GPU, no reranker). */
@@ -133,7 +131,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 false, false, null, null, 20, 0,
-                0, 0, 0, false);
+                0, 0, 0);
     }
 
     public SpectorConfig {
@@ -154,20 +152,7 @@ public record SpectorConfig(
         }
     }
 
-    /**
-     * Returns a copy with writable index forced on.
-     *
-     * <p>When {@code forceWritable=true}, the engine skips loading the read-only
-     * {@code DiskHnswIndex} from disk and creates a fresh in-memory writable index
-     * instead. Use this for ingestion workflows that need to build a new index.</p>
-     */
-    public SpectorConfig withForceWritable(boolean writable) {
-        return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
-                quantization, persistenceMode, dataDirectory,
-                indexType, ivfNlist, ivfNprobe, pqSubspaces,
-                gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, writable);
-    }
+
 
     /** Builder-style with custom dimensions. */
     public SpectorConfig withDimensions(int dims) {
@@ -175,7 +160,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /** Builder-style with custom capacity. */
@@ -184,7 +169,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /** Builder-style with custom similarity function. */
@@ -193,7 +178,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /** Builder-style with quantization type. */
@@ -202,7 +187,7 @@ public record SpectorConfig(
                 qt, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /** Builder-style with persistence mode and data directory. */
@@ -211,7 +196,7 @@ public record SpectorConfig(
                 quantization, mode, directory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /**
@@ -226,7 +211,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 IndexType.IVF_PQ, nlist, nprobe, subspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, 0, 0, 0, forceWritable);
+                oversamplingFactor, 0, 0, 0);
     }
 
     /** Builder-style to switch to IVF-PQ index with auto parameters. */
@@ -248,7 +233,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 enabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /**
@@ -263,7 +248,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, true, ollamaUrl, model, maxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /**
@@ -292,7 +277,7 @@ public record SpectorConfig(
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
                 Math.max(1, oversamplingFactor),
-                spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /** Builder-style to enable VASQ with the default oversampling factor (3). */
@@ -314,7 +299,7 @@ public record SpectorConfig(
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
                 Math.max(1, oversamplingFactor),
-                spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /** Builder-style to enable VASQ-4 with the default oversampling factor (3). */
@@ -341,7 +326,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold, forceWritable);
+                oversamplingFactor, spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
     /**
@@ -360,7 +345,7 @@ public record SpectorConfig(
                 quantization, persistenceMode, dataDirectory,
                 IndexType.SPECTRUM, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
-                oversamplingFactor, nCentroids, nProbe, shardThreshold, forceWritable);
+                oversamplingFactor, nCentroids, nProbe, shardThreshold);
     }
 
     /** Builder-style to switch to SPECTRUM index with auto parameters. */
