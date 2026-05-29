@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.embed.EmbeddingResult;
-import com.spectrayan.spector.engine.SpectorConfig;
+import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.mcp.schema.ToolSchemaBuilder;
 

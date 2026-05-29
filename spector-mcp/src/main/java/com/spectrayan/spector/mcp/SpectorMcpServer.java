@@ -53,6 +53,7 @@ public class SpectorMcpServer {
     static final String SERVER_NAME = "spector-search-mcp";
     static final String SERVER_VERSION = "0.1.0";
 
+    private final SpectorRuntime runtime;
     private final SpectorEngine engine;
     private final SpectorMemory memory; // nullable
     private volatile McpSyncServer mcpServer;
@@ -63,6 +64,7 @@ public class SpectorMcpServer {
      * @param runtime the Spector runtime (engine + optional memory)
      */
     public SpectorMcpServer(SpectorRuntime runtime) {
+        this.runtime = runtime;
         this.engine = runtime.engine();
         this.memory = runtime.memory();
     }
@@ -82,8 +84,8 @@ public class SpectorMcpServer {
                 engine.hasEmbeddingProvider() ? "configured" : "none",
                 SimdCapability.report());
 
-        // ── Assemble providers ──
-        var toolSpecs  = SpectorToolRegistry.createAll(engine, SERVER_VERSION, memory);
+        // ── Assemble providers (runtime-aware for mode routing) ──
+        var toolSpecs  = SpectorToolRegistry.createAll(runtime, SERVER_VERSION);
         var resources  = SpectorResourceProvider.create(engine, SERVER_VERSION);
         var prompts    = SpectorPromptProvider.create(engine);
 

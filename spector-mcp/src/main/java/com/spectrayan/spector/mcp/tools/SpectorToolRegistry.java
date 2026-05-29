@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.memory.SpectorMemory;
+import com.spectrayan.spector.runtime.SpectorRuntime;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
 
@@ -91,6 +92,24 @@ public final class SpectorToolRegistry {
             SpectorEngine engine, String serverVersion, SpectorMemory memory) {
         return handlers(serverVersion, memory).stream()
                 .map(handler -> handler.toToolSpecification(engine))
+                .toList();
+    }
+
+    /**
+     * Creates all tool specifications with mode-aware runtime support.
+     *
+     * <p>When a {@link SpectorRuntime} is provided, tools can access the
+     * runtime for mode-aware search and ingestion routing.</p>
+     *
+     * @param runtime       the Spector runtime (engine + optional memory)
+     * @param serverVersion the server version string
+     * @return list of MCP tool specifications
+     */
+    public static List<McpServerFeatures.SyncToolSpecification> createAll(
+            SpectorRuntime runtime, String serverVersion) {
+        SpectorMemory memory = runtime.hasMemory() ? runtime.memory() : null;
+        return handlers(serverVersion, memory).stream()
+                .map(handler -> handler.toToolSpecification(runtime.engine(), runtime))
                 .toList();
     }
 }

@@ -3,8 +3,8 @@ package com.spectrayan.spector.mcp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.spectrayan.spector.commons.config.SpectorProperties;
-import com.spectrayan.spector.commons.config.SpectorConfigFactory;
+import com.spectrayan.spector.config.SpectorProperties;
+import com.spectrayan.spector.config.SpectorConfigFactory;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.ingestion.EmbeddingProviderFactory;
 import com.spectrayan.spector.runtime.SpectorRuntime;

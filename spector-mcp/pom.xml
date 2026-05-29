@@ -18,6 +18,11 @@
         Uses the official Anthropic MCP Java SDK for protocol compliance.</description>
 
     <dependencies>
+
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-config</artifactId>
+        </dependency>
         <!-- ── Spector Runtime (engine + memory + config) ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>

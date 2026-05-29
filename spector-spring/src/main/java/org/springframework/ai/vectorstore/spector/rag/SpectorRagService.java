@@ -2,9 +2,9 @@ package org.springframework.ai.vectorstore.spector.rag;
 
 import com.spectrayan.spector.commons.TextChunk;
 import com.spectrayan.spector.commons.WordTokenizer;
-import com.spectrayan.spector.engine.rag.ContextBuilder;
-import com.spectrayan.spector.engine.rag.ContextResult;
-import com.spectrayan.spector.engine.rag.ScoredChunk;
+import com.spectrayan.spector.rag.ContextBuilder;
+import com.spectrayan.spector.rag.ContextResult;
+import com.spectrayan.spector.rag.ScoredChunk;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

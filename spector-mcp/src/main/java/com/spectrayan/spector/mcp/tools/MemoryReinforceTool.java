@@ -49,10 +49,15 @@ public final class MemoryReinforceTool extends MemoryToolHandler {
         String valenceStr = requireString(args, "valence");
 
         byte valence = parseValence(valenceStr);
+
+        // Check if this was a lateral result before reinforcing
+        boolean wasLateral = memory.recallPipeline().wasLateral(memoryId);
+
         memory.reinforce(memoryId, valence);
 
         String emoji = valence > 0 ? "👍" : valence < 0 ? "👎" : "😐";
-        return textResult(emoji + " Reinforced '" + memoryId + "' with valence=" + valence);
+        String lateralInfo = wasLateral ? " (lateral result — feedback recorded)" : "";
+        return textResult(emoji + " Reinforced '" + memoryId + "' with valence=" + valence + lateralInfo);
     }
 
     private static byte parseValence(String str) {
