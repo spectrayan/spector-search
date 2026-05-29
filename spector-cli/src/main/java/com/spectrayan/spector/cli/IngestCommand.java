@@ -143,7 +143,7 @@ class IngestCommand extends BaseCommand {
         props = propsBuilder.build();
 
         // ── Create runtime + ingest ──
-        try (SpectorRuntime runtime = SpectorRuntime.from(props, embedder, true)) {
+        try (SpectorRuntime runtime = SpectorRuntime.from(props, embedder)) {
             long startMs = System.currentTimeMillis();
 
             var results = runtime.ingestion().ingest(
