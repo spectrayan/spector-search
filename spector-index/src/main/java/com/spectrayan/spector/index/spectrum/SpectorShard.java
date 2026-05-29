@@ -11,8 +11,15 @@ import com.spectrayan.spector.index.ScoredResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import com.spectrayan.spector.config.SpectorConfig;
+import com.spectrayan.spector.index.ShardedDiskHnswIndex;
+import com.spectrayan.spector.index.ShardedDiskHnswWriter;
 
 /**
  * Adaptive per-centroid shard for {@link SpectorIndex}.
@@ -361,7 +368,7 @@ final class SpectorShard {
 
         // Step 2: Build HNSW with EUCLIDEAN — residual search must use L2
         // (see SpectorIndex.search() for the full rationale).
-        int capacity = currentSize * 4;
+        int capacity = Math.max(currentSize * 4, 1000);
         hnswIndex = QuantizedHnswIndex.vasqPreCalibrated(
                 dimensions,
                 capacity,
@@ -390,5 +397,159 @@ final class SpectorShard {
         // After this, any thread reading promoted=true is guaranteed to see
         // the fully constructed hnswIndex (via volatile happens-before).
         promoted = true;
+    }
+
+    /**
+     * Saves this shard's state to disk under the given directory.
+     *
+     * <p>Flat shards: residuals + metadata written to {@code shard_N.flat}.<br>
+     * Promoted shards: HNSW graph written via {@link ShardedDiskHnswWriter}
+     * into a subdirectory {@code shard_N_hnsw/}.</p>
+     */
+    void save(Path shardsDir, int shardIndex) throws IOException {
+        readLock.lock();
+        try {
+            Path shardFile = shardsDir.resolve("shard_" + shardIndex + ".flat");
+            try (var out = new java.io.DataOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(shardFile)))) {
+                out.writeBoolean(promoted);
+                out.writeInt(count);
+                if (!promoted) {
+                    // Write flat residuals
+                    for (int i = 0; i < count * dimensions; i++) {
+                        out.writeFloat(flatData[i]);
+                    }
+                    // Write flat metadata
+                    for (int i = 0; i < count; i++) {
+                        out.writeUTF(flatIds[i]);
+                        out.writeInt(flatStoreIndices[i]);
+                    }
+                }
+            }
+            if (promoted) {
+                Path shardHnswDir = shardsDir.resolve("shard_" + shardIndex + "_hnsw");
+                int nodesPerShard = SpectorConfig.DEFAULT_NODES_PER_SHARD;
+                ShardedDiskHnswWriter.write(hnswIndex, shardHnswDir, nodesPerShard);
+            }
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    /**
+     * Loads a shard's state from disk.
+     */
+    static SpectorShard load(Path shardsDir, int shardIndex, int dimensions, SpectorIndexConfig config, float[] centroid) throws IOException {
+        Path shardFile = shardsDir.resolve("shard_" + shardIndex + ".flat");
+        if (!Files.exists(shardFile)) {
+            throw new java.io.FileNotFoundException("Shard flat file not found: " + shardFile);
+        }
+
+        boolean promoted;
+        int count;
+
+        try (var in = new java.io.DataInputStream(new java.io.BufferedInputStream(Files.newInputStream(shardFile)))) {
+            promoted = in.readBoolean();
+            count = in.readInt();
+
+            var shard = new SpectorShard(dimensions, config, centroid);
+            shard.promoted = promoted;
+            shard.count = count;
+
+            if (!promoted) {
+                // Restore flat residuals and metadata
+                int cap = Math.max(INITIAL_FLAT_CAPACITY, count * 2);
+                shard.flatCapacity = cap;
+                shard.flatData = new float[cap * dimensions];
+                for (int i = 0; i < count * dimensions; i++) {
+                    shard.flatData[i] = in.readFloat();
+                }
+                shard.flatIds = new String[cap];
+                shard.flatStoreIndices = new int[cap];
+                for (int i = 0; i < count; i++) {
+                    shard.flatIds[i] = in.readUTF();
+                    shard.flatStoreIndices[i] = in.readInt();
+                }
+            } else {
+                shard.flatData = null;
+                shard.flatIds = null;
+                shard.flatStoreIndices = null;
+            }
+
+            return shard;
+        }
+    }
+
+    /**
+     * Loads the promoted HNSW graph structure and dynamically recalibrates/encodes it.
+     *
+     * <p>Reads from the sharded HNSW directory {@code shard_N_hnsw/} written by
+     * {@link ShardedDiskHnswWriter}. The graph is reconstructed with fresh VASQ
+     * calibration from the loaded residual vectors.</p>
+     */
+    void loadPromotedGraph(Path shardsDir, int shardIndex, com.spectrayan.spector.storage.VectorStore vs) throws IOException {
+        if (!promoted) return;
+
+        Path shardHnswDir = shardsDir.resolve("shard_" + shardIndex + "_hnsw");
+        if (!Files.exists(shardHnswDir)) {
+            throw new java.io.FileNotFoundException("Shard HNSW directory not found: " + shardHnswDir);
+        }
+
+        writeLock.lock();
+        try {
+            try (var diskIndex = ShardedDiskHnswIndex.open(shardHnswDir)) {
+                int nodeCount = diskIndex.size();
+
+                // 1. Read all raw residuals from the sharded disk HNSW index
+                float[][] rawResiduals = new float[nodeCount][dimensions];
+                for (int i = 0; i < nodeCount; i++) {
+                    rawResiduals[i] = diskIndex.readVector(i);
+                }
+
+                // 2. Calibrate VasqParams using the loaded residuals
+                VasqParams vasqParams = VasqCalibrator.calibrate(rawResiduals, nodeCount, dimensions);
+                var vasqStrategy = new com.spectrayan.spector.core.quantization.strategy.VasqStrategy(vasqParams, SimilarityFunction.EUCLIDEAN);
+
+                // 3. Create pre-calibrated QuantizedHnswIndex
+                int capacity = Math.max(nodeCount * 4, config.shardThreshold() * 2);
+                this.hnswIndex = QuantizedHnswIndex.vasqPreCalibrated(
+                        dimensions,
+                        capacity,
+                        SimilarityFunction.EUCLIDEAN,
+                        config.hnswParams(),
+                        vasqStrategy,
+                        config.oversamplingFactor()
+                );
+
+                // 4. Bulk-load the HNSW nodes via addPrebuilt
+                for (int i = 0; i < nodeCount; i++) {
+                    String id = diskIndex.getId(i);
+                    int level = diskIndex.readLevel(i);
+
+                    // Resolve storeIndex from VectorStore, or fallback to the node index if not found
+                    int storeIndex = vs != null ? vs.indexOf(id) : -1;
+                    if (storeIndex < 0) {
+                        storeIndex = i; // Fallback to index if VectorStore is empty/null or mapping is missing
+                    }
+
+                    int[] layer0 = diskIndex.readNeighbors(i, 0);
+                    int[][] upper = null;
+                    if (level > 0) {
+                        upper = new int[level][];
+                        for (int l = 1; l <= level; l++) {
+                            upper[l - 1] = diskIndex.readNeighbors(i, l);
+                        }
+                    }
+
+                    this.hnswIndex.addPrebuilt(id, storeIndex, rawResiduals[i], level, layer0, upper);
+                }
+
+                // 5. Restore HNSW graph entry point and max level
+                if (nodeCount > 0) {
+                    this.hnswIndex.restoreGraphState(diskIndex.entryPoint(), diskIndex.maxLevel());
+                }
+            }
+        } finally {
+            writeLock.unlock();
+        }
     }
 }

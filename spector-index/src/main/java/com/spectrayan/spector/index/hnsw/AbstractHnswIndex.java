@@ -159,6 +159,14 @@ public abstract class AbstractHnswIndex implements VectorIndex {
      */
     protected abstract void storeVector(int nodeIdx, float[] vector);
 
+    /**
+     * Returns the float32 vector for the given node.
+     *
+     * @param nodeIdx the internal node index
+     * @return the stored float32 vector
+     */
+    public abstract float[] getVector(int nodeIdx);
+
     // ─────────────── VectorIndex implementation ───────────────
 
     @Override

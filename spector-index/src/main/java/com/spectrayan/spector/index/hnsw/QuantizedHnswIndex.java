@@ -351,6 +351,11 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
     }
 
     @Override
+    public float[] getVector(int nodeIdx) {
+        return floatVectors[nodeIdx];
+    }
+
+    @Override
     protected void storeVector(int nodeIdx, float[] vector) {
         // Defensive copy: the caller (add()) may mutate the passed vector after this returns.
         // SpectorShard's ThreadLocal residual scratch is overwritten on the next add(), so the copy

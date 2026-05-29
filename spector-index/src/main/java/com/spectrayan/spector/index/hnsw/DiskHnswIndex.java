@@ -46,6 +46,7 @@ public class DiskHnswIndex implements VectorIndex {
     private final String[] ids;
     private final SimilarityFunction similarityFunction;
     private volatile boolean closed;
+    private volatile long lastAccessed;
 
     private DiskHnswIndex(Path filePath, IndexFileFormat.Header header,
                            Arena arena, MemorySegment segment,
@@ -60,6 +61,7 @@ public class DiskHnswIndex implements VectorIndex {
         this.ids = ids;
         this.similarityFunction = header.similarityFunction();
         this.closed = false;
+        this.lastAccessed = System.currentTimeMillis();
     }
 
     /**
@@ -87,7 +89,9 @@ public class DiskHnswIndex implements VectorIndex {
         log.info("DiskHnswIndex opened: {} nodes, {} dims, file={} ({} bytes)",
                 header.nodeCount(), header.dimensions(), indexPath, fileSize);
 
-        return new DiskHnswIndex(indexPath, header, arena, segment, raf, channel, ids);
+        DiskHnswIndex index = new DiskHnswIndex(indexPath, header, arena, segment, raf, channel, ids);
+        index.warmup(); // Warm up asynchronously on open
+        return index;
     }
 
     @Override
@@ -103,6 +107,7 @@ public class DiskHnswIndex implements VectorIndex {
 
     @Override
     public ScoredResult[] search(float[] query, int k) {
+        this.lastAccessed = System.currentTimeMillis();
         if (query.length != header.dimensions()) {
             throw new IllegalArgumentException(
                     "Expected " + header.dimensions() + " dims, got " + query.length);
@@ -138,10 +143,14 @@ public class DiskHnswIndex implements VectorIndex {
     public SimilarityFunction similarityFunction() { return similarityFunction; }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         if (!closed) {
             closed = true;
             try {
+                if (segment.isMapped()) {
+                    com.spectrayan.spector.commons.concurrent.MemoryPinning.unlock(segment);
+                    segment.unload();
+                }
                 arena.close();
                 channel.close();
                 raf.close();
@@ -150,6 +159,52 @@ public class DiskHnswIndex implements VectorIndex {
                 log.warn("Error closing DiskHnswIndex", e);
             }
         }
+    }
+
+    /**
+     * Pre-touches and loads the mapped memory segment into physical memory
+     * to prevent cold-start page fault latency spikes during initial queries.
+     * Performs a best-effort asynchronous load using a virtual thread.
+     */
+    public void warmup() {
+        if (segment.isMapped()) {
+            Thread.startVirtualThread(() -> {
+                long start = System.nanoTime();
+                try {
+                    // Advise kernel to sequentially pre-read mapped segment pages
+                    com.spectrayan.spector.commons.concurrent.NativeOsMemory.advise(segment, com.spectrayan.spector.commons.concurrent.NativeOsMemory.MADV_WILLNEED);
+                    segment.load();
+                    boolean pinned = com.spectrayan.spector.commons.concurrent.MemoryPinning.lock(segment);
+                    long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+                    log.info("DiskHnswIndex warmed up successfully (pinned={}) in {} ms (file={})",
+                            pinned, elapsedMs, filePath);
+                } catch (Exception e) {
+                    log.warn("Failed to warm up DiskHnswIndex: {}", e.getMessage());
+                }
+            });
+        }
+    }
+
+    /**
+     * Evicts the mapped segment pages from physical memory if it has been inactive
+     * for at least the specified grace period.
+     *
+     * @param gracePeriodMs threshold of inactivity in milliseconds
+     * @return true if successfully evicted, false if segment is active or not mapped
+     */
+    public synchronized boolean unloadIdle(long gracePeriodMs) {
+        if (!closed && segment.isMapped()) {
+            long idleMs = System.currentTimeMillis() - lastAccessed;
+            if (idleMs >= gracePeriodMs) {
+                com.spectrayan.spector.commons.concurrent.MemoryPinning.unlock(segment);
+                segment.unload();
+                // Advise kernel to immediately release the physical pages back to the system
+                com.spectrayan.spector.commons.concurrent.NativeOsMemory.advise(segment, com.spectrayan.spector.commons.concurrent.NativeOsMemory.MADV_DONTNEED);
+                log.info("DiskHnswIndex idle-evicted: file={} (idle for {} ms)", filePath, idleMs);
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Returns the file path. */

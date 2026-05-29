@@ -9,7 +9,11 @@ import com.spectrayan.spector.index.VectorIndex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -384,5 +388,111 @@ public final class SpectorIndex implements VectorIndex {
         if (!trained)
             throw new IllegalStateException(
                     "SpectorIndex must be trained before use. Call train(trainingVectors) first.");
+    }
+
+    /**
+     * Saves the SpectorIndex's state (centroids, shard modes, structures) to the given directory.
+     */
+    public void save(Path dir, com.spectrayan.spector.storage.VectorStore vs) throws IOException {
+        if (!trained) {
+            log.warn("SpectorIndex is not trained; skipping persistence.");
+            return;
+        }
+
+        Files.createDirectories(dir);
+
+        // 1. Save metadata to meta.properties
+        var props = new Properties();
+        props.setProperty("dimensions", String.valueOf(dimensions));
+        props.setProperty("nCentroids", String.valueOf(config.nCentroids()));
+        props.setProperty("nProbe", String.valueOf(config.nProbe()));
+        props.setProperty("shardThreshold", String.valueOf(config.shardThreshold()));
+        props.setProperty("totalSize", String.valueOf(totalSize.get()));
+        props.setProperty("trained", String.valueOf(trained));
+
+        try (var out = Files.newOutputStream(dir.resolve("meta.properties"))) {
+            props.store(out, "SpectorIndex Metadata");
+        }
+
+        // 2. Save Centroids
+        Path centroidsFile = dir.resolve("centroids.bin");
+        try (var out = new java.io.DataOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(centroidsFile)))) {
+            for (int i = 0; i < config.nCentroids(); i++) {
+                for (int d = 0; d < dimensions; d++) {
+                    out.writeFloat(centroids[i][d]);
+                }
+            }
+        }
+
+        // 3. Save Shards
+        Path shardsDir = dir.resolve("shards");
+        Files.createDirectories(shardsDir);
+        for (int i = 0; i < config.nCentroids(); i++) {
+            shards[i].save(shardsDir, i);
+        }
+
+        log.info("SpectorIndex persisted successfully to {} ({} centroids, {} size)", dir, config.nCentroids(), totalSize.get());
+    }
+
+    /**
+     * Reconstructs and loads a SpectorIndex state from the given directory.
+     */
+    public static SpectorIndex load(Path dir, int dimensions, SpectorIndexConfig config, com.spectrayan.spector.storage.VectorStore vs) throws IOException {
+        Path metaFile = dir.resolve("meta.properties");
+        if (!Files.exists(metaFile)) {
+            throw new java.io.FileNotFoundException("SpectorIndex meta file not found: " + metaFile);
+        }
+
+        var props = new Properties();
+        try (var in = Files.newInputStream(metaFile)) {
+            props.load(in);
+        }
+
+        int loadedDims = Integer.parseInt(props.getProperty("dimensions"));
+        int loadedNCentroids = Integer.parseInt(props.getProperty("nCentroids"));
+        int loadedNProbe = Integer.parseInt(props.getProperty("nProbe"));
+        int loadedShardThreshold = Integer.parseInt(props.getProperty("shardThreshold"));
+        int loadedTotalSize = Integer.parseInt(props.getProperty("totalSize"));
+        boolean loadedTrained = Boolean.parseBoolean(props.getProperty("trained"));
+
+        if (loadedDims != dimensions) {
+            throw new IllegalArgumentException("Dimensionality mismatch: expected " + dimensions + ", loaded " + loadedDims);
+        }
+
+        var index = new SpectorIndex(dimensions, config);
+        index.trained = loadedTrained;
+        index.totalSize.set(loadedTotalSize);
+
+        if (loadedTrained) {
+            // 1. Load Centroids
+            Path centroidsFile = dir.resolve("centroids.bin");
+            if (!Files.exists(centroidsFile)) {
+                throw new java.io.FileNotFoundException("Centroids bin file not found: " + centroidsFile);
+            }
+            index.centroids = new float[loadedNCentroids][dimensions];
+            try (var in = new java.io.DataInputStream(new java.io.BufferedInputStream(Files.newInputStream(centroidsFile)))) {
+                for (int i = 0; i < loadedNCentroids; i++) {
+                    for (int d = 0; d < dimensions; d++) {
+                        index.centroids[i][d] = in.readFloat();
+                    }
+                }
+            }
+
+            // 2. Load Shards
+            Path shardsDir = dir.resolve("shards");
+            index.shards = new SpectorShard[loadedNCentroids];
+            for (int i = 0; i < loadedNCentroids; i++) {
+                index.shards[i] = SpectorShard.load(shardsDir, i, dimensions, config, index.centroids[i]);
+            }
+
+            // 3. Post-load promoted graph reconstruction (must happen sequentially)
+            for (int i = 0; i < loadedNCentroids; i++) {
+                if (index.shards[i].isPromoted()) {
+                    index.shards[i].loadPromotedGraph(shardsDir, i, vs);
+                }
+            }
+        }
+
+        return index;
     }
 }

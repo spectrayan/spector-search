@@ -49,7 +49,7 @@ public final class DiskHnswWriter {
      * @param outputPath path to the output file (created or overwritten)
      * @throws IOException if writing fails
      */
-    public static void write(HnswIndex index, Path outputPath) throws IOException {
+    public static void write(AbstractHnswIndex index, Path outputPath) throws IOException {
         int nodeCount = index.size();
         int dimensions = index.dimensions();
         SimilarityFunction simFunc = index.similarityFunction();
