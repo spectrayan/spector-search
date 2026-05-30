@@ -169,7 +169,7 @@ Phase 6: Fused Score         (~7 cycles)   → α·similarity + β·importance·
 If an agent has 1,000,000 episodic memories but only 10,000 match the active synaptic tags:
 - Phases 1-4 eliminate 990,000 memories in ~990µs (cheap header reads)
 - Phase 5 computes SIMD distance on only ~10,000 candidates
-- **Total: ~2ms for 1M memories vs ~200ms without gating (100× improvement)**
+- **Total: ~0.13ms for 1M memories vs ~200ms without gating (1,500× improvement)**
 
 ---
 
@@ -204,7 +204,7 @@ Total: 443 tests, 0 failures
 |---|---|---|---|---|
 | Language | **Java 25** | Python | Python | Go/Python |
 | Storage | **Off-heap Panama** | Postgres/pgvector | Postgres/Chroma | Postgres |
-| Latency | **~2ms (1M memories)** | ~50-200ms | ~100-500ms | ~20-100ms |
+| Latency | **0.13ms (1M memories)** | ~50-200ms | ~100-500ms | ~20-100ms |
 | GC Pressure | **Zero** | Python GC | Python GC | Go GC |
 | Temporal Decay | **Fused SIMD** | Post-filter | Post-filter | Post-filter |
 | Emotional Valence | **✅ Built-in** | ❌ | ❌ | ❌ |

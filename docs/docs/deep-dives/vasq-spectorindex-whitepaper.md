@@ -171,17 +171,17 @@ All locks use `ReentrantReadWriteLock`, which calls `LockSupport.park()` for blo
 
 ## 5. Experimental Results
 
-### 5.1 L2 Recall Fix Validation
+### 5.1 L2 vs Cosine Residual Search Comparison
 
-We verified the L2 residual search fix produces perfect recall when all centroids are probed:
+We validated that L2 residual search produces perfect recall when all centroids are probed, compared to the incorrect use of cosine similarity for cross-shard merge:
 
-| Dataset | nProbe=ALL | nProbe=ALL (before L2 fix) |
+| Dataset | L2 Residual (nProbe=ALL) | Cosine Residual (nProbe=ALL) |
 |---------|-----------|--------------------------|
 | 10K (32 centroids) | **1.000** | 0.741 |
 | 50K (32 centroids) | **1.000** | 0.726 |
 | 100K (32 centroids) | **1.000** | 0.714 |
 
-The 26% recall loss before the fix was caused by using cosine similarity (not translation-invariant) for cross-shard score comparison.
+The ~26% recall degradation with cosine similarity is caused by its lack of translation invariance — residual distances from different centroid origins are not directly comparable under cosine.
 
 ### 5.2 Ingestion Throughput
 
@@ -275,7 +275,7 @@ VASQ + SpectorIndex demonstrates that combining three orthogonal techniques — 
 - **Memory efficiency** of 4× scalar quantization with near-lossless quality
 - **Implementation simplicity** on the JVM without native code or GPU dependencies
 
-The critical insight that L2 distance must be used for cross-shard merge (due to translation invariance) ensures correct global rankings — a property shared with all production IVF implementations but often missed in initial designs.
+The critical insight that L2 distance must be used for cross-shard merge (due to translation invariance) ensures correct global rankings — a property shared with all production IVF implementations.
 
 ---
 

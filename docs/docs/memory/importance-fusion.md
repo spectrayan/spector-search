@@ -51,17 +51,11 @@ The formula maps to importance ∈ **[0.05, 10.0]**:
 
 ## Novelty Computation
 
-### The Bug Fix
+### How It Works
 
-Previously, "novelty" was computed using the L2 **norm** of the embedding vector — which for normalized embeddings is always ~1.0. This made the surprise detector essentially a no-op.
-
-The fix uses the **nearest-neighbor distance** in working memory:
+Novelty is computed using the **nearest-neighbor distance** in working memory — the minimum L2 distance between the incoming embedding and all existing working memory slots:
 
 ```java
-// Before (broken): norm ≈ 1.0 for all normalized embeddings
-float novelty = VectorMath.l2norm(embedding);
-
-// After (correct): actual distance to nearest memory
 float nearestDist = workingStore.nearestDistance(quantizedVector, mins, scales);
 ```
 

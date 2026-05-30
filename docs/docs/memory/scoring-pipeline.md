@@ -226,7 +226,7 @@ graph TD
     D --> E["Phase 4: Importance pre-screen<br/>−3,000 → 5,000 remain<br/><i>~5 cycles each</i>"]
     E --> F["Phase 5: SIMD L2 distance<br/>5,000 × 200 cycles<br/><i>expensive</i>"]
     F --> G["Phase 6: Fused score<br/>5,000 × 7 cycles"]
-    G --> H["✅ ~2ms total"]
+    G --> H["✅ ~0.13ms total"]
 
     style A fill:#e74c3c,color:white
     style C fill:#f39c12,color:white

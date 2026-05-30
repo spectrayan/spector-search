@@ -2,7 +2,7 @@
 
 **Agent-native search and cognitive memory integration for the Spector AI Memory Backbone.**
 
-Give any AI agent (Claude Desktop, Cursor, autonomous agents) instant access to Spector's SIMD-accelerated vector search engine and cognitive memory — with zero network overhead. The MCP server runs in-process via `SpectorRuntime`, calling the engine and memory directly on virtual threads for 50–200µs query latency.
+Give any AI agent (Claude Desktop, Cursor, autonomous agents) instant access to Spector's SIMD-accelerated vector search engine and cognitive memory — with zero network overhead. The MCP server runs in-process via `SpectorRuntime`, calling the engine and memory directly on virtual threads for **88µs p50** query latency.
 
 ## Architecture
 
@@ -28,7 +28,7 @@ AI Agent ──JSON-RPC (stdio)──► SpectorMcpServer (thin orchestrator)
                                 ├── SpectorResourceProvider
                                 └── SpectorPromptProvider
 
-Total overhead: 50-200µs per query (100× faster than Python MCP servers)
+Total overhead: 88µs p50 per query (23–113× faster than Python MCP servers)
 ```
 
 ### Module Structure
@@ -154,10 +154,10 @@ Add to your `claude_desktop_config.json`:
 
 | Feature | Python Vector DB MCP | **Spector MCP** |
 |:---|:---|:---|
-| Search latency | 2–10ms (network + Python GIL) | **50–200µs** (in-process SIMD) |
+| Search latency | 2–10ms (network + Python GIL) | **88µs p50** (in-process SIMD) |
 | Network overhead | HTTP/gRPC round-trip | **Zero** (direct method call) |
-| GC pauses | Python/JVM heap pressure | **Zero** (100% off-heap Panama) |
-| Concurrent queries | Limited by Python GIL | **10,000+ QPS** (Virtual Threads) |
+| GC pauses | Python/JVM heap pressure | **≤0.01%** (100% off-heap Panama) |
+| Concurrent queries | Limited by Python GIL | **61,000 QPS** (Virtual Threads) |
 | Dependencies | Python framework stack | **Single JAR** (zero Python) |
 | Cognitive memory | External service (Mem0, Zep) | **Built-in** (opt-in via config) |
 

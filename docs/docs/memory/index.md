@@ -22,11 +22,13 @@ Spector Memory collapses the entire cognitive stack onto a **zero-GC, off-heap P
 
 | Metric | Python Memory Layer | **Spector Memory** |
 |---|---|---|
-| Query latency (1M memories) | 50-200ms | **~2ms** |
-| GC pauses | Unpredictable | **Zero** (100% off-heap) |
+| Query latency (1M memories) | 50-200ms | **0.13ms** † |
+| GC pauses | Unpredictable | **≤0.01%** (100% off-heap) † |
 | Scoring pipeline | Post-filter (lossy) | **Fused SIMD** (lossless) |
-| Concurrent queries | GIL-limited | **10,000+ QPS** (Virtual Threads) |
+| Concurrent queries | GIL-limited | **61,000 QPS** (Virtual Threads) † |
 | Memory per record | ~500B (Python objects) | **32B header + quantized vector** |
+
+† *Measured on Intel Core Ultra 9 285K, Java 25, AVX2. See [Benchmarks](../../#-benchmarks).*
 
 ---
 

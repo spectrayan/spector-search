@@ -57,10 +57,12 @@ Includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) s
 
 | Feature | Python Vector DB MCP | **Spector MCP** |
 |:---|:---|:---|
-| Search latency | 2–10ms | **50–200µs** (100× faster) |
+| Search latency | 2–10ms | **88µs p50** (23–113× faster) † |
 | Network overhead | HTTP/gRPC round-trip | **Zero** (in-process) |
-| Concurrent queries | Limited by Python GIL | **10,000+ QPS** |
+| Concurrent queries | Limited by Python GIL | **61,000 QPS** † |
 | Dependencies | Python framework stack | **Single JAR** |
+
+† *Measured. See [Benchmarks](../#-benchmarks).*
 
 > [!TIP]
 > See the [MCP Server Guide](../sdk-usage/mcp-server.md) to connect Claude Desktop, Cursor, or any MCP client in minutes.

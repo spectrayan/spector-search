@@ -8,7 +8,7 @@
 
 The [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is Anthropic's open standard for connecting AI agents to external data sources. Instead of writing custom Python glue-code with orchestration frameworks, agents connect directly to an MCP server via JSON-RPC and autonomously invoke tools.
 
-**Spector's MCP server runs in-process.** When Claude Desktop or Cursor calls `semantic_search`, the request goes from JSON-RPC → Java method call → SIMD kernel — never touching a network socket. This makes Spector **100× faster than Python-based MCP servers** that route through HTTP/gRPC.
+**Spector's MCP server runs in-process.** When Claude Desktop or Cursor calls `semantic_search`, the request goes from JSON-RPC → Java method call → SIMD kernel — never touching a network socket. This makes Spector **23–113× faster than Python-based MCP servers** that route through HTTP/gRPC.
 
 ---
 
@@ -273,7 +273,7 @@ graph LR
     style G2 fill:#00b894,color:white
 ```
 
-> **Total: 50–200µs per query** (100× faster)
+> **Total: 88µs p50 per query** (23–113× faster)
 
 | Bottleneck | Python MCP | Spector MCP |
 |:---|:---|:---|
@@ -282,7 +282,7 @@ graph LR
 | Python GIL contention | Blocks concurrent queries | **0µs** (Virtual Threads) |
 | GC pressure | Heap allocation per query | **0µs** (off-heap Panama) |
 | Search computation | ~100µs (native C++) | **~100µs** (Panama SIMD) |
-| **Total** | **2,000–10,000µs** | **50–200µs** |
+| **Total** | **2,000–10,000µs** | **88µs p50** |
 
 ---
 

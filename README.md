@@ -20,7 +20,7 @@ graph LR
     A["🤖 AI Agent"] -->|"JSON-RPC (stdio)"| B["⚡ SpectorMcpServer"]
     B -->|"Virtual Thread"| C["SpectorEngine.search()"]
     C -->|"Direct method call"| D["Off-heap MemorySegment + SIMD"]
-    D -->|"50–200µs"| E["✅ Results"]
+    D -->|"88µs p50"| E["✅ Results"]
 
     style A fill:#6c5ce7,color:white
     style B fill:#00b894,color:white
