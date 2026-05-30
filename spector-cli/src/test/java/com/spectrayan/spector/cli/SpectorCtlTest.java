@@ -47,7 +47,7 @@ class SpectorCtlTest {
 
         assertThat(exitCode).isEqualTo(0);
         String output = sw.toString();
-        assertThat(output).contains("Command-line tool for managing Spector Search");
+        assertThat(output).contains("Command-line tool for managing Spector");
         assertThat(output).contains("--host");
         assertThat(output).contains("--port");
         assertThat(output).contains("--json");

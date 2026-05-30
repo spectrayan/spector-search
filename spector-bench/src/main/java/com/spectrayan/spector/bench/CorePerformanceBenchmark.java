@@ -24,7 +24,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Core performance benchmark suite for Spector Search.
+ * Core performance benchmark suite for Spector.
  *
  * <p>Measures the fundamental performance characteristics of the in-process
  * SIMD-accelerated search engine: latency, throughput, GC impact, scalability,
@@ -590,7 +590,7 @@ public class CorePerformanceBenchmark {
 
     private void writeReport() throws IOException {
         StringBuilder sb = new StringBuilder();
-        sb.append("# Spector Search — Core Performance Report\n\n");
+        sb.append("# Spector — Core Performance Report\n\n");
         sb.append("**Generated:** ").append(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)).append("\n\n");
 
         // System info

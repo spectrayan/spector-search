@@ -10,11 +10,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Displays the status of the connected Spector Search instance.
+ * Displays the status of the connected Spector instance.
  */
 @Command(
         name = "status",
-        description = "Show Spector Search instance status.",
+        description = "Show Spector instance status.",
         mixinStandardHelpOptions = true
 )
 class StatusCommand extends BaseCommand {
@@ -27,7 +27,7 @@ class StatusCommand extends BaseCommand {
             if (isJson()) {
                 OutputFormatter.printJson(out(), status);
             } else {
-                out().println("Spector Search Status");
+                out().println("Spector Status");
                 out().println("=====================");
                 String[][] entries = {
                         {"Engine", status.getEngine() != null ? status.getEngine() : "N/A"},

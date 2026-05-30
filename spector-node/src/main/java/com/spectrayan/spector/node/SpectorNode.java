@@ -42,7 +42,7 @@ import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
 /**
- * Unified Spector Search node — serves HTTP REST, gRPC, and Prometheus metrics
+ * Unified Spector node — serves HTTP REST, gRPC, and Prometheus metrics
  * on a single Armeria (Netty) port.
  *
  * <h3>Architecture</h3>
@@ -271,7 +271,7 @@ public class SpectorNode implements AutoCloseable {
     // ─────────────── Main ───────────────
 
     /**
-     * Entry point for the Spector Search node.
+     * Entry point for the Spector node.
      *
      * <p>Reads configuration from environment variables. In standalone mode,
      * starts a local search node. In clustered mode, joins the cluster.</p>
@@ -283,6 +283,6 @@ public class SpectorNode implements AutoCloseable {
         Runtime.getRuntime().addShutdownHook(new Thread(node::close));
         node.start();
 
-        log.info("Spector Search ready — http://localhost:{}/health", nodeConfig.port());
+        log.info("Spector ready — http://localhost:{}/health", nodeConfig.port());
     }
 }

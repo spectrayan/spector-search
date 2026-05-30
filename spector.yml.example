@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════
-# Spector Search — Configuration Example
+# Spector — Configuration Example
 # ═══════════════════════════════════════════════════════════════════════
 # Copy this file to spector.yml and customize for your environment.
 # Values here override the bundled spector-defaults.yml.

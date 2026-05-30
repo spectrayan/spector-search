@@ -23,15 +23,15 @@ import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Spring AI {@link VectorStore} implementation backed by Spector Search.
+ * Spring AI {@link VectorStore} implementation backed by Spector.
  *
  * <p>Supports two modes of operation:
  * <ul>
  *   <li><b>Embedded</b> — uses a local {@link SpectorEngine} instance directly</li>
- *   <li><b>Remote</b> — communicates with a remote Spector Search instance via {@link SpectorClient}</li>
+ *   <li><b>Remote</b> — communicates with a remote Spector instance via {@link SpectorClient}</li>
  * </ul>
  *
- * <p>Since Spector Search is a vector-native engine, documents must have their embeddings
+ * <p>Since Spector is a vector-native engine, documents must have their embeddings
  * pre-computed and stored in metadata under the key {@code "embedding"} (as a {@code float[]}).
  * The {@link #similaritySearch(SearchRequest)} method requires a pre-computed query embedding
  * to be stored in the search request's metadata or passed via the query text that the engine
@@ -135,7 +135,7 @@ public class SpectorVectorStore implements VectorStore {
             return Collections.emptyList();
         }
 
-        // Spector Search is vector-native and doesn't embed text internally.
+        // Spector is vector-native and doesn't embed text internally.
         // Text-based similarity search requires an external embedding provider.
         // For now, we cannot convert text to vector without an embedder.
         LOG.debug("Text-based similarity search not supported without embedding provider; query='{}'", queryText);

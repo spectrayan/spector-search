@@ -11,7 +11,7 @@ This guide covers practical setup for Claude Desktop, Cursor IDE, and custom MCP
 ### 1. Build the Distribution JAR
 
 ```bash
-cd spector-search
+cd spector
 mvn package -pl spector-dist -am -DskipTests
 ```
 
@@ -24,7 +24,7 @@ Add the following to your agent's MCP configuration (see per-agent sections belo
 ```json
 {
   "mcpServers": {
-    "spector-search": {
+    "spector": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
@@ -130,7 +130,7 @@ Edit your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "spector-search": {
+    "spector": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
@@ -154,7 +154,7 @@ Add to your Cursor MCP settings (`.cursor/mcp.json` in your project, or global s
 ```json
 {
   "mcpServers": {
-    "spector-search": {
+    "spector": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
@@ -186,7 +186,7 @@ Any application implementing the [MCP client specification](https://modelcontext
 {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "my-app", "version": "1.0"}}}
 
 // Server → Client
-{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "spector-search-mcp", "version": "0.1.0"}}}
+{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "spector-mcp", "version": "0.1.0"}}}
 
 // Client → Server
 {"jsonrpc": "2.0", "method": "notifications/initialized"}

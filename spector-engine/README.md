@@ -1,6 +1,6 @@
 # spector-engine ⚙️
 
-> **The unified developer-facing facade, lifecycle manager, and configuration orchestrator for Spector Search.**
+> **The unified developer-facing facade, lifecycle manager, and configuration orchestrator for Spector.**
 
 `spector-engine` acts as the primary developer gateway. It groups all separate indices (HNSW, IVF-PQ, BM25), off-heap FFM vector stores, GPU wrappers, and LLM re-rankers under a single, highly intuitive facade: **`SpectorEngine`**.
 

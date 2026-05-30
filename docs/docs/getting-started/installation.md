@@ -12,14 +12,14 @@
 ## Building from Source
 
 ```bash
-git clone https://github.com/spectrayan/spector-search.git
-cd spector-search
+git clone https://github.com/spectrayan/spector.git
+cd spector
 mvn clean install -DskipTests
 ```
 
 ## Running with JVM Flags
 
-Spector Search uses incubator modules. The required JVM flags are configured in `pom.xml`, but if running manually:
+Spector uses incubator modules. The required JVM flags are configured in `pom.xml`, but if running manually:
 
 ```bash
 java --add-modules jdk.incubator.vector \

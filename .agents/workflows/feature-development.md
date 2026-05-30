@@ -1,5 +1,5 @@
 ---
-description: End-to-end process for implementing a new feature in Spector Search, from understanding requirements to committing clean code.
+description: End-to-end process for implementing a new feature in Spector, from understanding requirements to committing clean code.
 ---
 
 ## Trigger

@@ -158,7 +158,7 @@ class HnswIndexExtendedTest {
     @Test
     void searchJavaObjectContent() {
         var bm25 = new BM25Index();
-        String obj1 = "Product{name=Spector Search Engine, category=Software, price=0.0}";
+        String obj1 = "Product{name=Spector Engine, category=Software, price=0.0}";
         String obj2 = "Product{name=Office Chair, category=Furniture, price=299.99}";
 
         bm25.index("d1", ContentExtractor.fromJavaObject(obj1));

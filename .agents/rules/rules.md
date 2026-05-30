@@ -1,8 +1,8 @@
-# Spector Search — Agent Rules
+# Spector — Agent Rules
 
 ## Project Identity
 
-Spector Search is a **Java 25** vector search engine with biologically-inspired cognitive memory, built on Panama FFM, SIMD Vector API, and virtual threads. 22-module Maven reactor.
+Spector is a **Java 25** vector search engine with biologically-inspired cognitive memory, built on Panama FFM, SIMD Vector API, and virtual threads. 22-module Maven reactor.
 
 ## Critical Constraints
 

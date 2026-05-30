@@ -25,7 +25,7 @@ public final class SpectorPromptProvider {
     /** System instruction template for RAG prompts. */
     private static final String RAG_SYSTEM_INSTRUCTION =
             "You are a helpful assistant. Use the following context "
-            + "retrieved from the Spector Search knowledge base to answer the user's "
+            + "retrieved from the Spector knowledge base to answer the user's "
             + "question. Always cite your sources using the document IDs provided. "
             + "If the context does not contain relevant information, say so.";
 
@@ -75,7 +75,7 @@ public final class SpectorPromptProvider {
                     + "\n\nQuestion: " + query;
 
             return new McpSchema.GetPromptResult(
-                    "RAG query with citations from Spector Search",
+                    "RAG query with citations from Spector",
                     List.of(new McpSchema.PromptMessage(
                             McpSchema.Role.USER,
                             new McpSchema.TextContent(message)

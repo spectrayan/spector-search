@@ -27,7 +27,7 @@ import java.util.Properties;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Spring Boot-style hierarchical configuration loader for Spector Search.
+ * Spring Boot-style hierarchical configuration loader for Spector.
  *
  * <p>Provides a single point of entry for all configuration across modules.
  * Uses Apache Commons Configuration 2 under the hood with a

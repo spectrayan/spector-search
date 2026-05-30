@@ -1,6 +1,6 @@
 # 🧠 Core Concepts
 
-> **The algorithms and data structures that make Spector Search blazingly fast.** This page explains HNSW, IVF-PQ, BM25, RRF, and SIMD acceleration — the building blocks behind sub-millisecond hybrid search.
+> **The algorithms and data structures that make Spector blazingly fast.** This page explains HNSW, IVF-PQ, BM25, RRF, and SIMD acceleration — the building blocks behind sub-millisecond hybrid search.
 
 ---
 
@@ -58,7 +58,7 @@ graph TD
 
 ### 💾 Persistence Format
 
-Spector Search uses a page-aligned binary format for HNSW persistence:
+Spector uses a page-aligned binary format for HNSW persistence:
 
 ```
 [Header: 64 bytes]  → magic "SPHW", version, metadata
@@ -209,7 +209,7 @@ graph LR
 
 ## ⚡ SIMD Acceleration via Java Vector API
 
-Spector Search uses the Java Vector API (`jdk.incubator.vector`) to execute vector math on hardware SIMD lanes.
+Spector uses the Java Vector API (`jdk.incubator.vector`) to execute vector math on hardware SIMD lanes.
 
 ### 🔬 How It Works
 

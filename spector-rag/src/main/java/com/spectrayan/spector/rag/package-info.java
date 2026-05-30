@@ -1,5 +1,5 @@
 /**
- * Retrieval-Augmented Generation pipeline for Spector Search.
+ * Retrieval-Augmented Generation pipeline for Spector.
  *
  * <p>Provides the full RAG flow: query embedding → retrieval → context assembly → attribution.
  * Uses virtual threads for I/O-bound operations (embedding calls) while keeping retrieval

@@ -1,6 +1,6 @@
 # spector-cli 🖥️
 
-> **Command-line interface (`spectorctl`) for Spector Search — with both remote and local batch modes.**
+> **Command-line interface (`spectorctl`) for Spector — with both remote and local batch modes.**
 
 `spector-cli` implements **`spectorctl`**, a unified CLI that supports:
 - **Remote mode** — manage a running Spector server via REST API (search, ingest single docs, status)

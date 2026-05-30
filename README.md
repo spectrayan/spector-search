@@ -1,4 +1,4 @@
-# ⚡ Spector Search
+# ⚡ Spector
 
 > **The Zero-Overhead, Agent-Ready AI Memory Backbone.**
 >
@@ -6,7 +6,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-25-orange.svg)](https://openjdk.org/)
-[![Build](https://img.shields.io/github/actions/workflow/status/spectrayan/spector-search/ci.yml?branch=main)](https://github.com/spectrayan/spector-search/actions)
+[![Build](https://img.shields.io/github/actions/workflow/status/spectrayan/spector/ci.yml?branch=main)](https://github.com/spectrayan/spector/actions)
 [![MCP](https://img.shields.io/badge/MCP-Agent_Ready-blueviolet.svg)](spector-mcp/)
 
 ## 🧠 Why Spector?
@@ -87,7 +87,7 @@ Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "spector-search": {
+    "spector": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",
@@ -330,8 +330,8 @@ graph TD
 
 ```bash
 # Clone the repository
-git clone https://github.com/spectrayan/spector-search.git
-cd spector-search
+git clone https://github.com/spectrayan/spector.git
+cd spector
 
 # Build and run all tests
 mvn clean test
@@ -554,7 +554,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Language | Avg Latency | P99 Latency | Notes |
 |--------|----------|------------|------------|-------|
-| **Spector Search** | Java 25 | **0.10 ms** | **0.22 ms** | SIMD via Vector API, pure in-process, 100K docs |
+| **Spector** | Java 25 | **0.10 ms** | **0.22 ms** | SIMD via Vector API, pure in-process, 100K docs |
 | hnswlib | C++ | ~0.1–0.5 ms | ~1 ms | Fastest native HNSW; single-threaded |
 | FAISS (HNSW) | C++/Python | ~0.2–0.8 ms | ~1–2 ms | Versatile; GPU support available |
 | Apache Lucene 9+ | Java | ~1–5 ms | ~5–10 ms | Segment-based; force-merge helps |
@@ -570,7 +570,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Avg Latency | Notes |
 |--------|------------|-------|
-| **Spector Search** | **1.53 ms** | float[] scoring, min-heap top-K, virtual-thread parallel terms |
+| **Spector** | **1.53 ms** | float[] scoring, min-heap top-K, virtual-thread parallel terms |
 | Elasticsearch | <1–5 ms | Inverted index + skip lists, highly optimized |
 | Apache Lucene | <1–3 ms | Raw engine, no network overhead |
 | Weaviate (BM25) | ~10–30 ms | Go-based BM25 for hybrid search |
@@ -579,7 +579,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Approach | Avg Latency | Notes |
 |--------|----------|------------|-------|
-| **Spector Search** | RRF (parallel virtual threads) | **1.76 ms** | Both legs sub-ms at 10K; parallel via virtual threads |
+| **Spector** | RRF (parallel virtual threads) | **1.76 ms** | Both legs sub-ms at 10K; parallel via virtual threads |
 | Elasticsearch | RRF / linear combination | ~10–30 ms | Mature query planner, skip-list BM25 |
 | Qdrant | Sparse+Dense fusion | ~15–30 ms | Rust-based sparse vectors |
 | Weaviate | Hybrid BM25+HNSW | ~25–40 ms | Unified API, built-in vectorization |
@@ -588,7 +588,7 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 
 | Engine | Rate (100K docs) | Notes |
 |--------|-----------------|-------|
-| **Spector Search** | **1,597 docs/s** | In-process, HNSW graph build included |
+| **Spector** | **1,597 docs/s** | In-process, HNSW graph build included |
 | Elasticsearch | ~2,000–5,000 docs/s | Bulk API, depends on mapping & replicas |
 | Milvus | ~3,000–8,000 docs/s | Batch insert optimized |
 | Qdrant | ~2,000–5,000 docs/s | Payload indexing included |

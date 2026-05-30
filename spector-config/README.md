@@ -1,6 +1,6 @@
 # spector-config ⚙️
 
-> **Configuration system for Spector Search — YAML-driven, programmatic, and environment-aware.**
+> **Configuration system for Spector — YAML-driven, programmatic, and environment-aware.**
 
 `spector-config` defines all tuning parameters for the Spector engine, memory, ingestion, and persistence. It provides both programmatic builders and YAML file loading via `SpectorConfigFactory`.
 

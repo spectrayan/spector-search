@@ -1,6 +1,6 @@
 # 🚀 Getting Started
 
-> **Go from zero to your first search result in under 5 minutes.** This guide walks you through building Spector Search from source, starting the server, ingesting documents, and running your first hybrid search.
+> **Go from zero to your first search result in under 5 minutes.** This guide walks you through building Spector from source, starting the server, ingesting documents, and running your first hybrid search.
 
 ---
 
@@ -13,7 +13,7 @@
 | 🔧 Git | 2.40+ | `git --version` |
 
 > [!IMPORTANT]
-> Spector Search requires **JDK 25 or later** with the Vector API incubator module. [OpenJDK builds](https://jdk.java.net/) include this by default.
+> Spector requires **JDK 25 or later** with the Vector API incubator module. [OpenJDK builds](https://jdk.java.net/) include this by default.
 
 ---
 
@@ -21,8 +21,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/spectrayan/spector-search.git
-cd spector-search
+git clone https://github.com/spectrayan/spector.git
+cd spector
 
 # Build all modules (includes 316+ tests)
 mvn clean test
@@ -194,7 +194,7 @@ curl http://localhost:7070/api/v1/status
 
 ## 💻 Use as an Embedded Library
 
-No server needed — use Spector Search directly in your Java application:
+No server needed — use Spector directly in your Java application:
 
 ```java
 import com.spectrayan.spector.engine.SpectorEngine;
@@ -226,7 +226,7 @@ try (var engine = new SpectorEngine(config)) {
 
 In just a few minutes, you've:
 
-- ✅ Built Spector Search from source
+- ✅ Built Spector from source
 
 - ✅ Verified SIMD hardware acceleration
 

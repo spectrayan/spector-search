@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve Spector-Search
+about: Create a report to help us improve Spector
 title: ''
 labels: 'bug'
 assignees: ''
@@ -24,7 +24,7 @@ A clear and concise description of what you expected to happen.
 - OS: [e.g. Ubuntu 22.04, Windows 11, macOS 14]
 - JDK version: [e.g. OpenJDK 25]
 - SIMD capability: [e.g. S_256_BIT / AVX2]
-- Spector-Search version: [e.g. 0.1.0]
+- Spector version: [e.g. 0.1.0]
 
 **Logs / Stack Traces**
 If applicable, add relevant log output or stack traces.

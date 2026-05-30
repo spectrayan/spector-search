@@ -7,7 +7,7 @@ import picocli.CommandLine.Option;
 /**
  * Main entry point for the spectorctl command-line tool.
  *
- * <p>Provides subcommands for managing a running Spector Search instance
+ * <p>Provides subcommands for managing a running Spector instance
  * via its REST API.</p>
  *
  * <h3>Usage</h3>
@@ -23,7 +23,7 @@ import picocli.CommandLine.Option;
  */
 @Command(
         name = "spectorctl",
-        description = "Command-line tool for managing Spector Search instances.",
+        description = "Command-line tool for managing Spector instances.",
         mixinStandardHelpOptions = true,
         version = "spectorctl 0.1.0",
         subcommands = {
@@ -35,11 +35,11 @@ import picocli.CommandLine.Option;
 )
 public class SpectorCtl implements Runnable {
 
-    @Option(names = {"--host"}, description = "Spector Search host (default: localhost).",
+    @Option(names = {"--host"}, description = "Spector host (default: localhost).",
             defaultValue = "localhost", scope = CommandLine.ScopeType.INHERIT)
     String host;
 
-    @Option(names = {"--port"}, description = "Spector Search port (default: 7070).",
+    @Option(names = {"--port"}, description = "Spector port (default: 7070).",
             defaultValue = "7070", scope = CommandLine.ScopeType.INHERIT)
     int port;
 

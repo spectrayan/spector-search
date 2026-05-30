@@ -1,6 +1,6 @@
 # 🕸️ HNSW Explained
 
-> **How the world's most popular vector search algorithm works, from first principles.** Hierarchical Navigable Small World graphs power vector search in Pinecone, Weaviate, Qdrant, pgvector, and Spector Search. This page explains HNSW step by step, with intuition, diagrams, and practical tuning advice.
+> **How the world's most popular vector search algorithm works, from first principles.** Hierarchical Navigable Small World graphs power vector search in Pinecone, Weaviate, Qdrant, pgvector, and Spector. This page explains HNSW step by step, with intuition, diagrams, and practical tuning advice.
 
 ---
 
@@ -204,7 +204,7 @@ As you descend layers, you converge on a small region of the space. At layer 0, 
 
 ### 3. SIMD Acceleration
 
-Each distance computation (L2, cosine, dot product) can be parallelized using SIMD instructions. Spector Search uses the Java Vector API to compute 8-16 dimensions simultaneously:
+Each distance computation (L2, cosine, dot product) can be parallelized using SIMD instructions. Spector uses the Java Vector API to compute 8-16 dimensions simultaneously:
 
 ```java
 // 8 dimensions computed in a single CPU instruction
@@ -238,9 +238,9 @@ At 10M+ vectors, HNSW's memory consumption and construction time make it impract
 
 ---
 
-## 🔬 HNSW in Spector Search
+## 🔬 HNSW in Spector
 
-Spector Search uses HNSW in two contexts:
+Spector uses HNSW in two contexts:
 
 ### 1. Standalone HNSW Index
 

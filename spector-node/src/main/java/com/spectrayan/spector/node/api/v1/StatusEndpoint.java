@@ -47,7 +47,7 @@ public class StatusEndpoint implements ApiModule {
     @Get("/status")
     public HttpResponse status() {
         var status = new java.util.LinkedHashMap<String, Object>();
-        status.put("engine", "spector-search");
+        status.put("engine", "spector");
         status.put("version", "0.1.0-SNAPSHOT");
         status.put("nodeId", nodeConfig.nodeId());
         status.put("mode", nodeConfig.mode().name());

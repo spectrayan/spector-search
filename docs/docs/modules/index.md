@@ -1,6 +1,6 @@
 # Modules
 
-Spector Search is organized as a multi-module Maven project. Each module has a focused responsibility, clear API boundaries, and minimal cross-module coupling.
+Spector is organized as a multi-module Maven project. Each module has a focused responsibility, clear API boundaries, and minimal cross-module coupling.
 
 ---
 

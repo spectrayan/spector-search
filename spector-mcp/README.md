@@ -121,7 +121,7 @@ Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "spector-search": {
+    "spector": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",

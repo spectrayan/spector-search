@@ -16,7 +16,7 @@ import java.util.concurrent.StructuredTaskScope.Subtask;
 import java.util.stream.Stream;
 
 /**
- * Centralized concurrency utilities for Spector Search.
+ * Centralized concurrency utilities for Spector.
  *
  * <p>Provides a dual-mode execution model controlled by a feature flag:
  * <ul>

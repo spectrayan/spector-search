@@ -28,7 +28,7 @@ import com.spectrayan.spector.commons.error.SpectorInternalException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Spring Boot auto-configuration for embedded Spector Search.
+ * Spring Boot auto-configuration for embedded Spector.
  *
  * <p>Automatically creates and wires {@link SpectorEngine} and optionally
  * {@link SpectorMemory} beans when Spector is on the classpath. If a

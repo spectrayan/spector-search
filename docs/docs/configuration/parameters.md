@@ -1,6 +1,6 @@
 # ⚙️ Configuration Guide
 
-> **Every knob, dial, and lever in Spector Search — with sensible defaults and expert tuning advice.** Whether you're optimizing for recall, latency, throughput, or memory, this page has you covered.
+> **Every knob, dial, and lever in Spector — with sensible defaults and expert tuning advice.** Whether you're optimizing for recall, latency, throughput, or memory, this page has you covered.
 
 ---
 

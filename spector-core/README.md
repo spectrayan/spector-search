@@ -1,6 +1,6 @@
 # spector-core 🌀
 
-> **The high-performance SIMD-accelerated similarity and quantization math core of Spector Search.**
+> **The high-performance SIMD-accelerated similarity and quantization math core of Spector.**
 
 `spector-core` houses the low-level math kernels, Walsh-Hadamard transforms, and vectorized similarity operators that form the computational engine of the search platform. Written natively for Java 25 utilizing the Panama Vector API (`jdk.incubator.vector`), it compiles hardware-specific SIMD instructions (AVX2, AVX-512, and ARM NEON) on the fly, eliminating native libraries or JNI bindings.
 

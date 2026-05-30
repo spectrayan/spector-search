@@ -1,4 +1,4 @@
-Spector-Search
+Spector
 Copyright 2026 Spectrayan
 
 This product includes software developed by
@@ -28,34 +28,34 @@ ATTRIBUTION NOTICE
 ================================================================================
 
 This software is the original work of the Spectrayan team. If you use
-Spector-Search in your own projects, deployments, or services, you MUST
+Spector in your own projects, deployments, or services, you MUST
 provide visible attribution to the Spectrayan team. This attribution must
 include:
 
-  1. The text "Powered by Spector-Search" or "Built with Spector-Search" in
+  1. The text "Powered by Spector" or "Built with Spector" in
      your application's documentation, about page, or equivalent visible
      location.
 
-  2. A link to the Spector-Search GitHub repository:
-     https://github.com/spectrayan/spector-search
+  2. A link to the Spector GitHub repository:
+     https://github.com/spectrayan/spector
 
 ================================================================================
 TRADEMARK POLICY
 ================================================================================
 
-"Spector-Search", "Spectrayan", the Spectrayan logo, and associated branding
+"Spector", "Spectrayan", the Spectrayan logo, and associated branding
 are trademarks of Spectrayan. This license does NOT grant you permission to:
 
-  - Use the names "Spector-Search" or "Spectrayan" as your product name
+  - Use the names "Spector" or "Spectrayan" as your product name
   - Present this software as your own original creation
   - Remove or obscure the Spectrayan attribution notices
   - Use the Spectrayan logos or branding in your own marketing materials
   - Offer this software as a commercial SaaS product under a different brand
     without prior written agreement from Spectrayan
 
-You MAY use the names "Spector-Search" and "Spectrayan" solely to:
+You MAY use the names "Spector" and "Spectrayan" solely to:
 
-  - Describe that your software is based on or derived from Spector-Search
+  - Describe that your software is based on or derived from Spector
   - Give credit to the original authors as required by this NOTICE file
   - Link back to the official repository
 

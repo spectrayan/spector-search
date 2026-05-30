@@ -1,6 +1,6 @@
 # ☕ Java SDK Guide
 
-> **Type-safe, thread-safe Java access to Spector Search — as a remote client or embedded engine.** Whether you're connecting to a server or embedding search directly in your application, this guide covers everything you need.
+> **Type-safe, thread-safe Java access to Spector — as a remote client or embedded engine.** Whether you're connecting to a server or embedding search directly in your application, this guide covers everything you need.
 
 ---
 

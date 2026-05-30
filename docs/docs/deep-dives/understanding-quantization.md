@@ -339,9 +339,9 @@ graph TD
 
 ---
 
-## 🎯 What Spector Search Uses
+## 🎯 What Spector Uses
 
-Spector Search provides a full spectrum of scalar quantization plus IVF-PQ, covering every memory/recall trade-off:
+Spector provides a full spectrum of scalar quantization plus IVF-PQ, covering every memory/recall trade-off:
 
 ### Scalar INT8 — For High-Recall Scenarios
 
@@ -415,7 +415,7 @@ All quantization modes support an **oversampling-based rescore** to recover reca
 
 ```mermaid
 graph LR
-    subgraph "Spector Search Coverage"
+    subgraph "Spector Coverage"
         INT8["Scalar INT8<br/>4× compression<br/>95-99% recall"]
         INT4["Scalar INT4<br/>8× compression<br/>85-95% recall"]
         INT2["Scalar INT2<br/>16× compression<br/>75-90% recall"]

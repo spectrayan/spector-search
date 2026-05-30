@@ -1,6 +1,6 @@
-# Contributing to Spector-Search
+# Contributing to Spector
 
-Thank you for your interest in contributing to Spector-Search! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Spector! This document provides guidelines and instructions for contributing.
 
 ## Table of Contents
 
@@ -38,8 +38,8 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 ```bash
 # Clone your fork
-git clone https://github.com/<your-username>/spector-search.git
-cd spector-search
+git clone https://github.com/<your-username>/spector.git
+cd spector
 
 # Verify JDK 25+ is installed
 java -version
@@ -56,7 +56,7 @@ mvn exec:java -pl spector-node -Dexec.mainClass="com.spectrayan.spector.server.S
 
 ### SIMD Verification
 
-Spector-Search uses the Java Vector API for SIMD acceleration. Verify your system supports it:
+Spector uses the Java Vector API for SIMD acceleration. Verify your system supports it:
 
 ```bash
 # Check SIMD capability
@@ -162,7 +162,7 @@ docs: add benchmark results to README
 
 ### Bug Reports
 
-Use the [Bug Report template](https://github.com/spectrayan/spector-search/issues/new?template=bug_report.md) and include:
+Use the [Bug Report template](https://github.com/spectrayan/spector/issues/new?template=bug_report.md) and include:
 
 - Steps to reproduce
 - Expected vs actual behavior
@@ -171,7 +171,7 @@ Use the [Bug Report template](https://github.com/spectrayan/spector-search/issue
 
 ### Feature Requests
 
-Use the [Feature Request template](https://github.com/spectrayan/spector-search/issues/new?template=feature_request.md) and describe:
+Use the [Feature Request template](https://github.com/spectrayan/spector/issues/new?template=feature_request.md) and describe:
 
 - The problem you're trying to solve
 - Your proposed solution
@@ -179,11 +179,11 @@ Use the [Feature Request template](https://github.com/spectrayan/spector-search/
 
 ## Questions?
 
-- **General questions:** Open a [Discussion](https://github.com/spectrayan/spector-search/discussions)
-- **Bug reports:** Open an [Issue](https://github.com/spectrayan/spector-search/issues)
+- **General questions:** Open a [Discussion](https://github.com/spectrayan/spector/discussions)
+- **Bug reports:** Open an [Issue](https://github.com/spectrayan/spector/issues)
 - **Security vulnerabilities:** See [SECURITY.md](SECURITY.md)
 - **Email:** [developer@spectrayan.com](mailto:developer@spectrayan.com)
 
 ---
 
-Thank you for contributing to Spector-Search! ⚡
+Thank you for contributing to Spector! ⚡

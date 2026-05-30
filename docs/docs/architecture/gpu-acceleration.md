@@ -1,6 +1,6 @@
 # 🎮 GPU Acceleration
 
-> **Unlock massive parallel throughput with optional CUDA GPU acceleration.** Spector Search loads GPU kernels via Panama FFM (Foreign Function & Memory), maintaining the zero-JNI philosophy. GPU shines for batch workloads — single queries are already sub-millisecond on CPU SIMD.
+> **Unlock massive parallel throughput with optional CUDA GPU acceleration.** Spector loads GPU kernels via Panama FFM (Foreign Function & Memory), maintaining the zero-JNI philosophy. GPU shines for batch workloads — single queries are already sub-millisecond on CPU SIMD.
 
 ---
 

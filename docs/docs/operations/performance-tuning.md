@@ -1,6 +1,6 @@
 # 🏎️ Performance Tuning
 
-> **Spector Search delivers sub-millisecond latency out of the box — but there's always room to optimize for your specific workload.** This page covers benchmarks, tuning strategies, and the science of finding the right recall/latency/memory trade-off.
+> **Spector delivers sub-millisecond latency out of the box — but there's always room to optimize for your specific workload.** This page covers benchmarks, tuning strategies, and the science of finding the right recall/latency/memory trade-off.
 
 ---
 

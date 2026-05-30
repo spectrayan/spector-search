@@ -77,7 +77,7 @@ jobs:
 
           # Copy and rename docs to wiki-friendly names
           cp ../main/docs/docs/index.md Home.md
-          cp ../main/docs/docs/about.md What-is-Spector-Search.md
+          cp ../main/docs/docs/about.md What-is-Spector.md
           cp ../main/docs/docs/getting-started/quickstart.md Getting-Started.md
           cp ../main/docs/docs/faq.md FAQ.md
           cp ../main/docs/docs/architecture/overview.md Architecture-Overview.md

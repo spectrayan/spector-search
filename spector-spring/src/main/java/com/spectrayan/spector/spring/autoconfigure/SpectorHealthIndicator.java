@@ -11,7 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.stereotype.Component;
 
 /**
- * Spring Boot Actuator health indicator for Spector Search.
+ * Spring Boot Actuator health indicator for Spector.
  *
  * <p>Reports engine status, document count, SIMD capability, and optional
  * memory tier counts at {@code /actuator/health}.</p>

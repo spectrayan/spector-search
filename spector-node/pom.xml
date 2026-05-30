@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.spectrayan</groupId>
-        <artifactId>spector-search</artifactId>
+        <artifactId>spector</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>spector-node</artifactId>
     <name>Spector Node</name>
-    <description>Unified Spector Search node — serves HTTP REST, gRPC, MCP-over-SSE,
+    <description>Unified Spector node — serves HTTP REST, gRPC, MCP-over-SSE,
         and Prometheus metrics on a single Armeria (Netty) port. Includes distributed
         cluster coordination (membership, shard routing, replication) for HA deployments.</description>
 

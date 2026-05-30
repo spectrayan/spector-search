@@ -14,11 +14,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Search documents in the Spector Search engine.
+ * Search documents in the Spector engine.
  */
 @Command(
         name = "search",
-        description = "Search for documents in Spector Search.",
+        description = "Search for documents in Spector.",
         mixinStandardHelpOptions = true
 )
 class SearchCommand extends BaseCommand {

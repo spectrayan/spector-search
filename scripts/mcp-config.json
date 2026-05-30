@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "spector-search": {
+    "spector": {
       "command": "java",
       "args": [
         "--add-modules",

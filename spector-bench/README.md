@@ -2,7 +2,7 @@
 
 > **JMH microbenchmarks, performance sweeps, and large-scale real-embedding performance runners.**
 
-`spector-bench` handles empirical performance testing, SIMD kernel validation, and large-scale index sweeps for Spector Search. It is designed to run locally, generating interactive HTML reports with latency charts.
+`spector-bench` handles empirical performance testing, SIMD kernel validation, and large-scale index sweeps for Spector. It is designed to run locally, generating interactive HTML reports with latency charts.
 
 ---
 

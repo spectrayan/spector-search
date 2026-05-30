@@ -1,10 +1,10 @@
 ---
-description: End-to-end process for preparing a Spector Search release — test verification, changelog, version bump, docs, and tagging.
+description: End-to-end process for preparing a Spector release — test verification, changelog, version bump, docs, and tagging.
 ---
 
 # Workflow: Release Preparation
 
-End-to-end process for preparing a Spector Search release — test verification, changelog, version bump, docs, and tagging.
+End-to-end process for preparing a Spector release — test verification, changelog, version bump, docs, and tagging.
 
 ## Trigger
 

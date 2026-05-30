@@ -1,6 +1,6 @@
 # spector-metrics 📊
 
-> **Micrometer-based observability layer for Spector Search — Prometheus metrics, JVM telemetry, and decorator-pattern engine instrumentation.**
+> **Micrometer-based observability layer for Spector — Prometheus metrics, JVM telemetry, and decorator-pattern engine instrumentation.**
 
 `spector-metrics` provides transparent instrumentation for the Spector engine and JVM runtime. It uses the [Micrometer](https://micrometer.io/) metrics facade, compatible with Prometheus, Datadog, JMX, and any Micrometer-supported backend.
 
