@@ -97,6 +97,14 @@ public enum ErrorCode {
     BIT_WIDTH_INVALID         (100_016, ErrorCategory.VALIDATION,
             "Bit width must be one of {}, got {}"),
 
+    /** The engine has been closed and cannot accept further operations. */
+    ENGINE_CLOSED             (100_017, ErrorCategory.VALIDATION,
+            "SpectorEngine is closed"),
+
+    /** An embedding provider is required but was not configured. */
+    EMBEDDING_PROVIDER_MISSING(100_018, ErrorCategory.VALIDATION,
+            "No EmbeddingProvider configured — use builder().embeddingProvider() or supply vectors manually"),
+
     // ══════════════════════════════════════════════════════════════════════
     // CONFIG (SPE-110-xxx)
     // ══════════════════════════════════════════════════════════════════════

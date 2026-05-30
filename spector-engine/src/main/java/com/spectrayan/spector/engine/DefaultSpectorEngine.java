@@ -23,6 +23,9 @@ import com.spectrayan.spector.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.io.IOException;
 import java.nio.file.Path;
 
@@ -428,7 +431,7 @@ public class DefaultSpectorEngine implements SpectorEngine {
     }
 
     private void ensureOpen() {
-        if (closed) throw new IllegalStateException("SpectorEngine is closed");
+        if (closed) throw new IllegalStateException(ErrorCode.ENGINE_CLOSED.format());
     }
 
     // ═════════════════════════════════════════════════════════════════

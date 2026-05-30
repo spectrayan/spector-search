@@ -342,7 +342,7 @@ final class EngineIngestion {
     private void requireEmbeddingProvider() {
         if (embeddingProvider == null) {
             throw new IllegalStateException(
-                    "No EmbeddingProvider configured. Use SpectorEngine(config, provider) or supply vectors manually.");
+                    com.spectrayan.spector.commons.error.ErrorCode.EMBEDDING_PROVIDER_MISSING.format());
         }
     }
 }
