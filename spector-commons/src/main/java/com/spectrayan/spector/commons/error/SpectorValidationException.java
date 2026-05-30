@@ -34,6 +34,10 @@ public class SpectorValidationException extends SpectorException {
         super(errorCode, args);
     }
 
+    public SpectorValidationException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(errorCode, preformattedMessage, isPreformatted);
+    }
+
     /**
      * Creates a validation exception with a cause and formatted message.
      *

@@ -87,7 +87,7 @@ public class RemoteShardClient implements AutoCloseable {
             SearchResponse response = stub.vectorSearch(request);
             return toScoredResults(response);
         } catch (Exception e) {
-            throw new SpectorShardUnavailableException(endpoint.shardId(), e);
+            throw GrpcErrorMapper.toSpectorException(e, endpoint.shardId());
         }
     }
 
@@ -107,7 +107,7 @@ public class RemoteShardClient implements AutoCloseable {
             SearchResponse response = stub.keywordSearch(request);
             return toScoredResults(response);
         } catch (Exception e) {
-            throw new SpectorShardUnavailableException(endpoint.shardId(), e);
+            throw GrpcErrorMapper.toSpectorException(e, endpoint.shardId());
         }
     }
 
@@ -129,7 +129,7 @@ public class RemoteShardClient implements AutoCloseable {
             SearchResponse response = stub.hybridSearch(request);
             return toScoredResults(response);
         } catch (Exception e) {
-            throw new SpectorShardUnavailableException(endpoint.shardId(), e);
+            throw GrpcErrorMapper.toSpectorException(e, endpoint.shardId());
         }
     }
 
@@ -152,7 +152,7 @@ public class RemoteShardClient implements AutoCloseable {
             IngestResponse response = stub.ingest(builder.build());
             return response.getSuccess();
         } catch (Exception e) {
-            throw new SpectorShardUnavailableException(endpoint.shardId(), e);
+            throw GrpcErrorMapper.toSpectorException(e, endpoint.shardId());
         }
     }
 

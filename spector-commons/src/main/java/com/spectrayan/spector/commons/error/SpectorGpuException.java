@@ -23,6 +23,12 @@ public class SpectorGpuException extends SpectorException {
         this.availableBytes = -1;
     }
 
+    public SpectorGpuException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(errorCode, preformattedMessage, isPreformatted);
+        this.requestedBytes = -1;
+        this.availableBytes = -1;
+    }
+
     public SpectorGpuException(ErrorCode errorCode, Throwable cause, Object... args) {
         super(errorCode, cause, args);
         this.requestedBytes = -1;

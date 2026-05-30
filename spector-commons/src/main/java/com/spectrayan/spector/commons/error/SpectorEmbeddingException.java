@@ -15,6 +15,10 @@ public class SpectorEmbeddingException extends SpectorException {
         super(errorCode, args);
     }
 
+    public SpectorEmbeddingException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(errorCode, preformattedMessage, isPreformatted);
+    }
+
     public SpectorEmbeddingException(ErrorCode errorCode, Throwable cause, Object... args) {
         super(errorCode, cause, args);
     }

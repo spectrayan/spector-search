@@ -50,6 +50,15 @@ public abstract class SpectorException extends RuntimeException {
     }
 
     /**
+     * Internal constructor to reconstruct an exception on the client-side
+     * with a pre-formatted message, bypassing template formatting.
+     */
+    protected SpectorException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(preformattedMessage);
+        this.errorCode = errorCode;
+    }
+
+    /**
      * Creates a new Spector exception with a cause and formatted message.
      *
      * @param errorCode the stable error code identifying this condition

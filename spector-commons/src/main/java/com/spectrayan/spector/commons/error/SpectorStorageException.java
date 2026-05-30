@@ -16,6 +16,10 @@ public class SpectorStorageException extends SpectorException {
         super(errorCode, args);
     }
 
+    public SpectorStorageException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(errorCode, preformattedMessage, isPreformatted);
+    }
+
     public SpectorStorageException(ErrorCode errorCode, Throwable cause, Object... args) {
         super(errorCode, cause, args);
     }

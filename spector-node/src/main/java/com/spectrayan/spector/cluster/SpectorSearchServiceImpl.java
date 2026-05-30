@@ -43,7 +43,7 @@ public class SpectorSearchServiceImpl
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Vector search failed on shard '{}'", shardId, e);
-            responseObserver.onError(e);
+            responseObserver.onError(GrpcErrorMapper.toStatusRuntimeException(e));
         }
     }
 
@@ -57,7 +57,7 @@ public class SpectorSearchServiceImpl
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Keyword search failed on shard '{}'", shardId, e);
-            responseObserver.onError(e);
+            responseObserver.onError(GrpcErrorMapper.toStatusRuntimeException(e));
         }
     }
 
@@ -73,7 +73,7 @@ public class SpectorSearchServiceImpl
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Hybrid search failed on shard '{}'", shardId, e);
-            responseObserver.onError(e);
+            responseObserver.onError(GrpcErrorMapper.toStatusRuntimeException(e));
         }
     }
 
@@ -97,11 +97,7 @@ public class SpectorSearchServiceImpl
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Ingest failed on shard '{}'", shardId, e);
-            responseObserver.onNext(IngestResponse.newBuilder()
-                    .setSuccess(false)
-                    .setError(e.getMessage())
-                    .build());
-            responseObserver.onCompleted();
+            responseObserver.onError(GrpcErrorMapper.toStatusRuntimeException(e));
         }
     }
 

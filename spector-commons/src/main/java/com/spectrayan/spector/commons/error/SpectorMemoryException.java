@@ -15,6 +15,10 @@ public class SpectorMemoryException extends SpectorException {
         super(errorCode, args);
     }
 
+    public SpectorMemoryException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(errorCode, preformattedMessage, isPreformatted);
+    }
+
     public SpectorMemoryException(ErrorCode errorCode, Throwable cause, Object... args) {
         super(errorCode, cause, args);
     }

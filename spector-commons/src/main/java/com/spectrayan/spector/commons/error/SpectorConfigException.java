@@ -15,6 +15,10 @@ public class SpectorConfigException extends SpectorException {
         super(errorCode, args);
     }
 
+    public SpectorConfigException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(errorCode, preformattedMessage, isPreformatted);
+    }
+
     public SpectorConfigException(ErrorCode errorCode, Throwable cause, Object... args) {
         super(errorCode, cause, args);
     }

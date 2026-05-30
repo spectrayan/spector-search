@@ -14,6 +14,10 @@ public class SpectorIngestionException extends SpectorException {
         super(errorCode, args);
     }
 
+    public SpectorIngestionException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(errorCode, preformattedMessage, isPreformatted);
+    }
+
     public SpectorIngestionException(ErrorCode errorCode, Throwable cause, Object... args) {
         super(errorCode, cause, args);
     }

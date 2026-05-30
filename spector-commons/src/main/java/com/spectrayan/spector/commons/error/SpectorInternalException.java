@@ -34,6 +34,10 @@ public class SpectorInternalException extends SpectorException {
         super(errorCode, args);
     }
 
+    public SpectorInternalException(ErrorCode errorCode, String preformattedMessage, boolean isPreformatted) {
+        super(errorCode, preformattedMessage, isPreformatted);
+    }
+
     /**
      * Creates an internal exception with a cause and formatted message.
      *
