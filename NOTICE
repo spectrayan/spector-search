@@ -65,13 +65,56 @@ For trademark licensing inquiries: legal@spectrayan.com
 THIRD-PARTY NOTICES
 ================================================================================
 
-This product includes software developed by the following open-source projects:
+This product includes software developed by the following open-source projects.
+Dependency versions are managed in the root pom.xml.
 
-  - Javalin (https://javalin.io) — Apache 2.0
-  - Jackson (https://github.com/FasterXML/jackson) — Apache 2.0
+Runtime Dependencies:
+
+  - Jackson 3.x (https://github.com/FasterXML/jackson) — Apache 2.0
+  - Jackson 2.x (https://github.com/FasterXML/jackson) — Apache 2.0
+    Used by Javalin and MCP SDK for JSON serialization.
   - SLF4J (https://www.slf4j.org/) — MIT
   - Logback (https://logback.qos.ch/) — EPL 1.0 / LGPL 2.1
+  - SnakeYAML (https://bitbucket.org/snakeyaml/snakeyaml/) — Apache 2.0
+  - Apache Commons Configuration 2 (https://commons.apache.org/configuration/) — Apache 2.0
+  - Apache Commons BeanUtils (https://commons.apache.org/beanutils/) — Apache 2.0
+
+Server & Networking:
+
+  - Armeria (https://armeria.dev/) — Apache 2.0
+    HTTP/gRPC server framework built on Netty.
+  - Netty (https://netty.io/) — Apache 2.0
+    Transitive dependency via Armeria.
+  - gRPC Java (https://grpc.io/) — Apache 2.0
+  - Protocol Buffers (https://protobuf.dev/) — BSD 3-Clause
+  - Javalin (https://javalin.io/) — Apache 2.0
+
+Metrics & Observability:
+
+  - Micrometer Core (https://micrometer.io/) — Apache 2.0
+  - Micrometer Prometheus Registry (https://micrometer.io/) — Apache 2.0
+
+AI Agent Integration:
+
+  - MCP SDK (https://github.com/modelcontextprotocol/java-sdk) — MIT
+    Official Anthropic Model Context Protocol Java SDK.
+
+Spring Integration (spector-spring module):
+
+  - Spring Framework (https://spring.io/projects/spring-framework) — Apache 2.0
+  - Spring Boot (https://spring.io/projects/spring-boot) — Apache 2.0
+  - Spring AI (https://spring.io/projects/spring-ai) — Apache 2.0
+
+Test Dependencies (not distributed):
+
   - JUnit 5 (https://junit.org/junit5/) — EPL 2.0
   - AssertJ (https://assertj.github.io/doc/) — Apache 2.0
-  - JMH (https://openjdk.java.net/projects/code-tools/jmh/) — GPL 2.0 + CE
-  - OpenJDK Vector API (https://openjdk.java.net/jeps/338) — GPL 2.0 + CE
+  - JMH (https://openjdk.org/projects/code-tools/jmh/) — GPL 2.0 + CE
+
+JDK APIs (bundled with OpenJDK, not separately distributed):
+
+  - Java Vector API (JEP 489) — incubator module (jdk.incubator.vector)
+  - Panama Foreign Function & Memory API (JEP 454) — finalized
+  - Virtual Threads (JEP 444) — finalized
+  - Structured Concurrency (JEP 505) — preview
+
