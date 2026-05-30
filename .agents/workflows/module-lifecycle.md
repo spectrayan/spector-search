@@ -1,10 +1,10 @@
 ---
-description: Process for adding, removing, or renaming Maven modules in the Spector Search reactor.
+description: Process for adding, removing, or renaming Maven modules in the Spector reactor.
 ---
 
 # Workflow: Module Lifecycle
 
-Process for adding, removing, or renaming Maven modules in the Spector Search reactor.
+Process for adding, removing, or renaming Maven modules in the Spector reactor.
 
 ## Trigger
 
@@ -27,7 +27,7 @@ spector-{name}/
 
 ### 2. Create POM
 
-- Parent: `com.spectrayan:spector-search:0.1.0-SNAPSHOT`
+- Parent: `com.spectrayan:spector:0.1.0-SNAPSHOT`
 - Add dependencies from the correct architecture layer
 - Include `--add-modules jdk.incubator.vector` in compiler args if needed
 

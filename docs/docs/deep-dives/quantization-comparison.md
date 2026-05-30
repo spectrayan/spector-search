@@ -81,7 +81,7 @@ DiskBBQ (introduced experimentally) adds IVF-like partitioning on top of BBQ:
 
 ### Why These Two?
 
-Spector Search is a **purpose-built vector engine** — no segment model, no legacy constraints. This gives freedom to implement whatever quantization works best for the use case.
+Spector is a **purpose-built vector engine** — no segment model, no legacy constraints. This gives freedom to implement whatever quantization works best for the use case.
 
 The two-method strategy covers the full spectrum:
 
@@ -233,7 +233,7 @@ Which quantization methods are available in each engine:
 
 | Engine | Scalar INT8 | Scalar INT4/INT2 | Binary | Product Quantization | IVF-PQ | DiskANN | Rescoring |
 |--------|:-----------:|:----------------:|:------:|:-------------------:|:------:|:-------:|:---------:|
-| **Spector Search** | ✅ | ✅ (non-uniform) | ❌ | ✅ (via IVF-PQ) | ✅ | ❌ | ✅ (VASQ/VASQ-4 + configurable oversampling) |
+| **Spector** | ✅ | ✅ (non-uniform) | ❌ | ✅ (via IVF-PQ) | ✅ | ❌ | ✅ (VASQ/VASQ-4 + configurable oversampling) |
 | **Elasticsearch** | ✅ | ❌ | ✅ (BBQ) | ❌ | ❌ | ❌ | ✅ (asymmetric) |
 | **Milvus** | ✅ (IVF-SQ8) | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ |
 | **Qdrant** | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ (oversampling) |

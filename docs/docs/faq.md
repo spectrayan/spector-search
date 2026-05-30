@@ -1,6 +1,6 @@
 # ❓ FAQ
 
-> **Quick answers to the most common questions about Spector Search.** Can't find what you're looking for? Check [GitHub Discussions](https://github.com/spectrayan/spector-search/discussions) or the specific wiki pages linked throughout.
+> **Quick answers to the most common questions about Spector.** Can't find what you're looking for? Check [GitHub Discussions](https://github.com/spectrayan/spector/discussions) or the specific wiki pages linked throughout.
 
 ---
 
@@ -8,13 +8,13 @@
 
 ### What Java version do I need?
 
-**JDK 25 or later.** Spector Search uses the Java Vector API (incubator module) for SIMD acceleration and Panama FFM for off-heap memory. [OpenJDK builds](https://jdk.java.net/) include these by default.
+**JDK 25 or later.** Spector uses the Java Vector API (incubator module) for SIMD acceleration and Panama FFM for off-heap memory. [OpenJDK builds](https://jdk.java.net/) include these by default.
 
 ---
 
 ### Does it work without a GPU?
 
-**Yes, completely.** GPU is optional. Without a GPU, Spector Search uses CPU SIMD acceleration (AVX2/AVX-512/NEON) which delivers sub-millisecond search at 100K documents. GPU helps primarily for high-concurrency batch workloads.
+**Yes, completely.** GPU is optional. Without a GPU, Spector uses CPU SIMD acceleration (AVX2/AVX-512/NEON) which delivers sub-millisecond search at 100K documents. GPU helps primarily for high-concurrency batch workloads.
 
 > [!TIP]
 > See [GPU Acceleration](architecture/gpu-acceleration.md) for details on when GPU adds value (spoiler: batch sizes > 32).
@@ -23,7 +23,7 @@
 
 ### Can I use it as an embedded library?
 
-**Absolutely!** Spector Search runs in two modes:
+**Absolutely!** Spector runs in two modes:
 
 | Mode | Description | Overhead |
 |------|-------------|----------|
@@ -41,13 +41,13 @@ try (var engine = new SpectorEngine(SpectorConfig.DEFAULT.withDimensions(384))) 
 
 ### What about persistence? Do I lose data on restart?
 
-**No!** Spector Search supports persistence through memory-mapped files. The HNSW index uses a page-aligned binary format that loads instantly via `mmap` — no deserialization needed. Vector data survives restarts.
+**No!** Spector supports persistence through memory-mapped files. The HNSW index uses a page-aligned binary format that loads instantly via `mmap` — no deserialization needed. Vector data survives restarts.
 
 ---
 
 ### How does it compare to Elasticsearch?
 
-| Aspect | ⚡ Spector Search | Elasticsearch |
+| Aspect | ⚡ Spector | Elasticsearch |
 |--------|---------------|--------------|
 | Vector search latency | **0.13 ms** (100K, in-process) | 2–10 ms |
 | Hybrid search latency | **1.01 ms** (100K, in-process) | 10–30 ms |
@@ -73,7 +73,7 @@ vectorStore.similaritySearch(
 
 ---
 
-### What embedding models work with Spector Search?
+### What embedding models work with Spector?
 
 Any model that produces float32 vectors. Set `dimensions` to match:
 
@@ -86,7 +86,7 @@ Any model that produces float32 vectors. Set `dimensions` to match:
 | mxbai-embed-large | 1024 | Ollama |
 
 > [!NOTE]
-> Spector Search includes an Ollama embedding provider out of the box. Implement the `EmbeddingProvider` SPI for any other source.
+> Spector includes an Ollama embedding provider out of the box. Implement the `EmbeddingProvider` SPI for any other source.
 
 ---
 
@@ -184,7 +184,7 @@ mvn -pl spector-bench exec:java -Dexec.args="-rf json -rff results.json"
 
 ## ⚙️ Operations
 
-### What ports does Spector Search use?
+### What ports does Spector use?
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
@@ -193,7 +193,7 @@ mvn -pl spector-bench exec:java -Dexec.args="-rf json -rff results.json"
 
 ---
 
-### How do I monitor Spector Search?
+### How do I monitor Spector?
 
 ```bash
 curl http://localhost:7070/health          # Health check
@@ -245,7 +245,7 @@ Clients include `X-API-Key: my-secret-key` in requests. Without a key configured
 
 - [Getting Started](getting-started/quickstart.md) — Quick start guide
 
-- [What is Spector Search](about.md) — Product overview
+- [What is Spector](about.md) — Product overview
 
 - [Configuration Guide](configuration/parameters.md) — All parameters
 

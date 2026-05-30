@@ -1,8 +1,8 @@
-site_name: Spector Search Documentation
+site_name: Spector Documentation
 site_description: The Zero-Overhead, Agent-Ready AI Memory Backbone
-site_url: https://spectrayan.github.io/spector-search/
-repo_url: https://github.com/spectrayan/spector-search
-repo_name: spectrayan/spector-search
+site_url: https://spectrayan.github.io/spector/
+repo_url: https://github.com/spectrayan/spector
+repo_name: spectrayan/spector
 
 theme:
   name: material

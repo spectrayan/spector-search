@@ -125,7 +125,7 @@ This is the most important ANN algorithm today. See our [HNSW Deep Dive](hnsw-ex
 
 **Idea:** Use IVF to partition the space, then build a small HNSW graph inside each partition. Best of both worlds.
 
-This is what Spector Search's flagship **SpectorIndex** implements. See our [SpectorIndex Deep Dive](spector-index-architecture.md) for the full architecture.
+This is what Spector's flagship **SpectorIndex** implements. See our [SpectorIndex Deep Dive](spector-index-architecture.md) for the full architecture.
 
 ```mermaid
 graph TD

@@ -23,7 +23,7 @@ import java.util.Map;
  */
 public final class GrpcErrorMapper {
 
-    private static final String ERROR_DOMAIN = "spector-search";
+    private static final String ERROR_DOMAIN = "spector";
 
     /**
      * Translates a Throwable into a rich gRPC StatusRuntimeException.

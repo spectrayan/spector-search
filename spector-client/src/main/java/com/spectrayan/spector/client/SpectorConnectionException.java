@@ -1,7 +1,7 @@
 package com.spectrayan.spector.client;
 
 /**
- * Thrown when the client cannot connect to the Spector Search server.
+ * Thrown when the client cannot connect to the Spector server.
  */
 public class SpectorConnectionException extends SpectorClientException {
 
@@ -9,7 +9,7 @@ public class SpectorConnectionException extends SpectorClientException {
     private final int port;
 
     public SpectorConnectionException(String host, int port, Throwable cause) {
-        super("Failed to connect to Spector Search at " + host + ":" + port + ": " + cause.getMessage(), cause);
+        super("Failed to connect to Spector at " + host + ":" + port + ": " + cause.getMessage(), cause);
         this.host = host;
         this.port = port;
     }

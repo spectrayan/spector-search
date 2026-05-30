@@ -1,6 +1,6 @@
 # spector-commons 📄
 
-> **Ingestion utilities, text tokenizers, semantic chunkers, and document content extractors for Spector Search.**
+> **Ingestion utilities, text tokenizers, semantic chunkers, and document content extractors for Spector.**
 
 `spector-commons` handles the preprocessing phase of document ingestion. It parses raw file formats (HTML, PDF, plain text), extracts core text content, and chunks it using character, token-level, or streaming boundaries to fit model context windows before embedding generation.
 

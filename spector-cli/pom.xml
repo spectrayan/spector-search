@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.spectrayan</groupId>
-        <artifactId>spector-search</artifactId>
+        <artifactId>spector</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>spector-cli</artifactId>
     <name>Spector CLI (spectorctl)</name>
-    <description>Command-line tool for managing Spector Search instances.</description>
+    <description>Command-line tool for managing Spector instances.</description>
 
     <properties>
         <picocli.version>4.7.6</picocli.version>

@@ -57,7 +57,7 @@ abstract class BaseCommand implements Runnable {
      * Handles a connection exception by printing a user-friendly error.
      */
     protected int handleConnectionError(SpectorConnectionException e) {
-        err().println("Error: Unable to connect to Spector Search at " + e.host() + ":" + e.port());
+        err().println("Error: Unable to connect to Spector at " + e.host() + ":" + e.port());
         err().println("Cause: " + e.getCause().getMessage());
         return 1;
     }

@@ -10,9 +10,9 @@ description: "High-performance StorageClass for Spector cognitive off-heap data 
 apiVersion: v1
 kind: Service
 metadata:
-  name: spector-search
+  name: spector
   labels:
-    app: spector-search
+    app: spector
 spec:
   ports:
     - port: 8080
@@ -21,24 +21,24 @@ spec:
       name: internal-sync
   clusterIP: None
   selector:
-    app: spector-search
+    app: spector
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: spector-node
   labels:
-    app: spector-search
+    app: spector
 spec:
-  serviceName: "spector-search"
+  serviceName: "spector"
   replicas: 3
   selector:
     matchLabels:
-      app: spector-search
+      app: spector
   template:
     metadata:
       labels:
-        app: spector-search
+        app: spector
       annotations:
         # Inform container runtimes of low/high memory boundaries in cgroups v2
         # resources.requests.memory sets memory.min/low, and limits.memory sets memory.max.
@@ -55,11 +55,11 @@ spec:
                   - key: app
                     operator: In
                     values:
-                      - spector-search
+                      - spector
               topologyKey: "kubernetes.io/hostname"
       containers:
-        - name: spector-search
-          image: spectrayan/spector-search:latest
+        - name: spector
+          image: spectrayan/spector:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

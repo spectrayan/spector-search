@@ -23,7 +23,7 @@ import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
 
 /**
- * High-performance MCP Server for Spector Search.
+ * High-performance MCP Server for Spector.
  *
  * <p>Thin orchestrator that assembles tool, resource, and prompt providers
  * into an MCP server. All search operations run in-process with zero
@@ -50,7 +50,7 @@ public class SpectorMcpServer {
 
     private static final Logger log = LoggerFactory.getLogger(SpectorMcpServer.class);
 
-    static final String SERVER_NAME = "spector-search-mcp";
+    static final String SERVER_NAME = "spector-mcp";
     static final String SERVER_VERSION = "0.1.0";
 
     private final SpectorRuntime runtime;

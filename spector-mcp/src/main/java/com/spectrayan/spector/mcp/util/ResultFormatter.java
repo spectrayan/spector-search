@@ -116,7 +116,7 @@ public final class ResultFormatter {
      */
     public static Map<String, Object> buildEngineStatusMap(SpectorEngine engine, String version) {
         var status = new LinkedHashMap<String, Object>(12);
-        status.put("engine", "spector-search");
+        status.put("engine", "spector");
         status.put("version", version);
         status.put("documents", engine.documentCount());
         status.put("dimensions", engine.config().dimensions());
@@ -142,7 +142,7 @@ public final class ResultFormatter {
         Map<String, Object> status = buildEngineStatusMap(engine, version);
 
         var sb = new StringBuilder(512);
-        sb.append("Spector Search Engine Status:\n");
+        sb.append("Spector Engine Status:\n");
         sb.append("─────────────────────────────\n");
         for (var entry : status.entrySet()) {
             sb.append(String.format("%-15s %s%n",

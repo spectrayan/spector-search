@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.spectrayan</groupId>
-        <artifactId>spector-search</artifactId>
+        <artifactId>spector</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>spector-metrics</artifactId>
     <name>Spector Metrics</name>
-    <description>Micrometer-based observability for Spector Search — metered decorators for engine, memory, and ingestion.</description>
+    <description>Micrometer-based observability for Spector — metered decorators for engine, memory, and ingestion.</description>
 
     <dependencies>
         <!-- Micrometer core (standalone, no Spring) -->

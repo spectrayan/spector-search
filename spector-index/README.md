@@ -1,6 +1,6 @@
 # spector-index 🔢
 
-> **Core indexing engine of Spector Search: HNSW, IVF, Product Quantization (PQ), and BM25.**
+> **Core indexing engine of Spector: HNSW, IVF, Product Quantization (PQ), and BM25.**
 
 `spector-index` houses the algorithmic core of both keyword and semantic searches. It includes standard and quantized HNSW graphs, coarse Centroid Voronoi Partitioners (IVF), Product Quantizers, and a pure-Java high-speed BM25 postings index.
 

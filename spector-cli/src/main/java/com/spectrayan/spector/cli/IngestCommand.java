@@ -21,7 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Ingest documents into Spector Search.
+ * Ingest documents into Spector.
  *
  * <p>Supports two modes, auto-detected from the flags provided:</p>
  * <ul>
@@ -41,7 +41,7 @@ import java.util.Map;
  */
 @Command(
         name = "ingest",
-        description = "Ingest documents into Spector Search (remote or local batch).",
+        description = "Ingest documents into Spector (remote or local batch).",
         mixinStandardHelpOptions = true
 )
 class IngestCommand extends BaseCommand {

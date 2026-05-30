@@ -489,7 +489,7 @@ public class IndustryBenchmark {
 
     private void writeReport(Path path) throws IOException {
         StringBuilder sb = new StringBuilder();
-        sb.append("Spector Search Industry Benchmark\n");
+        sb.append("Spector Industry Benchmark\n");
         sb.append("Generated: ").append(LocalDateTime.now()).append("\n");
         sb.append("Java: ").append(System.getProperty("java.version")).append("\n");
         sb.append("CPUs: ").append(runtime.availableProcessors()).append("\n");

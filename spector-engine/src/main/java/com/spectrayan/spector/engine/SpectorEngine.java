@@ -14,7 +14,7 @@ import java.nio.file.Path;
 import java.util.function.Function;
 
 /**
- * Primary interface for the Spector Search engine.
+ * Primary interface for the Spector engine.
  *
  * <p>Provides a unified API for document ingestion, search, and lifecycle
  * management. Implementations include {@link DefaultSpectorEngine} (the

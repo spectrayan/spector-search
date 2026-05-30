@@ -1,8 +1,8 @@
 # spector-embed-api 🧬
 
-> **The pluggable Embedding Provider Service Provider Interface (SPI) contract for Spector Search.**
+> **The pluggable Embedding Provider Service Provider Interface (SPI) contract for Spector.**
 
-`spector-embed-api` defines the public SPI contract that allows developers to plug custom text embedding generators into the Spector Search ingestion and query pipelines. This ensures that Spector remains completely independent of any specific LLM provider or hosting environment.
+`spector-embed-api` defines the public SPI contract that allows developers to plug custom text embedding generators into the Spector ingestion and query pipelines. This ensures that Spector remains completely independent of any specific LLM provider or hosting environment.
 
 ---
 

@@ -1,6 +1,6 @@
 # 🌀 VASQ: Vectorized Affine Scalar Quantization
 
-> **How Spector Search achieves INT8 precision rivaling INT12–INT16 using the Fast Walsh-Hadamard Transform.** VASQ is Spector's custom quantization technique that combines mathematical rotation with affine scalar quantization to minimize information loss. This page explains the theory, implementation, and why it outperforms standard scalar quantization.
+> **How Spector achieves INT8 precision rivaling INT12–INT16 using the Fast Walsh-Hadamard Transform.** VASQ is Spector's custom quantization technique that combines mathematical rotation with affine scalar quantization to minimize information loss. This page explains the theory, implementation, and why it outperforms standard scalar quantization.
 
 ---
 
@@ -289,7 +289,7 @@ The hi/lo split gives the CPU two independent FMA chains — one for even dimens
 
 ---
 
-## 💻 Implementation in Spector Search
+## 💻 Implementation in Spector
 
 ### VasqCalibrator
 

@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.spectrayan</groupId>
-        <artifactId>spector-search</artifactId>
+        <artifactId>spector</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>spector-bench</artifactId>
     <name>Spector Benchmarks</name>
-    <description>JMH benchmarks for Spector Search performance testing.</description>
+    <description>JMH benchmarks for Spector performance testing.</description>
 
     <properties>
         <exec.mainClass>com.spectrayan.spector.bench.IndustryBenchmark</exec.mainClass>

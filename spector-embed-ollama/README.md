@@ -1,6 +1,6 @@
 # spector-embed-ollama 🤖
 
-> **Out-of-the-box Ollama embedding integration, fallback handling, and parallel batch calling for Spector Search.**
+> **Out-of-the-box Ollama embedding integration, fallback handling, and parallel batch calling for Spector.**
 
 `spector-embed-ollama` implements the `EmbeddingProvider` contract for local Ollama instances. It supports parallel API calls, high-throughput batching, automatic JSON escape handling, and resilient connection timeout fallbacks.
 
@@ -25,7 +25,7 @@ EmbeddingProvider provider = new OllamaEmbeddingProvider(
 );
 
 // Single vector generation
-float[] vector = provider.embed("Spector Search uses Panama FFM");
+float[] vector = provider.embed("Spector uses Panama FFM");
 
 // Batch generation
 List<String> sentences = List.of("First sentence", "Second sentence");

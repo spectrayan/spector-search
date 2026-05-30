@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.spectrayan</groupId>
-        <artifactId>spector-search</artifactId>
+        <artifactId>spector</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>spring-ai-starter-vector-store-spector-search</artifactId>
+    <artifactId>spring-ai-starter-vector-store-spector</artifactId>
     <name>Spector Spring AI Integration</name>
-    <description>Spring AI VectorStore implementation backed by Spector Search engine.</description>
+    <description>Spring AI VectorStore implementation backed by Spector engine.</description>
 
     <dependencies>
         <!-- Spring AI Vector Store (VectorStore, SearchRequest, Filter) -->

@@ -1,5 +1,5 @@
 /**
- * Document ingestion pipeline for Spector Search.
+ * Document ingestion pipeline for Spector.
  *
  * <p>Orchestrates the flow: document → chunk → embed → store → index.
  * Uses virtual threads and structured concurrency for parallel embedding

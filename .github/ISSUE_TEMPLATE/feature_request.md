@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Spector-Search
+about: Suggest an idea for Spector
 title: ''
 labels: 'enhancement'
 assignees: ''

@@ -1,6 +1,6 @@
 # 🌱 Spring AI Integration
 
-> **Seamlessly integrate Spector Search into your Spring AI applications.** The `spector-spring` module implements Spring AI's `VectorStore` interface, giving you access to filter expressions, RAG patterns, and the full Spring AI ecosystem backed by sub-millisecond search.
+> **Seamlessly integrate Spector into your Spring AI applications.** The `spector-spring` module implements Spring AI's `VectorStore` interface, giving you access to filter expressions, RAG patterns, and the full Spring AI ecosystem backed by sub-millisecond search.
 
 ---
 
@@ -77,7 +77,7 @@ public class VectorStoreConfig {
 
 ### 🌐 Remote Mode (Client SDK)
 
-Connect to a running Spector Search server:
+Connect to a running Spector server:
 
 ```java
 import com.spectrayan.spector.client.SpectorClient;

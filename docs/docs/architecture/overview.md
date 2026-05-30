@@ -1,6 +1,6 @@
 # 🏗️ Architecture Overview
 
-> **Spector Search is a modular, JVM-native AI memory backbone organized as a Maven multi-module project.** This page covers the module structure, dependency graph, data flow, threading model, and memory architecture that make sub-millisecond, agent-native search possible.
+> **Spector is a modular, JVM-native AI memory backbone organized as a Maven multi-module project.** This page covers the module structure, dependency graph, data flow, threading model, and memory architecture that make sub-millisecond, agent-native search possible.
 
 ---
 
@@ -251,7 +251,7 @@ The MCP path routes through `SpectorRuntime` — the single composition root tha
 
 ## 🧵 Threading Model: Virtual Threads
 
-Spector Search is designed from the ground up for Java virtual threads:
+Spector is designed from the ground up for Java virtual threads:
 
 > [!TIP]
 > **No `synchronized` blocks** anywhere in the codebase. All coordination uses `ReentrantLock` to avoid virtual thread pinning.

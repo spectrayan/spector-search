@@ -1,12 +1,12 @@
-# ⚡ Welcome to Spector Search
+# ⚡ Welcome to Spector
 
 > **The Zero-Overhead, Agent-Ready AI Memory Backbone.**
 
-Welcome to the Spector Search documentation — your central hub for the high-performance, agent-native AI search engine. Whether you're connecting AI agents via MCP, building RAG pipelines, powering recommendation systems, or need sub-millisecond search with zero infrastructure, you're in the right place.
+Welcome to the Spector documentation — your central hub for the high-performance, agent-native AI search engine. Whether you're connecting AI agents via MCP, building RAG pipelines, powering recommendation systems, or need sub-millisecond search with zero infrastructure, you're in the right place.
 
 ---
 
-## 🔥 Why Spector Search?
+## 🔥 Why Spector?
 
 | Metric | Value |
 |--------|-------|
@@ -29,7 +29,7 @@ Welcome to the Spector Search documentation — your central hub for the high-pe
 | Page | Description |
 |------|-------------|
 | [Getting Started](getting-started/quickstart.md) | Build, run, and search in 5 minutes |
-| [What is Spector Search](about.md) | Product overview, use cases, and comparisons |
+| [What is Spector](about.md) | Product overview, use cases, and comparisons |
 | [JDK API Status](getting-started/jdk-api-status.md) | Vector API, Panama FFM, and preview feature compatibility |
 | [FAQ](faq.md) | Common questions answered |
 
@@ -96,7 +96,7 @@ graph LR
 | | |
 |---|---|
 | **Language** | Java 25 |
-| **License** | Apache 2.0 · [BSL 1.1](https://github.com/spectrayan/spector-search/blob/main/spector-memory/LICENSE) (memory module) |
+| **License** | Apache 2.0 · [BSL 1.1](https://github.com/spectrayan/spector/blob/main/spector-memory/LICENSE) (memory module) |
 | **Modules** | 18 Maven modules |
 | **Dependencies** | Zero (JDK only) |
 | **SIMD** | AVX2 / AVX-512 / NEON |
@@ -106,4 +106,4 @@ graph LR
 
 ---
 
-**Built with ⚡ by [Spectrayan](https://www.spectrayan.com/)** · [GitHub](https://github.com/spectrayan/spector-search) · [Apache 2.0](https://github.com/spectrayan/spector-search/blob/main/LICENSE) · [BSL 1.1 (memory)](https://github.com/spectrayan/spector-search/blob/main/spector-memory/LICENSE)
+**Built with ⚡ by [Spectrayan](https://www.spectrayan.com/)** · [GitHub](https://github.com/spectrayan/spector) · [Apache 2.0](https://github.com/spectrayan/spector/blob/main/LICENSE) · [BSL 1.1 (memory)](https://github.com/spectrayan/spector/blob/main/spector-memory/LICENSE)

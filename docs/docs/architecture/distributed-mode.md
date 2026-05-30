@@ -1,6 +1,6 @@
 # 🌐 Distributed Mode
 
-> **Scale Spector Search horizontally across multiple nodes.** The distributed architecture uses consistent hash sharding, configurable replication, heartbeat-based membership, and parallel query fan-out with result merging via gRPC.
+> **Scale Spector horizontally across multiple nodes.** The distributed architecture uses consistent hash sharding, configurable replication, heartbeat-based membership, and parallel query fan-out with result merging via gRPC.
 
 ---
 
@@ -118,7 +118,7 @@ sequenceDiagram
 
 ### Prerequisites
 
-- All nodes must run the same Spector Search version
+- All nodes must run the same Spector version
 
 - Nodes must be reachable via gRPC (default port: 9090)
 

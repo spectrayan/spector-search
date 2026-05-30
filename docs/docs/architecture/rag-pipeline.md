@@ -1,6 +1,6 @@
 # 🤖 RAG Pipeline
 
-> **End-to-end Retrieval-Augmented Generation built right into Spector Search.** From document ingestion to LLM-ready context assembly — with token-aware chunking, parallel embedding, and source attribution out of the box.
+> **End-to-end Retrieval-Augmented Generation built right into Spector.** From document ingestion to LLM-ready context assembly — with token-aware chunking, parallel embedding, and source attribution out of the box.
 
 ---
 

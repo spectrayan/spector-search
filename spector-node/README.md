@@ -2,7 +2,7 @@
 
 > **Unified Armeria-powered node — serves HTTP REST, gRPC, SSE events, Prometheus metrics, and health probes on a single Netty port.**
 
-`spector-node` is the production entry point for Spector Search. It replaces the old `spector-node` (Armeria) and `spector-node` (gRPC) modules with a single, unified Armeria binary. One port, one NIO runtime, one binary.
+`spector-node` is the production entry point for Spector. It replaces the old `spector-node` (Armeria) and `spector-node` (gRPC) modules with a single, unified Armeria binary. One port, one NIO runtime, one binary.
 
 ---
 

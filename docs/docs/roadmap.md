@@ -1,6 +1,6 @@
 # 🗺️ Roadmap
 
-Spector Search is under active development. This page details planned improvements, their projected impact, and implementation status.
+Spector is under active development. This page details planned improvements, their projected impact, and implementation status.
 
 ---
 

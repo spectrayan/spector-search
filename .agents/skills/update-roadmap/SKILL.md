@@ -1,6 +1,6 @@
 # Skill: Update Roadmap
 
-This skill enables the agent to dynamically and consistently manage the project roadmap for Spector Search, ensuring perfect synchronization between the root `README.md` and the detailed documentation in `docs/docs/roadmap.md`.
+This skill enables the agent to dynamically and consistently manage the project roadmap for Spector, ensuring perfect synchronization between the root `README.md` and the detailed documentation in `docs/docs/roadmap.md`.
 
 ## Trigger
 

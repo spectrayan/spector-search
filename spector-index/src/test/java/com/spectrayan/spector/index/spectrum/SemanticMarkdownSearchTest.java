@@ -67,7 +67,7 @@ class SemanticMarkdownSearchTest {
         embedder = OllamaEmbeddingProvider.create(MODEL);
 
         // Collect markdown + text files from project root
-        Path projectRoot = Paths.get("d:/git/spector-search");
+        Path projectRoot = Paths.get("d:/git/spector");
         List<Path> files;
         try (Stream<Path> stream = Files.walk(projectRoot, 2)) {
             files = stream

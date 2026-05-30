@@ -201,7 +201,7 @@ Then configure your agent:
 ```json
 {
   "mcpServers": {
-    "spector-search": {
+    "spector": {
       "command": "java",
       "args": [
         "--add-modules", "jdk.incubator.vector",

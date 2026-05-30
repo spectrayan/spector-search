@@ -1,6 +1,6 @@
 # 🖥️ CLI Reference
 
-> **Manage Spector Search from the command line.** `spectorctl` connects to a running server via REST and provides commands for indexing, ingestion, search, and status monitoring — with both human-friendly tables and machine-parseable JSON output.
+> **Manage Spector from the command line.** `spectorctl` connects to a running server via REST and provides commands for indexing, ingestion, search, and status monitoring — with both human-friendly tables and machine-parseable JSON output.
 
 ---
 
@@ -9,7 +9,7 @@
 Build from source:
 
 ```bash
-cd spector-search
+cd spector
 mvn clean package -pl spector-cli -am -DskipTests
 ```
 
@@ -161,7 +161,7 @@ Human-readable tables for interactive use:
 ```
 $ spectorctl status
 ╔══════════════════════════════════════╗
-║ Spector Search Status                ║
+║ Spector Status                ║
 ╠══════════════════════════════════════╣
 ║ Status:    RUNNING                   ║
 ║ Port:      7070                      ║
@@ -176,7 +176,7 @@ $ spectorctl search --text "nearest neighbor" --topK 5
 ┌─────────────┬────────┬────────────────────────────────────────────┐
 │ ID          │ Score  │ Content                                    │
 ├─────────────┼────────┼────────────────────────────────────────────┤
-│ doc-1       │ 0.9412 │ Spector Search uses HNSW for approximate.. │
+│ doc-1       │ 0.9412 │ Spector uses HNSW for approximate.. │
 │ doc-2       │ 0.7231 │ IVF-PQ provides memory-efficient billion.. │
 └─────────────┴────────┴────────────────────────────────────────────┘
 ```
@@ -225,7 +225,7 @@ MAX_RETRIES=30
 for i in $(seq 1 $MAX_RETRIES); do
   if spectorctl --host $SPECTOR_HOST --port $SPECTOR_PORT status --json 2>/dev/null | \
      jq -e '.status == "RUNNING"' > /dev/null 2>&1; then
-    echo "✅ Spector Search is ready"
+    echo "✅ Spector is ready"
     exit 0
   fi
   echo "⏳ Waiting for server... ($i/$MAX_RETRIES)"

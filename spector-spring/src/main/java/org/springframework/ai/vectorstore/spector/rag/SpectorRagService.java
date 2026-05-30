@@ -19,7 +19,7 @@ import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Spring AI RAG service that integrates Spector Search vector retrieval with
+ * Spring AI RAG service that integrates Spector vector retrieval with
  * context assembly for retrieval-augmented generation.
  *
  * <p>Delegates vector retrieval to {@link SpectorVectorStore} and context assembly

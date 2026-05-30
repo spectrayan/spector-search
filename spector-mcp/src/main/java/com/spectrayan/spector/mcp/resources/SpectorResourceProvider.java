@@ -46,7 +46,7 @@ public final class SpectorResourceProvider {
             SpectorEngine engine, String serverVersion) {
 
         var resource = McpSchema.Resource.builder(SCHEME + "status", "Engine Status")
-                .description("Real-time Spector Search engine status including document count, "
+                .description("Real-time Spector engine status including document count, "
                         + "index type, SIMD capabilities, GPU status, and embedding configuration.")
                 .mimeType("application/json")
                 .build();

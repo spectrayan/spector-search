@@ -1,6 +1,6 @@
 # Skill: Code Review
 
-This skill defines the code review process for the Spector Search project. Use this when reviewing PRs, inspecting diffs, or performing pre-commit quality checks.
+This skill defines the code review process for the Spector project. Use this when reviewing PRs, inspecting diffs, or performing pre-commit quality checks.
 
 ## Trigger
 

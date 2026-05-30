@@ -1,6 +1,6 @@
 # 🤝 Contributing
 
-> **We'd love your help making Spector Search even better!** Whether you're fixing a bug, adding a feature, improving docs, or optimizing performance — every contribution matters. This page covers everything you need to get started.
+> **We'd love your help making Spector even better!** Whether you're fixing a bug, adding a feature, improving docs, or optimizing performance — every contribution matters. This page covers everything you need to get started.
 
 ---
 
@@ -18,8 +18,8 @@
 
 ```bash
 # Fork and clone
-git clone https://github.com/<your-username>/spector-search.git
-cd spector-search
+git clone https://github.com/<your-username>/spector.git
+cd spector
 
 # Verify JDK
 java -version   # Should show 25+
@@ -226,7 +226,7 @@ void hnswPersistenceRoundTrip(@ForAll @Size(min=10, max=1000) List<float[]> vect
 
 ### Bug Reports
 
-Use the [Bug Report template](https://github.com/spectrayan/spector-search/issues/new?template=bug_report.md):
+Use the [Bug Report template](https://github.com/spectrayan/spector/issues/new?template=bug_report.md):
 
 - Steps to reproduce
 
@@ -238,7 +238,7 @@ Use the [Bug Report template](https://github.com/spectrayan/spector-search/issue
 
 ### 💡 Feature Requests
 
-Use the [Feature Request template](https://github.com/spectrayan/spector-search/issues/new?template=feature_request.md):
+Use the [Feature Request template](https://github.com/spectrayan/spector/issues/new?template=feature_request.md):
 
 - Problem you're solving
 
@@ -252,9 +252,9 @@ Use the [Feature Request template](https://github.com/spectrayan/spector-search/
 
 | Channel | Use For |
 |---------|---------|
-| [GitHub Discussions](https://github.com/spectrayan/spector-search/discussions) | General questions |
-| [GitHub Issues](https://github.com/spectrayan/spector-search/issues) | Bug reports |
-| [SECURITY.md](https://github.com/spectrayan/spector-search/blob/main/SECURITY.md) | Security vulnerabilities |
+| [GitHub Discussions](https://github.com/spectrayan/spector/discussions) | General questions |
+| [GitHub Issues](https://github.com/spectrayan/spector/issues) | Bug reports |
+| [SECURITY.md](https://github.com/spectrayan/spector/blob/main/SECURITY.md) | Security vulnerabilities |
 | developer@spectrayan.com | Direct contact |
 
 ---

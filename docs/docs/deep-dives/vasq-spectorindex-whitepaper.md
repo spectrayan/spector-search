@@ -2,7 +2,7 @@
 
 > **Vectorized Affine Scalar Quantization with Adaptive IVF-HNSW Indexing for High-Performance Approximate Nearest Neighbor Search**
 
-*Spector Search Engine — 2026*
+*Spector Engine — 2026*
 
 ---
 

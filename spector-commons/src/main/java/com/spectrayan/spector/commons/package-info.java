@@ -1,5 +1,5 @@
 /**
- * Shared utilities for the Spector Search engine.
+ * Shared utilities for the Spector engine.
  *
  * <p>Contains framework-independent helpers for content extraction,
  * text chunking, and normalization that are used across multiple modules.</p>

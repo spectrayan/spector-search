@@ -1,5 +1,5 @@
 /**
- * Spector MCP — Model Context Protocol integration for Spector Search.
+ * Spector MCP — Model Context Protocol integration for Spector.
  *
  * <p>This package provides a high-performance MCP server that exposes
  * Spector's SIMD-accelerated vector search engine to AI agents

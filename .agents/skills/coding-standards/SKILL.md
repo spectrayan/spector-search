@@ -1,6 +1,6 @@
 # Skill: Coding Standards Reference
 
-This skill provides the comprehensive coding standards for the Spector Search project. Agents should reference this document when writing or reviewing Java code in any `spector-*` module.
+This skill provides the comprehensive coding standards for the Spector project. Agents should reference this document when writing or reviewing Java code in any `spector-*` module.
 
 ## Trigger
 

@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════
-# Spector Search — Test Defaults
+# Spector — Test Defaults
 # ═══════════════════════════════════════════════════════════════════════
 # Minimal test-only defaults matching the values expected by
 # SpectorPropertiesTest. Decoupled from the production defaults file

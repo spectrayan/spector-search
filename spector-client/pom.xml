@@ -6,13 +6,13 @@
 
     <parent>
         <groupId>com.spectrayan</groupId>
-        <artifactId>spector-search</artifactId>
+        <artifactId>spector</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>spector-client</artifactId>
     <name>Spector Client SDK</name>
-    <description>Java client SDK for programmatic interaction with Spector Search REST API.</description>
+    <description>Java client SDK for programmatic interaction with Spector REST API.</description>
 
     <dependencies>
         <!-- Jackson for JSON serialization/deserialization -->

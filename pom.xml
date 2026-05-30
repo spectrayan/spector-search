@@ -5,13 +5,13 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.spectrayan</groupId>
-    <artifactId>spector-search</artifactId>
+    <artifactId>spector</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>Spector Search</name>
+    <name>Spector</name>
     <description>Ultra-fast, SIMD-accelerated semantic search engine built on Java Vector API + modern JVM technologies.</description>
-    <url>https://github.com/spectrayan/spector-search</url>
+    <url>https://github.com/spectrayan/spector</url>
 
     <licenses>
         <license>
@@ -163,7 +163,7 @@
             </dependency>
             <dependency>
                 <groupId>com.spectrayan</groupId>
-                <artifactId>spring-ai-starter-vector-store-spector-search</artifactId>
+                <artifactId>spring-ai-starter-vector-store-spector</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

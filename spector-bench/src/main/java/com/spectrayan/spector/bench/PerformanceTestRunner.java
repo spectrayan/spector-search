@@ -402,7 +402,7 @@ public class PerformanceTestRunner {
         <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Spector Search — Performance Report</title>
+        <title>Spector — Performance Report</title>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
         <style>
           :root {
@@ -460,7 +460,7 @@ public class PerformanceTestRunner {
         </head>
         <body>
         <div class="header">
-          <h1>⚡ Spector Search Performance Report</h1>
+          <h1>⚡ Spector Performance Report</h1>
           <div class="meta">Generated: %s | Java %s | CPUs: %d | SIMD: %s</div>
         </div>
 

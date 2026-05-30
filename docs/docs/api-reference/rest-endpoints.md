@@ -1,6 +1,6 @@
 # 🌐 REST API Reference
 
-> **Complete reference for all Spector Search REST endpoints.** The API runs on an embedded Armeria server with virtual threads, accepting and returning JSON. Every request gets its own virtual thread — no connection limits to worry about.
+> **Complete reference for all Spector REST endpoints.** The API runs on an embedded Armeria server with virtual threads, accepting and returning JSON. Every request gets its own virtual thread — no connection limits to worry about.
 
 ---
 

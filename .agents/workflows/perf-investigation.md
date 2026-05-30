@@ -1,6 +1,6 @@
 # Workflow: Performance Investigation
 
-Process for investigating performance regressions or optimizing hot paths in Spector Search.
+Process for investigating performance regressions or optimizing hot paths in Spector.
 
 ## Trigger
 

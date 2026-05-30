@@ -1,16 +1,16 @@
-# 🌟 What is Spector Search?
+# 🌟 What is Spector?
 
 > **The Zero-Overhead, Agent-Ready AI Memory Backbone.**
 >
 > Legacy search engines bolted vectors onto text databases. Spector is designed from the ground up for modern AI — combining vector similarity, keyword search, and hybrid ranking in a single embeddable library with zero external dependencies. Connect any AI agent via the built-in MCP server, or embed directly in your application.
 
-Spector Search is an open-source, high-performance search engine built entirely on modern Java 25. It's designed for developers who want sub-millisecond search, native AI agent integration, and zero infrastructure complexity. Drop in a JAR, write a few lines of code, and you have production-grade hybrid search with built-in agent support.
+Spector is an open-source, high-performance search engine built entirely on modern Java 25. It's designed for developers who want sub-millisecond search, native AI agent integration, and zero infrastructure complexity. Drop in a JAR, write a few lines of code, and you have production-grade hybrid search with built-in agent support.
 
 ---
 
 ## 🎯 What It Does
 
-Spector Search indexes documents with their vector embeddings and text content, then retrieves them using multiple strategies — directly from AI agents or your application code:
+Spector indexes documents with their vector embeddings and text content, then retrieves them using multiple strategies — directly from AI agents or your application code:
 
 ```mermaid
 graph LR
@@ -69,7 +69,7 @@ Includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) s
 
 ### 📦 Pure Java, Zero Dependencies
 
-Unlike most vector databases that rely on C++, Rust, or Python bindings, Spector Search is 100% Java. It uses the JDK's own Vector API for SIMD acceleration — no JNI, no native libraries, no external infrastructure.
+Unlike most vector databases that rely on C++, Rust, or Python bindings, Spector is 100% Java. It uses the JDK's own Vector API for SIMD acceleration — no JNI, no native libraries, no external infrastructure.
 
 > [!TIP]
 > Add the JAR to your classpath and you're done. No Docker, no clusters, no ops.
@@ -129,7 +129,7 @@ Spector offers two quantization paths:
 
 | Engine | Language | Vector Avg | Vector P99 |
 |--------|----------|-----------|-----------| 
-| **⚡ Spector Search** | **Java 25** | **0.13 ms** | **0.26 ms** |
+| **⚡ Spector** | **Java 25** | **0.13 ms** | **0.26 ms** |
 | hnswlib | C++ | 0.1–0.5 ms | ~1 ms |
 | FAISS | C++ | 0.2–0.8 ms | 1–2 ms |
 | Lucene 9+ | Java | 1–5 ms | 5–10 ms |
@@ -184,14 +184,14 @@ Combine keyword precision (finding exact product SKUs, error codes) with semanti
 
 ### 📱 Embedded Analytics
 
-Drop Spector Search into existing Java applications without infrastructure changes. Perfect for desktop applications, microservices, or edge deployments.
+Drop Spector into existing Java applications without infrastructure changes. Perfect for desktop applications, microservices, or edge deployments.
 
 ---
 
-## ✅ When to Choose Spector Search
+## ✅ When to Choose Spector
 
 > [!NOTE]
-> **Choose Spector Search when:**
+> **Choose Spector when:**
 > - You want AI agents to autonomously search your data (MCP integration)
 > - You want sub-millisecond hybrid search without infrastructure complexity
 > - Your stack is Java/JVM and you want native integration

@@ -23,7 +23,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
 import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
- * Thread-safe Java client SDK for Spector Search REST API.
+ * Thread-safe Java client SDK for Spector REST API.
  *
  * <p>Uses Java HttpClient with connection pooling. All methods are safe
  * for concurrent invocations from multiple threads.</p>
@@ -101,7 +101,7 @@ public class SpectorClient implements AutoCloseable {
     }
 
     /**
-     * Performs a search against the Spector Search engine.
+     * Performs a search against the Spector engine.
      *
      * @param request the search request (keyword, vector, or hybrid)
      * @return the search response containing results and metadata

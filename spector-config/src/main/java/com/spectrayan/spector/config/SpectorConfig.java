@@ -8,7 +8,7 @@ import com.spectrayan.spector.core.quantization.QuantizationType;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 /**
- * Immutable configuration for a Spector Search engine instance.
+ * Immutable configuration for a Spector engine instance.
  *
  * @param dimensions         vector dimensionality
  * @param capacity           max number of documents

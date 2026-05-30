@@ -1,8 +1,8 @@
 # spector-spring 🍃
 
-> **Spring Boot starter and Spring AI integration auto-configurations for Spector Search.**
+> **Spring Boot starter and Spring AI integration auto-configurations for Spector.**
 
-`spector-spring` registers Spector Search as a native Spring Boot starter dependency. It auto-configures the in-process `SpectorEngine` bean, maps application properties, and implements Spring AI's core `VectorStore` interfaces for plug-and-play RAG architectures.
+`spector-spring` registers Spector as a native Spring Boot starter dependency. It auto-configures the in-process `SpectorEngine` bean, maps application properties, and implements Spring AI's core `VectorStore` interfaces for plug-and-play RAG architectures.
 
 ---
 

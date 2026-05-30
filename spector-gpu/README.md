@@ -1,6 +1,6 @@
 # spector-gpu 🖥️
 
-> **GPU acceleration for Spector Search using JNI-free Panama FFM interop with CUDA.**
+> **GPU acceleration for Spector using JNI-free Panama FFM interop with CUDA.**
 
 `spector-gpu` accelerates batch vector similarity calculations by offloading distance calculations to NVIDIA GPUs. Using Project Panama's Foreign Function & Memory (FFM) API, it loads CUDA dynamic libraries (`nvcuda.dll` or `libcuda.so`) and binds memory buffers directly to GPU contexts without writing any JNI C++ code.
 
