@@ -2,9 +2,13 @@ name: Deploy Documentation
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'labs/**'
     paths:
       - 'docs/**'
+      - 'scripts/collect-labs.sh'
+      - 'LABS.md'
   workflow_dispatch:
 
 permissions:
@@ -22,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # Full history — needed to access labs/* branches
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -31,6 +37,9 @@ jobs:
       - name: Install MkDocs and dependencies
         run: |
           pip install mkdocs-material pymdown-extensions mkdocs-callouts
+
+      - name: Collect Labs branches
+        run: ./scripts/collect-labs.sh
 
       - name: Build documentation
         run: mkdocs build

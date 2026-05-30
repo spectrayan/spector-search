@@ -184,6 +184,8 @@ nav:
       - Contributing: operations/contributing.md
   - FAQ: faq.md
   - Roadmap: roadmap.md
+  - "🔬 Labs":
+      - labs/index.md
 
 extra_css:
   - stylesheets/extra.css
