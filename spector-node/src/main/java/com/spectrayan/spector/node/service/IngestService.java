@@ -13,7 +13,7 @@ import com.spectrayan.spector.node.event.SpectorBulkIngestCompletedEvent;
 import com.spectrayan.spector.node.event.SpectorDocumentDeletedEvent;
 import com.spectrayan.spector.node.event.SpectorDocumentIngestedEvent;
 import com.spectrayan.spector.node.event.SpectorEventBus;
-import com.spectrayan.spector.node.exception.SpectorApiException;
+import com.spectrayan.spector.node.exception.LegacySpectorApiException;
 
 /**
  * Ingest service facade — encapsulates local vs cluster routing for document ingestion.
@@ -68,7 +68,7 @@ public class IngestService {
         request.validateForAutoIngest();
 
         if (!engine.hasEmbeddingProvider()) {
-            throw SpectorApiException.conflict(
+            throw LegacySpectorApiException.conflict(
                     "Auto-embed requires an EmbeddingProvider. Configure the engine with an embedding provider.");
         }
 

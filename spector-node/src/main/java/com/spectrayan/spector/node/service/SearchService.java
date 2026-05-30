@@ -13,7 +13,7 @@ import com.spectrayan.spector.node.api.dto.SearchResponseDto;
 import com.spectrayan.spector.node.event.SpectorEventBus;
 import com.spectrayan.spector.node.event.SpectorSearchCompletedEvent;
 import com.spectrayan.spector.node.event.SpectorSearchFailedEvent;
-import com.spectrayan.spector.node.exception.SpectorApiException;
+import com.spectrayan.spector.node.exception.LegacySpectorApiException;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 
@@ -70,7 +70,7 @@ public class SearchService {
                     nodeId, Instant.now(),
                     request.resolvedMode().name(), e.getMessage()));
 
-            throw SpectorApiException.internal("Search failed: " + e.getMessage(), e);
+            throw LegacySpectorApiException.internal("Search failed: " + e.getMessage(), e);
         }
     }
 

@@ -3,11 +3,12 @@ package com.spectrayan.spector.node.exception;
 /**
  * Validation exception for request parameter errors.
  *
- * <p>Always maps to HTTP 400 Bad Request. Use for input validation
- * failures like missing required fields, out-of-range values, or
- * dimension mismatches.</p>
+ * <p>Always maps to HTTP 400 Bad Request.</p>
+ *
+ * @deprecated Use {@link com.spectrayan.spector.commons.error.SpectorValidationException} instead.
  */
-public class ValidationException extends SpectorApiException {
+@Deprecated(since = "0.1.0", forRemoval = true)
+public class ValidationException extends LegacySpectorApiException {
 
     public ValidationException(String message) {
         super(400, message);
