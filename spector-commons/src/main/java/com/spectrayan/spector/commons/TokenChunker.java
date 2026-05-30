@@ -4,6 +4,9 @@ import java.text.BreakIterator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * Token-aware text chunker that splits by word/token count instead of character count.
@@ -42,9 +45,9 @@ public class TokenChunker {
      * @param overlapTokens overlap tokens between consecutive chunks
      */
     public TokenChunker(int maxTokens, int overlapTokens) {
-        if (maxTokens <= 0) throw new IllegalArgumentException("maxTokens must be > 0");
-        if (overlapTokens < 0) throw new IllegalArgumentException("overlapTokens must be >= 0");
-        if (overlapTokens >= maxTokens) throw new IllegalArgumentException("overlapTokens must be < maxTokens");
+        if (maxTokens <= 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "maxTokens", 1, Integer.MAX_VALUE, 0);
+        if (overlapTokens < 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "overlapTokens", 0);
+        if (overlapTokens >= maxTokens) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "overlapTokens", 0, 0, 0);
         this.maxTokens = maxTokens;
         this.overlapTokens = overlapTokens;
     }

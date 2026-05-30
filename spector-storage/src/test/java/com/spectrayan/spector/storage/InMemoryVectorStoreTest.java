@@ -1,5 +1,9 @@
 package com.spectrayan.spector.storage;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+import com.spectrayan.spector.commons.error.SpectorStoreFullException;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
@@ -89,7 +93,7 @@ class InMemoryVectorStoreTest {
     void wrongDimensionsThrows() {
         try (var store = new InMemoryVectorStore(3, 10)) {
             assertThatThrownBy(() -> store.put("x", new float[]{1f, 2f}))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(SpectorValidationException.class)
                     .hasMessageContaining("3");
         }
     }
@@ -100,8 +104,8 @@ class InMemoryVectorStoreTest {
             store.put("a", new float[]{1f, 2f});
             store.put("b", new float[]{3f, 4f});
             assertThatThrownBy(() -> store.put("c", new float[]{5f, 6f}))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("full");
+                    .isInstanceOf(SpectorStoreFullException.class)
+                    .hasMessageContaining("Vector store has reached capacity");
         }
     }
 
@@ -113,7 +117,7 @@ class InMemoryVectorStoreTest {
 
         assertThat(store.isClosed()).isTrue();
         assertThatThrownBy(() -> store.get("a"))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(SpectorException.class);
     }
 
     @ParameterizedTest

@@ -2,6 +2,8 @@ package com.spectrayan.spector.index;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * A bounded priority queue for HNSW candidate tracking during search and construction.
@@ -69,19 +71,19 @@ public final class NeighborQueue {
 
     /** Returns the score at the top of the heap (worst in a max-heap of top-K). */
     public float topScore() {
-        if (size == 0) throw new IllegalStateException("Queue is empty");
+        if (size == 0) throw new SpectorInternalException(ErrorCode.EMPTY_COLLECTION, "queue");
         return scores[0];
     }
 
     /** Returns the index at the top of the heap. */
     public int topIndex() {
-        if (size == 0) throw new IllegalStateException("Queue is empty");
+        if (size == 0) throw new SpectorInternalException(ErrorCode.EMPTY_COLLECTION, "queue");
         return indices[0];
     }
 
     /** Removes and returns the top element. */
     public int poll() {
-        if (size == 0) throw new IllegalStateException("Queue is empty");
+        if (size == 0) throw new SpectorInternalException(ErrorCode.EMPTY_COLLECTION, "queue");
         int result = indices[0];
         size--;
         if (size > 0) {

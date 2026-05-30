@@ -1,5 +1,9 @@
 package com.spectrayan.spector.index.ivf;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -40,7 +44,7 @@ class IvfFlatIndexTest {
     @Test
     void searchBeforeTraining_throws() {
         var index = new IvfFlatIndex(32, SimilarityFunction.COSINE);
-        var ex = assertThrows(IllegalStateException.class,
+        var ex = assertThrows(SpectorException.class,
                 () -> index.search(new float[32], 5));
         assertTrue(ex.getMessage().contains("trained"));
     }
@@ -48,7 +52,7 @@ class IvfFlatIndexTest {
     @Test
     void addBeforeTraining_throws() {
         var index = new IvfFlatIndex(32, SimilarityFunction.COSINE);
-        assertThrows(IllegalStateException.class,
+        assertThrows(SpectorException.class,
                 () -> index.add("doc-0", 0, new float[32]));
     }
 
@@ -56,7 +60,7 @@ class IvfFlatIndexTest {
     void trainWithTooFewVectors_throws() {
         var index = new IvfFlatIndex(32, SimilarityFunction.COSINE);
         float[][] vectors = randomVectors(5, 32, 42);
-        var ex = assertThrows(IllegalArgumentException.class,
+        var ex = assertThrows(SpectorValidationException.class,
                 () -> index.train(vectors, 10));
         assertTrue(ex.getMessage().contains("at least 10"));
     }
@@ -66,11 +70,11 @@ class IvfFlatIndexTest {
         var index = new IvfFlatIndex(32, SimilarityFunction.COSINE);
         float[][] vectors = randomVectors(100, 32, 42);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> index.train(vectors, 1)); // below MIN_CELLS
 
         var index2 = new IvfFlatIndex(32, SimilarityFunction.COSINE);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> index2.train(vectors, 65_537)); // above MAX_CELLS
     }
 
@@ -181,10 +185,10 @@ class IvfFlatIndexTest {
         index.train(trainData, 8);
         index.add("doc-0", 0, trainData[0]);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> index.search(trainData[0], 0, 5)); // nprobe < 1
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> index.search(trainData[0], 9, 5)); // nprobe > numCells
     }
 

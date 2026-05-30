@@ -1,32 +1,27 @@
 package com.spectrayan.spector.commons.error;
 
 /**
- * Abstract base for all Spector checked exceptions.
+ * Abstract base for all Spector exceptions.
  *
  * <p>Every Spector exception carries an {@link ErrorCode} that uniquely identifies the
  * error condition. The error code follows the {@code SPE-XXX-YYY} schema and is
  * <b>immutable once assigned</b> — users and monitoring systems can safely key on it.</p>
  *
- * <p>This is a <b>checked exception</b>. All public API methods that can fail must
- * declare {@code throws SpectorException} (or a specific subclass), forcing callers
- * to handle errors explicitly.</p>
- *
  * <h3>Exception Hierarchy</h3>
  * <pre>{@code
- *   Exception
- *   └── SpectorException
- *       ├── SpectorValidationException      (SPE-100-xxx)
- *       ├── SpectorConfigException          (SPE-110-xxx)
- *       ├── SpectorIndexException           (SPE-200-xxx)
- *       ├── SpectorStorageException         (SPE-210-xxx)
- *       ├── SpectorEmbeddingException       (SPE-300-xxx)
- *       ├── SpectorMemoryException          (SPE-310-xxx)
- *       ├── SpectorGpuException             (SPE-400-xxx)
- *       ├── SpectorServerException          (SPE-500-xxx)
- *       ├── SpectorClientException          (SPE-510-xxx)
- *       ├── SpectorIngestionException       (SPE-600-xxx)
- *       ├── SpectorClusterException         (SPE-700-xxx)
- *       └── SpectorInternalException        (SPE-900-xxx)
+ *   SpectorException
+ *   ├── SpectorValidationException      (SPE-100-xxx)
+ *   ├── SpectorConfigException          (SPE-110-xxx)
+ *   ├── SpectorIndexException           (SPE-200-xxx)
+ *   ├── SpectorStorageException         (SPE-210-xxx)
+ *   ├── SpectorEmbeddingException       (SPE-300-xxx)
+ *   ├── SpectorMemoryException          (SPE-310-xxx)
+ *   ├── SpectorGpuException             (SPE-400-xxx)
+ *   ├── SpectorServerException          (SPE-500-xxx)
+ *   ├── SpectorClientException          (SPE-510-xxx)
+ *   ├── SpectorIngestionException       (SPE-600-xxx)
+ *   ├── SpectorClusterException         (SPE-700-xxx)
+ *   └── SpectorInternalException        (SPE-900-xxx)
  * }</pre>
  *
  * <h3>Usage</h3>
@@ -39,7 +34,7 @@ package com.spectrayan.spector.commons.error;
  * @see ErrorCode
  * @see ErrorCategory
  */
-public abstract class SpectorException extends Exception {
+public abstract class SpectorException extends RuntimeException {
 
     private final ErrorCode errorCode;
 

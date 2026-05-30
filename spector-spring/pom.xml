@@ -132,6 +132,10 @@
             <version>3.5.3</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

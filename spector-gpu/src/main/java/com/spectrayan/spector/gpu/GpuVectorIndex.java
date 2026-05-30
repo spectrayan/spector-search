@@ -14,6 +14,10 @@ import org.slf4j.LoggerFactory;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorGpuException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * GPU-resident vector index for brute-force similarity search.
@@ -136,7 +140,7 @@ public final class GpuVectorIndex implements AutoCloseable {
                         ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
         MemorySegment ctxPtr = arena.allocate(ValueLayout.ADDRESS);
         int result = (int) cuCtxCreate.invoke(ctxPtr, 0, 0);
-        if (result != 0) throw new RuntimeException("cuCtxCreate failed: " + result);
+        if (result != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuCtxCreate failed", result);
 
         long dbBytes = (long) numVectors * dims * Float.BYTES;
         long resultBytes = (long) numVectors * Float.BYTES;
@@ -162,13 +166,13 @@ public final class GpuVectorIndex implements AutoCloseable {
 
         MemorySegment dbSegment = arena.allocateFrom(ValueLayout.JAVA_FLOAT, database);
         int r = (int) cuMemcpyHtoD.invoke(dDatabase, dbSegment, dbBytes);
-        if (r != 0) throw new RuntimeException("cuMemcpyHtoD failed: " + r);
+        if (r != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuMemcpyHtoD failed", r);
 
         log.info("Database uploaded to GPU successfully");
 
         // Load PTX kernel
         try (var ptxStream = GpuVectorIndex.class.getResourceAsStream("/kernels/batch_cosine.ptx")) {
-            if (ptxStream == null) throw new RuntimeException("batch_cosine.ptx not found");
+            if (ptxStream == null) throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, "batch_cosine.ptx not found");
             String ptx = new String(ptxStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
             MemorySegment ptxBytes = arena.allocateFrom(ptx);
 
@@ -177,7 +181,7 @@ public final class GpuVectorIndex implements AutoCloseable {
                     cudaLib.find("cuModuleLoadData").orElseThrow(),
                     FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
             result = (int) cuModuleLoadData.invoke(modulePtr, ptxBytes);
-            if (result != 0) throw new RuntimeException("cuModuleLoadData failed: " + result);
+            if (result != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuModuleLoadData failed", result);
 
             long module = modulePtr.get(ValueLayout.ADDRESS, 0).address();
 
@@ -188,7 +192,7 @@ public final class GpuVectorIndex implements AutoCloseable {
                     FunctionDescriptor.of(ValueLayout.JAVA_INT,
                             ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
             result = (int) cuModuleGetFunction.invoke(funcPtr, MemorySegment.ofAddress(module), funcName);
-            if (result != 0) throw new RuntimeException("cuModuleGetFunction failed: " + result);
+            if (result != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuModuleGetFunction failed", result);
 
             long cuFunction = funcPtr.get(ValueLayout.ADDRESS, 0).address();
 
@@ -220,7 +224,7 @@ public final class GpuVectorIndex implements AutoCloseable {
     private static long deviceAlloc(Arena arena, MethodHandle cuMemAlloc, long bytes) throws Throwable {
         MemorySegment ptr = arena.allocate(ValueLayout.JAVA_LONG);
         int result = (int) cuMemAlloc.invoke(ptr, bytes);
-        if (result != 0) throw new RuntimeException("cuMemAlloc failed: " + result + " (bytes=" + bytes + ")");
+        if (result != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuMemAlloc failed", result);
         return ptr.get(ValueLayout.JAVA_LONG, 0);
     }
 
@@ -233,7 +237,7 @@ public final class GpuVectorIndex implements AutoCloseable {
      * @return array of numVectors similarity scores
      */
     public float[] search(float[] query) {
-        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+        if (closed) throw new SpectorSegmentClosedException();
 
         if (gpuActive) {
             try {
@@ -253,7 +257,7 @@ public final class GpuVectorIndex implements AutoCloseable {
         try (Arena local = Arena.ofConfined()) {
             MemorySegment querySegment = local.allocateFrom(ValueLayout.JAVA_FLOAT, query);
             int r = (int) cuMemcpyHtoD.invoke(dQuery, querySegment, queryBytes);
-            if (r != 0) throw new RuntimeException("Query upload failed: " + r);
+            if (r != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "Query upload failed", r);
 
             // Set up kernel params
             MemorySegment paramsArray = local.allocate(ValueLayout.ADDRESS, 5);
@@ -282,15 +286,15 @@ public final class GpuVectorIndex implements AutoCloseable {
                     MemorySegment.ofAddress(cuFunction),
                     gridSize, 1, 1, blockSize, 1, 1,
                     0, MemorySegment.NULL, paramsArray, MemorySegment.NULL);
-            if (r != 0) throw new RuntimeException("Kernel launch failed: " + r);
+            if (r != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "Kernel launch failed", r);
 
             r = (int) cuCtxSynchronize.invoke();
-            if (r != 0) throw new RuntimeException("Sync failed: " + r);
+            if (r != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "Sync failed", r);
 
             // Download results
             MemorySegment resultSegment = local.allocate(ValueLayout.JAVA_FLOAT, numVectors);
             r = (int) cuMemcpyDtoH.invoke(resultSegment, dResults, resultBytes);
-            if (r != 0) throw new RuntimeException("Result download failed: " + r);
+            if (r != 0) throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "Result download failed", r);
 
             float[] results = new float[numVectors];
             MemorySegment.copy(resultSegment, ValueLayout.JAVA_FLOAT, 0, results, 0, numVectors);

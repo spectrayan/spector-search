@@ -1,5 +1,7 @@
 package com.spectrayan.spector.gpu;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.time.Duration;
@@ -23,14 +25,14 @@ class PanamaMemoryDetectorTest {
     @Test
     void rejectsThresholdBelowOneSecond() {
         assertThatThrownBy(() -> new PanamaMemoryDetector(Duration.ofMillis(500)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("at least 1 second");
+                .isInstanceOf(SpectorValidationException.class)
+                .hasMessageContaining("lifetimeThreshold");
     }
 
     @Test
     void rejectsNullThreshold() {
         assertThatThrownBy(() -> new PanamaMemoryDetector(null))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test

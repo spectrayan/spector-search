@@ -14,6 +14,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Consistent hash ring-based shard manager for distributed document assignment.
@@ -70,7 +73,7 @@ public class ConsistentHashShardManager implements ShardManager {
      * Creates a ConsistentHashShardManager with the specified shard count.
      *
      * @param shardCount the total number of shards (2–256)
-     * @throws IllegalArgumentException if shardCount is outside the valid range
+     * @throws SpectorValidationException if shardCount is outside the valid range
      */
     public ConsistentHashShardManager(int shardCount) {
         this(shardCount, DEFAULT_VIRTUAL_NODES);
@@ -81,16 +84,14 @@ public class ConsistentHashShardManager implements ShardManager {
      *
      * @param shardCount          the total number of shards (2–256)
      * @param virtualNodesPerShard number of virtual nodes per physical shard
-     * @throws IllegalArgumentException if shardCount is outside the valid range
+     * @throws SpectorValidationException if shardCount is outside the valid range
      */
     public ConsistentHashShardManager(int shardCount, int virtualNodesPerShard) {
         if (shardCount < MIN_SHARD_COUNT || shardCount > MAX_SHARD_COUNT) {
-            throw new IllegalArgumentException(
-                    "Shard count must be between " + MIN_SHARD_COUNT + " and " + MAX_SHARD_COUNT
-                            + ", got: " + shardCount);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "shardCount", MIN_SHARD_COUNT, MAX_SHARD_COUNT, shardCount);
         }
         if (virtualNodesPerShard < 1) {
-            throw new IllegalArgumentException("Virtual nodes per shard must be at least 1");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "virtualNodesPerShard", 1, Integer.MAX_VALUE, 0);
         }
 
         this.shardCount = shardCount;
@@ -109,7 +110,7 @@ public class ConsistentHashShardManager implements ShardManager {
     @Override
     public int assignShard(String documentId) {
         if (documentId == null || documentId.isEmpty()) {
-            throw new IllegalArgumentException("Document ID must not be null or empty");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Document ID");
         }
 
         long hash = hash(documentId);
@@ -117,7 +118,7 @@ public class ConsistentHashShardManager implements ShardManager {
         ringLock.readLock().lock();
         try {
             if (hashRing.isEmpty()) {
-                throw new IllegalStateException("No shards registered in the hash ring");
+                throw new SpectorInternalException(ErrorCode.EMPTY_COLLECTION, "shards");
             }
 
             // Find the first virtual node at or after the hash position
@@ -135,11 +136,10 @@ public class ConsistentHashShardManager implements ShardManager {
     @Override
     public void addShard(int shardIndex, String nodeEndpoint) {
         if (shardIndex < 0 || shardIndex >= shardCount) {
-            throw new IllegalArgumentException(
-                    "Shard index must be between 0 and " + (shardCount - 1) + ", got: " + shardIndex);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Shard index must be between 0 and " + (shardCount - 1) + ", got: " + shardIndex);
         }
         if (nodeEndpoint == null || nodeEndpoint.isBlank()) {
-            throw new IllegalArgumentException("Node endpoint must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Node endpoint");
         }
 
         ringLock.writeLock().lock();
@@ -287,7 +287,7 @@ public class ConsistentHashShardManager implements ShardManager {
      */
     public int assignShardExcluding(String documentId, int excludeShard) {
         if (documentId == null || documentId.isEmpty()) {
-            throw new IllegalArgumentException("Document ID must not be null or empty");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Document ID");
         }
 
         long hash = hash(documentId);
@@ -319,7 +319,7 @@ public class ConsistentHashShardManager implements ShardManager {
 
                 if (wrapped && position.equals(startPosition)) {
                     // All nodes belong to excluded shard — shouldn't happen
-                    throw new IllegalStateException("No available shards after exclusion");
+                    throw new SpectorInternalException(ErrorCode.EMPTY_COLLECTION, "shards");
                 }
             }
         } finally {

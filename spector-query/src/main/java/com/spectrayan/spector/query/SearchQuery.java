@@ -1,6 +1,8 @@
 package com.spectrayan.spector.query;
 
 import java.util.Map;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Represents a search query with mode selection and parameters.
@@ -29,7 +31,7 @@ public record SearchQuery(
     }
 
     public SearchQuery {
-        if (topK <= 0) throw new IllegalArgumentException("topK must be positive: " + topK);
+        if (topK <= 0) throw new SpectorValidationException(ErrorCode.TOP_K_INVALID, 1, topK);
         if (mode == null) mode = SearchMode.HYBRID;
         if (metadata == null) metadata = Map.of();
     }

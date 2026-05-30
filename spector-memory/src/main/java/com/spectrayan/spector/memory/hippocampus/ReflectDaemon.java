@@ -196,6 +196,7 @@ public final class ReflectDaemon {
                 List<Integer> prunedCounts = ConcurrentTasks.forkJoinAll(pruneTasks);
                 for (int p : prunedCounts) totalTombstoned += p;
             } catch (ConcurrentExecutionException | InterruptedException e) {
+                Thread.currentThread().interrupt();
                 log.warn("Parallel prune failed, falling back to sequential: {}", e.getMessage());
                 for (EpisodicPartition partition : allPartitions) {
                     totalTombstoned += compactor.pruneDecayed(partition,
@@ -243,6 +244,7 @@ public final class ReflectDaemon {
                 List<Integer> consolidated = ConcurrentTasks.forkJoinAll(remTasks);
                 for (int c : consolidated) totalConsolidated += c;
             } catch (ConcurrentExecutionException | InterruptedException e) {
+                Thread.currentThread().interrupt();
                 log.warn("Parallel REM failed, falling back to sequential: {}", e.getMessage());
                 for (EpisodicPartition partition : episodicStore.partitions()) {
                     int promoted = centroidRouter != null

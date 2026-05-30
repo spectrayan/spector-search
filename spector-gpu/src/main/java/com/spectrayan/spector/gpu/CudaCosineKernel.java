@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * CUDA-accelerated cosine similarity kernel with CPU SIMD fallback.
@@ -304,24 +306,19 @@ public class CudaCosineKernel implements SimilarityKernel {
 
     private void validateInputs(float[] query, float[] database, int numVectors, int dimensions) {
         if (dimensions < MIN_DIMENSIONS || dimensions > MAX_DIMENSIONS) {
-            throw new IllegalArgumentException(
-                    "Dimensions must be between " + MIN_DIMENSIONS + " and " + MAX_DIMENSIONS +
-                    ", got: " + dimensions);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "dimensions", MIN_DIMENSIONS, MAX_DIMENSIONS, dimensions);
         }
         if (dimensions % 32 != 0) {
-            throw new IllegalArgumentException(
-                    "Dimensions must be a multiple of 32, got: " + dimensions);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "dimensions (must be multiple of 32)", dimensions);
         }
         if (numVectors < 0) {
-            throw new IllegalArgumentException("numVectors must be non-negative, got: " + numVectors);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "numVectors", numVectors);
         }
         if (query == null || query.length < dimensions) {
-            throw new IllegalArgumentException(
-                    "Query vector must have at least " + dimensions + " elements");
+            throw new SpectorValidationException(ErrorCode.VECTOR_LENGTH_MISMATCH, 0, dimensions);
         }
         if (numVectors > 0 && (database == null || database.length < (long) numVectors * dimensions)) {
-            throw new IllegalArgumentException(
-                    "Database must have at least " + ((long) numVectors * dimensions) + " elements");
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "Database must have at least " + ((long) numVectors * dimensions) + " elements");
         }
     }
 

@@ -1,5 +1,7 @@
 package com.spectrayan.spector.commons.document;
 
+import com.spectrayan.spector.commons.error.SpectorDocumentReadException;
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -30,15 +32,15 @@ public final class DocumentReaderFactory {
      *
      * @param file the path to the document
      * @return the reader for the detected format
-     * @throws DocumentReadException if the format is unsupported
+     * @throws SpectorDocumentReadException if the format is unsupported
      */
-    public static DocumentReader getReader(Path file) throws DocumentReadException {
+    public static DocumentReader getReader(Path file) throws SpectorDocumentReadException {
         String fileName = file.getFileName().toString();
         String extension = getExtension(fileName).toLowerCase(Locale.ROOT);
 
         DocumentReader reader = READERS.get(extension);
         if (reader == null) {
-            throw new DocumentReadException(fileName,
+            throw new SpectorDocumentReadException(fileName,
                     "unsupported format '.%s'. Supported formats: %s".formatted(extension, SUPPORTED_FORMATS));
         }
         return reader;
@@ -49,9 +51,9 @@ public final class DocumentReaderFactory {
      *
      * @param file the path to the document
      * @return the extracted text and metadata
-     * @throws DocumentReadException if the format is unsupported or the file cannot be read
+     * @throws SpectorDocumentReadException if the format is unsupported or the file cannot be read
      */
-    public static DocumentResult read(Path file) throws DocumentReadException {
+    public static DocumentResult read(Path file) throws SpectorDocumentReadException {
         return getReader(file).read(file);
     }
 
@@ -65,7 +67,7 @@ public final class DocumentReaderFactory {
     private static String getExtension(String fileName) {
         int lastDot = fileName.lastIndexOf('.');
         if (lastDot < 0 || lastDot == fileName.length() - 1) {
-            throw new DocumentReadException(fileName,
+            throw new SpectorDocumentReadException(fileName,
                     "unsupported format (no file extension). Supported formats: " + SUPPORTED_FORMATS);
         }
         return fileName.substring(lastDot + 1);

@@ -9,6 +9,10 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Batches multiple similarity queries into single GPU kernel launches for maximum throughput.
@@ -80,15 +84,15 @@ public class BatchGpuSearcher implements AutoCloseable {
      * @param memoryManager  the GPU memory manager for memory tracking
      * @param batchingWindow the time window to collect queries before launching (1–100ms)
      * @param maxBatchSize   the maximum number of queries per batch (1–1024)
-     * @throws IllegalArgumentException if parameters are out of valid range
+     * @throws SpectorValidationException if parameters are out of valid range
      */
     public BatchGpuSearcher(SimilarityKernel kernel, GpuMemoryManager memoryManager,
                             Duration batchingWindow, int maxBatchSize) {
         if (kernel == null) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("Kernel"));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Kernel");
         }
         if (memoryManager == null) {
-            throw new IllegalArgumentException("Memory manager must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Memory manager");
         }
         validateBatchingWindow(batchingWindow);
         validateMaxBatchSize(maxBatchSize);
@@ -117,8 +121,8 @@ public class BatchGpuSearcher implements AutoCloseable {
      * @param dimensions vector dimensionality
      * @param topK       number of top results per query (1–1000)
      * @return map of query index to its individual result (top-K or error)
-     * @throws IllegalStateException    if the searcher is closed
-     * @throws IllegalArgumentException if parameters are invalid
+     * @throws SpectorGpuException    if the searcher is closed
+     * @throws SpectorValidationException if parameters are invalid
      */
     public Map<Integer, BatchQueryResult> batchSearch(
             List<float[]> queries, float[] database, int numVectors, int dimensions, int topK) {
@@ -135,8 +139,8 @@ public class BatchGpuSearcher implements AutoCloseable {
      * @param topK           number of top results per query (1–1000)
      * @param batchingWindow the batching window for this invocation
      * @return map of query index to its individual result (top-K or error)
-     * @throws IllegalStateException    if the searcher is closed
-     * @throws IllegalArgumentException if parameters are invalid
+     * @throws SpectorGpuException    if the searcher is closed
+     * @throws SpectorValidationException if parameters are invalid
      */
     public Map<Integer, BatchQueryResult> batchSearch(
             List<float[]> queries, float[] database, int numVectors, int dimensions,
@@ -408,51 +412,45 @@ public class BatchGpuSearcher implements AutoCloseable {
 
     private void validateBatchingWindow(Duration window) {
         if (window == null) {
-            throw new IllegalArgumentException("Batching window must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Batching window");
         }
         long ms = window.toMillis();
         if (ms < MIN_WINDOW_MS || ms > MAX_WINDOW_MS) {
-            throw new IllegalArgumentException(
-                    "Batching window must be between %d and %dms, got: %dms"
-                            .formatted(MIN_WINDOW_MS, MAX_WINDOW_MS, ms));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "Batching window must be between %d and %dms, got: %dms" .formatted(MIN_WINDOW_MS, MAX_WINDOW_MS, ms));
         }
     }
 
     private void validateMaxBatchSize(int batchSize) {
         if (batchSize < 1 || batchSize > MAX_BATCH_SIZE) {
-            throw new IllegalArgumentException(
-                    "Max batch size must be between 1 and %d, got: %d"
-                            .formatted(MAX_BATCH_SIZE, batchSize));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "Max batch size must be between 1 and %d, got: %d" .formatted(MAX_BATCH_SIZE, batchSize));
         }
     }
 
     private void validateSearchInputs(List<float[]> queries, float[] database,
                                        int numVectors, int dimensions, int topK) {
         if (queries == null) {
-            throw new IllegalArgumentException("Queries list must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Queries list");
         }
         if (database == null) {
-            throw new IllegalArgumentException("Database array must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Database array");
         }
         if (numVectors < 0) {
-            throw new IllegalArgumentException("Number of vectors must be non-negative, got: " + numVectors);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "numVectors", numVectors);
         }
         if (dimensions <= 0) {
-            throw new IllegalArgumentException("Dimensions must be positive, got: " + dimensions);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "Dimensions", 1, Integer.MAX_VALUE, dimensions);
         }
         if (topK < 1 || topK > 1000) {
-            throw new IllegalArgumentException("topK must be between 1 and 1000, got: " + topK);
+            throw new SpectorValidationException(ErrorCode.TOP_K_INVALID, 1, topK);
         }
         if (numVectors > 0 && database.length < (long) numVectors * dimensions) {
-            throw new IllegalArgumentException(
-                    "Database array length (%d) is less than required (%d)"
-                            .formatted(database.length, (long) numVectors * dimensions));
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "Database array length (%d) is less than required (%d)" .formatted(database.length, (long) numVectors * dimensions));
         }
     }
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+            throw new SpectorSegmentClosedException();
         }
     }
 }

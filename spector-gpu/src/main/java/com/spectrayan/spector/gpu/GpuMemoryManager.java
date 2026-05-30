@@ -1,5 +1,7 @@
 package com.spectrayan.spector.gpu;
 
+import com.spectrayan.spector.commons.error.SpectorGpuMemoryException;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
@@ -15,6 +17,11 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorGpuException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Manages GPU device memory allocation and lifecycle via Panama FFM.
@@ -83,7 +90,7 @@ public class GpuMemoryManager implements AutoCloseable {
      * and CPU-fallback scenarios).</p>
      *
      * @param maxBudgetBytes maximum device memory budget in bytes (minimum 256MB)
-     * @throws IllegalArgumentException if budget is below 256MB
+     * @throws SpectorValidationException if budget is below 256MB
      */
     public GpuMemoryManager(long maxBudgetBytes) {
         this(maxBudgetBytes, !GpuCapability.isAvailable());
@@ -94,13 +101,11 @@ public class GpuMemoryManager implements AutoCloseable {
      *
      * @param maxBudgetBytes maximum device memory budget in bytes (minimum 256MB)
      * @param simulatedMode  if true, operates without real GPU memory (for testing)
-     * @throws IllegalArgumentException if budget is below 256MB
+     * @throws SpectorValidationException if budget is below 256MB
      */
     public GpuMemoryManager(long maxBudgetBytes, boolean simulatedMode) {
         if (maxBudgetBytes < MIN_BUDGET_BYTES) {
-            throw new IllegalArgumentException(
-                    "Memory budget must be at least 256MB, got: %d bytes (%d MB)"
-                            .formatted(maxBudgetBytes, maxBudgetBytes / (1024 * 1024)));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "Memory budget must be at least 256MB, got: %d bytes (%d MB)" .formatted(maxBudgetBytes, maxBudgetBytes / (1024 * 1024)));
         }
 
         this.maxBudgetBytes = maxBudgetBytes;
@@ -124,7 +129,7 @@ public class GpuMemoryManager implements AutoCloseable {
                                 ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
                 int ctxResult = (int) cuCtxCreate.invoke(ctxPtr, 0, 0);
                 if (ctxResult != 0) {
-                    throw new RuntimeException("cuCtxCreate failed: " + ctxResult);
+                    throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuCtxCreate failed", ctxResult);
                 }
                 this.cuContext = ctxPtr.get(ValueLayout.ADDRESS, 0);
 
@@ -150,7 +155,7 @@ public class GpuMemoryManager implements AutoCloseable {
                 log.info("GpuMemoryManager initialized: budget={}MB, GPU={}",
                         maxBudgetBytes / (1024 * 1024), GpuCapability.detect().deviceName());
             } catch (Throwable e) {
-                throw new RuntimeException("Failed to initialize CUDA memory handles", e);
+                throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "Failed to initialize CUDA memory handles");
             }
         } else {
             // Simulated mode — no actual GPU, but track allocations for testing
@@ -176,8 +181,8 @@ public class GpuMemoryManager implements AutoCloseable {
      * @param size  number of bytes to allocate on the device
      * @param arena the Arena scope that determines the allocation's lifetime
      * @return a MemorySegment representing the device allocation
-     * @throws GpuMemoryException if allocation fails or would exceed budget
-     * @throws IllegalStateException if the manager is closed
+     * @throws SpectorGpuMemoryException if allocation fails or would exceed budget
+     * @throws SpectorGpuException if the manager is closed
      */
     public MemorySegment allocateDevice(long size, Arena arena) {
         ensureOpen();
@@ -223,8 +228,8 @@ public class GpuMemoryManager implements AutoCloseable {
      * @param size  number of bytes to allocate as pinned host memory
      * @param arena the Arena scope that determines the allocation's lifetime
      * @return a MemorySegment backed by pinned host memory
-     * @throws GpuMemoryException if allocation fails or would exceed budget
-     * @throws IllegalStateException if the manager is closed
+     * @throws SpectorGpuMemoryException if allocation fails or would exceed budget
+     * @throws SpectorGpuException if the manager is closed
      */
     public MemorySegment allocatePinned(long size, Arena arena) {
         ensureOpen();
@@ -332,13 +337,13 @@ public class GpuMemoryManager implements AutoCloseable {
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+            throw new SpectorSegmentClosedException();
         }
     }
 
     private void validateSize(long size) {
         if (size <= 0) {
-            throw new IllegalArgumentException("Allocation size must be positive, got: " + size);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "size", 1, Integer.MAX_VALUE, size);
         }
     }
 
@@ -347,7 +352,7 @@ public class GpuMemoryManager implements AutoCloseable {
         long available = maxBudgetBytes - currentUsage;
 
         if (requestedSize > available) {
-            throw new GpuMemoryException(
+            throw new SpectorGpuMemoryException(
                     "Allocation of %d bytes would exceed budget. Budget: %d bytes, Used: %d bytes, Available: %d bytes"
                             .formatted(requestedSize, maxBudgetBytes, currentUsage, available),
                     requestedSize,
@@ -362,7 +367,7 @@ public class GpuMemoryManager implements AutoCloseable {
             int result = (int) cuMemAlloc.invoke(ptrHolder, size);
             if (result != 0) {
                 long available = queryAvailableDeviceMemory();
-                throw new GpuMemoryException(
+                throw new SpectorGpuMemoryException(
                         "cuMemAlloc failed (error %d) for %d bytes. Available device memory: %d bytes"
                                 .formatted(result, size, available),
                         size,
@@ -370,10 +375,10 @@ public class GpuMemoryManager implements AutoCloseable {
                 );
             }
             return ptrHolder.get(ValueLayout.JAVA_LONG, 0);
-        } catch (GpuMemoryException e) {
+        } catch (SpectorGpuMemoryException e) {
             throw e;
         } catch (Throwable e) {
-            throw new GpuMemoryException(
+            throw new SpectorGpuMemoryException(
                     "Device memory allocation failed: " + e.getMessage(),
                     e, size, -1
             );
@@ -385,7 +390,7 @@ public class GpuMemoryManager implements AutoCloseable {
             MemorySegment ptrHolder = localArena.allocate(ValueLayout.ADDRESS);
             int result = (int) cuMemAllocHost.invoke(ptrHolder, size);
             if (result != 0) {
-                throw new GpuMemoryException(
+                throw new SpectorGpuMemoryException(
                         "cuMemAllocHost failed (error %d) for %d bytes".formatted(result, size),
                         size,
                         getAvailableBytes()
@@ -394,10 +399,10 @@ public class GpuMemoryManager implements AutoCloseable {
             MemorySegment hostPtr = ptrHolder.get(ValueLayout.ADDRESS, 0);
             // Reinterpret with the caller's arena scope and desired size
             return hostPtr.reinterpret(size, arena, null);
-        } catch (GpuMemoryException e) {
+        } catch (SpectorGpuMemoryException e) {
             throw e;
         } catch (Throwable e) {
-            throw new GpuMemoryException(
+            throw new SpectorGpuMemoryException(
                     "Pinned memory allocation failed: " + e.getMessage(),
                     e, size, -1
             );

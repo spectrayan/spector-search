@@ -15,6 +15,8 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.BitSet;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Read-only HNSW index backed by a memory-mapped file.
@@ -96,8 +98,7 @@ public class DiskHnswIndex implements VectorIndex {
 
     @Override
     public void add(String id, int storeIndex, float[] vector) {
-        throw new UnsupportedOperationException(
-                "DiskHnswIndex is read-only. Build with HnswIndex → DiskHnswWriter.");
+        throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "DiskHnswIndex", "read-only; build with HnswIndex + DiskHnswWriter");
     }
 
     @Override
@@ -109,8 +110,7 @@ public class DiskHnswIndex implements VectorIndex {
     public ScoredResult[] search(float[] query, int k) {
         this.lastAccessed = System.currentTimeMillis();
         if (query.length != header.dimensions()) {
-            throw new IllegalArgumentException(
-                    "Expected " + header.dimensions() + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, header.dimensions(), query.length);
         }
         if (header.nodeCount() == 0) {
             return new ScoredResult[0];

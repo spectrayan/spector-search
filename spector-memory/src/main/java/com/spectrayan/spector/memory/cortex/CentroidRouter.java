@@ -1,5 +1,8 @@
 package com.spectrayan.spector.memory.cortex;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -196,7 +199,7 @@ public final class CentroidRouter {
      * Returns the centroid vector for a given ID.
      */
     public float[] centroid(int id) {
-        if (id < 0 || id >= activeCentroids) throw new IndexOutOfBoundsException("Centroid " + id);
+        if (id < 0 || id >= activeCentroids) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "centroidId", 0, activeCentroids - 1, id);
         return centroids[id].clone();
     }
 

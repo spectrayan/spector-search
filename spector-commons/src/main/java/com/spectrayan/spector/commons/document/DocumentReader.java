@@ -1,5 +1,7 @@
 package com.spectrayan.spector.commons.document;
 
+import com.spectrayan.spector.commons.error.SpectorDocumentReadException;
+
 import java.nio.file.Path;
 
 /**
@@ -15,9 +17,9 @@ public interface DocumentReader {
      *
      * @param file the path to the document file
      * @return the extracted text and metadata
-     * @throws DocumentReadException if the file cannot be read or is in an unsupported format
+     * @throws SpectorDocumentReadException if the file cannot be read or is in an unsupported format
      */
-    DocumentResult read(Path file) throws DocumentReadException;
+    DocumentResult read(Path file) throws SpectorDocumentReadException;
 
     /**
      * Returns the format this reader supports.

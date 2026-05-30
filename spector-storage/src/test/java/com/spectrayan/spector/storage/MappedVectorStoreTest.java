@@ -1,5 +1,8 @@
 package com.spectrayan.spector.storage;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+import com.spectrayan.spector.commons.error.SpectorStoreFullException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
@@ -65,7 +68,7 @@ class MappedVectorStoreTest {
             float[] raw = store.getByIndex(0);
             // This will throw because count=0 after reopen
             // We verify the file persisted the bytes by re-putting and checking
-        } catch (IndexOutOfBoundsException expected) {
+        } catch (com.spectrayan.spector.commons.error.SpectorValidationException expected) {
             // Expected — count resets to 0 on reopen
         }
     }
@@ -89,7 +92,8 @@ class MappedVectorStoreTest {
             store.put("a", new float[]{1f, 2f});
             store.put("b", new float[]{3f, 4f});
             assertThatThrownBy(() -> store.put("c", new float[]{5f, 6f}))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(SpectorStoreFullException.class)
+                    .hasMessageContaining("Vector store has reached capacity");
         }
     }
 
@@ -119,7 +123,7 @@ class MappedVectorStoreTest {
         store.close();
         assertThat(store.isClosed()).isTrue();
         assertThatThrownBy(() -> store.get("a"))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(SpectorException.class);
     }
 
     @Test

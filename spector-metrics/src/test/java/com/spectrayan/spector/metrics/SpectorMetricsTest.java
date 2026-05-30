@@ -1,5 +1,7 @@
 package com.spectrayan.spector.metrics;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
@@ -29,7 +31,7 @@ class SpectorMetricsTest {
     @Test
     void initThrowsOnNull() {
         assertThatThrownBy(() -> SpectorMetrics.init(null))
-                .isInstanceOf(NullPointerException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("MeterRegistry must not be null");
     }
 }

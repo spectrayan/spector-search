@@ -6,6 +6,8 @@ import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Parallel embedding pipeline that processes text chunks in configurable batches
@@ -42,7 +44,7 @@ public class ParallelEmbeddingPipeline {
      */
     public ParallelEmbeddingPipeline(EmbeddingProvider provider) {
         if (provider == null) {
-            throw new IllegalArgumentException("provider must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "provider");
         }
         this.provider = provider;
     }

@@ -1,5 +1,7 @@
 package com.spectrayan.spector.node.service;
 
+import com.spectrayan.spector.commons.error.SpectorEmbeddingException;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -8,7 +10,6 @@ import java.util.Objects;
 
 import com.spectrayan.spector.commons.TextChunk;
 import com.spectrayan.spector.commons.WordTokenizer;
-import com.spectrayan.spector.embed.EmbeddingException;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.node.api.dto.RagRequest;
 import com.spectrayan.spector.commons.error.ErrorCode;
@@ -18,6 +19,7 @@ import com.spectrayan.spector.query.SearchResponse;
 import com.spectrayan.spector.rag.ContextBuilder;
 import com.spectrayan.spector.rag.ContextResult;
 import com.spectrayan.spector.rag.ScoredChunk;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * RAG (Retrieval-Augmented Generation) service facade.
@@ -58,7 +60,7 @@ public class RagService {
         float[] queryVector;
         try {
             queryVector = engine.embeddingProvider().embed(request.query).vector();
-        } catch (EmbeddingException e) {
+        } catch (SpectorEmbeddingException e) {
             throw SpectorApiException.serviceUnavailable(ErrorCode.EMBEDDING_UNAVAILABLE, e.getMessage());
         }
 

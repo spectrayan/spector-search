@@ -1,5 +1,11 @@
 package com.spectrayan.spector.gpu;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
+import com.spectrayan.spector.commons.error.SpectorGpuMemoryException;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
@@ -39,7 +45,7 @@ class GpuMemoryManagerTest {
 
     @Test
     void constructor_rejectsBudgetBelowMinimum() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new GpuMemoryManager(100L * 1024 * 1024)); // 100MB < 256MB minimum
     }
 
@@ -84,7 +90,7 @@ class GpuMemoryManagerTest {
     @Test
     void allocateDevice_rejectsZeroSize() {
         try (Arena arena = Arena.ofConfined()) {
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(SpectorValidationException.class, () ->
                     manager.allocateDevice(0, arena));
         }
     }
@@ -92,7 +98,7 @@ class GpuMemoryManagerTest {
     @Test
     void allocateDevice_rejectsNegativeSize() {
         try (Arena arena = Arena.ofConfined()) {
-            assertThrows(IllegalArgumentException.class, () ->
+            assertThrows(SpectorValidationException.class, () ->
                     manager.allocateDevice(-1, arena));
         }
     }
@@ -104,7 +110,7 @@ class GpuMemoryManagerTest {
             manager.allocateDevice(500L * 1024 * 1024, arena);
 
             // This should exceed budget
-            assertThrows(GpuMemoryException.class, () ->
+            assertThrows(SpectorGpuMemoryException.class, () ->
                     manager.allocateDevice(50L * 1024 * 1024, arena));
         }
     }
@@ -114,7 +120,7 @@ class GpuMemoryManagerTest {
         try (Arena arena = Arena.ofConfined()) {
             manager.allocateDevice(500L * 1024 * 1024, arena);
 
-            GpuMemoryException ex = assertThrows(GpuMemoryException.class, () ->
+            SpectorGpuMemoryException ex = assertThrows(SpectorGpuMemoryException.class, () ->
                     manager.allocateDevice(50L * 1024 * 1024, arena));
 
             assertEquals(50L * 1024 * 1024, ex.getRequestedBytes());
@@ -160,7 +166,7 @@ class GpuMemoryManagerTest {
         try (Arena arena = Arena.ofConfined()) {
             manager.allocateDevice(500L * 1024 * 1024, arena);
 
-            assertThrows(GpuMemoryException.class, () ->
+            assertThrows(SpectorGpuMemoryException.class, () ->
                     manager.allocatePinned(50L * 1024 * 1024, arena));
         }
     }
@@ -212,7 +218,7 @@ class GpuMemoryManagerTest {
     void close_rejectsSubsequentAllocations() {
         manager.close();
         try (Arena arena = Arena.ofConfined()) {
-            assertThrows(IllegalStateException.class, () ->
+            assertThrows(SpectorException.class, () ->
                     manager.allocateDevice(1024, arena));
         }
     }

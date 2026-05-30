@@ -4,6 +4,8 @@ import java.text.BreakIterator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Splits large documents into overlapping chunks for indexing.
@@ -67,12 +69,12 @@ public class TextChunker {
      *
      * @param chunkSize  target chunk size in characters
      * @param overlap    overlap between consecutive chunks in characters
-     * @throws IllegalArgumentException if overlap >= chunkSize
+     * @throws SpectorValidationException if overlap >= chunkSize
      */
     public TextChunker(int chunkSize, int overlap) {
-        if (chunkSize <= 0) throw new IllegalArgumentException("chunkSize must be > 0");
-        if (overlap < 0) throw new IllegalArgumentException("overlap must be >= 0");
-        if (overlap >= chunkSize) throw new IllegalArgumentException("overlap must be < chunkSize");
+        if (chunkSize <= 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "chunkSize", 1, Integer.MAX_VALUE, 0);
+        if (overlap < 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "overlap", 0);
+        if (overlap >= chunkSize) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "overlap", 0, 0, 0);
         this.chunkSize = chunkSize;
         this.overlap = overlap;
     }

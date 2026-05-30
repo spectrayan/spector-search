@@ -26,7 +26,7 @@ public interface SimilarityKernel {
      * @param numVectors number of database vectors (batch size)
      * @param dimensions vector dimensionality (must be a multiple of 32, range 32–2048)
      * @return array of {@code numVectors} similarity scores
-     * @throws IllegalArgumentException if dimensions or batch size are invalid
+     * @throws SpectorValidationException if dimensions or batch size are invalid
      */
     float[] compute(float[] query, float[] database, int numVectors, int dimensions);
 

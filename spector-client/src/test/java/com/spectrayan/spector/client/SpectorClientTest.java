@@ -1,5 +1,7 @@
 package com.spectrayan.spector.client;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.client.model.*;
 import org.junit.jupiter.api.Test;
 
@@ -36,42 +38,42 @@ class SpectorClientTest {
     @Test
     void builderRejectsNullHost() {
         assertThatThrownBy(() -> SpectorClient.builder().host(null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("host");
     }
 
     @Test
     void builderRejectsBlankHost() {
         assertThatThrownBy(() -> SpectorClient.builder().host("  "))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("host");
     }
 
     @Test
     void builderRejectsInvalidPort() {
         assertThatThrownBy(() -> SpectorClient.builder().port(0))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("port");
 
         assertThatThrownBy(() -> SpectorClient.builder().port(70000))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("port");
     }
 
     @Test
     void builderRejectsNegativeMaxConnections() {
         assertThatThrownBy(() -> SpectorClient.builder().maxConnections(0))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("maxConnections");
     }
 
     @Test
     void builderRejectsNullTimeout() {
         assertThatThrownBy(() -> SpectorClient.builder().connectTimeout(null))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
 
         assertThatThrownBy(() -> SpectorClient.builder().requestTimeout(null))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test

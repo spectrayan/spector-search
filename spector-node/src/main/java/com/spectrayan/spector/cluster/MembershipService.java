@@ -1,5 +1,7 @@
 package com.spectrayan.spector.cluster;
 
+import com.spectrayan.spector.commons.error.SpectorMembershipException;
+
 import java.util.Set;
 
 /**
@@ -24,8 +26,8 @@ public interface MembershipService extends AutoCloseable {
      *
      * @param nodeId   unique identifier for the node
      * @param endpoint network endpoint (host:port) for the node
-     * @throws IllegalArgumentException if nodeId or endpoint is null or blank
-     * @throws MembershipException      if registration fails after all retry attempts
+     * @throws SpectorValidationException if nodeId or endpoint is null or blank
+     * @throws SpectorMembershipException      if registration fails after all retry attempts
      */
     void registerNode(String nodeId, String endpoint);
 
@@ -35,7 +37,7 @@ public interface MembershipService extends AutoCloseable {
      * <p>Triggers shard rebalancing within 5 seconds of the status change.</p>
      *
      * @param nodeId the node to mark as unavailable
-     * @throws IllegalArgumentException if nodeId is null, blank, or not found in the cluster
+     * @throws SpectorValidationException if nodeId is null, blank, or not found in the cluster
      */
     void markUnavailable(String nodeId);
 

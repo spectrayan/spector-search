@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.quantization.vasq.VasqCalibrator;
 import com.spectrayan.spector.core.quantization.vasq.VasqParams;
 import org.junit.jupiter.api.Test;
@@ -135,14 +137,14 @@ class VasqCalibratorTest {
 
     @Test
     void emptySampleThrows() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> VasqCalibrator.calibrate(List.of(), 64, SEED));
     }
 
     @Test
     void wrongDimThrows() {
         List<float[]> samples = List.of(new float[32], new float[64]);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> VasqCalibrator.calibrate(samples, 64, SEED));
     }
 

@@ -15,6 +15,8 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Cross-agent memory replication via WAL event replay.
@@ -86,7 +88,7 @@ public final class CloudSync {
         } catch (Exception e) {
             if (e instanceof WalCorruptionException || e.getCause() instanceof WalCorruptionException) {
                 log.error("WAL Corruption detected during event replication! Triggering cold bootstrap sync...", e);
-                throw new RuntimeException("WAL Corruption triggered bootstrap", e);
+                throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "WAL corruption");
             }
             throw e;
         }
@@ -180,7 +182,7 @@ public final class CloudSync {
         } catch (Exception e) {
             if (e instanceof WalCorruptionException || e.getCause() instanceof WalCorruptionException) {
                 log.error("WAL Corruption detected during CRDT event replication! Triggering cold bootstrap sync...", e);
-                throw new RuntimeException("WAL Corruption triggered bootstrap", e);
+                throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "WAL corruption");
             }
             throw e;
         }

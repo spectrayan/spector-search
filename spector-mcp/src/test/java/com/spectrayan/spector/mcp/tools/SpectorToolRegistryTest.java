@@ -113,6 +113,15 @@ class SpectorToolRegistryTest {
     }
 
     @Test
+    void semanticSearchInvalidTopKShouldReturnStructuredError() {
+        var result = callTool("semantic_search",
+                Map.of("query", "vector search", "top_k", 0));
+
+        assertThat(result.isError()).isTrue();
+        assertText(result).contains("[SPE-100-005]");
+    }
+
+    @Test
     void hybridSearchShouldWork() {
         var result = callTool("hybrid_search",
                 Map.of("query", "machine learning", "top_k", 2, "mode", "hybrid"));

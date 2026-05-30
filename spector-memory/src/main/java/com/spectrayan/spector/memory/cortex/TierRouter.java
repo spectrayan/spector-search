@@ -6,6 +6,8 @@ import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHead
 
 import java.lang.foreign.MemorySegment;
 import java.util.EnumMap;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Tier store registry and polymorphic routing — zero switch statements.
@@ -63,12 +65,12 @@ public final class TierRouter implements AutoCloseable {
     /**
      * Returns the {@link TierStore} for a given memory type.
      *
-     * @throws IllegalArgumentException if no store is registered for the type
+     * @throws SpectorValidationException if no store is registered for the type
      */
     public TierStore get(MemoryType type) {
         TierStore store = stores.get(type);
         if (store == null) {
-            throw new IllegalArgumentException("No store registered for type: " + type);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "storeType", type);
         }
         return store;
     }

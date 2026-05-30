@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorMemoryTierFullException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Permanent factual knowledge store delegating to existing HNSW/VASQ index infrastructure.
@@ -91,7 +94,7 @@ public final class SemanticMemoryStore extends AbstractTierStore {
      */
     public synchronized int store(CognitiveHeader header) {
         if (count >= capacity) {
-            throw new IllegalStateException("SemanticMemoryStore full (capacity=" + capacity + ")");
+            throw new SpectorMemoryTierFullException("SEMANTIC", capacity);
         }
 
         long offset = dataOffset() + (long) count * SynapticHeaderConstants.HEADER_BYTES;

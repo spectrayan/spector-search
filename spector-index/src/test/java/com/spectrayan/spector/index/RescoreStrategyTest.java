@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,14 +19,14 @@ class RescoreStrategyTest {
     @Test
     void constructorRejectsZeroOversamplingFactor() {
         assertThatThrownBy(() -> new RescoreStrategy(0))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("oversamplingFactor");
     }
 
     @Test
     void constructorRejectsNegativeOversamplingFactor() {
         assertThatThrownBy(() -> new RescoreStrategy(-3))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("oversamplingFactor");
     }
 

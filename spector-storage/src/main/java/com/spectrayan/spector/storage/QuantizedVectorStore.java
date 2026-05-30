@@ -21,6 +21,10 @@ import com.spectrayan.spector.core.quantization.strategy.QuantizationStrategyFac
 import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
 import com.spectrayan.spector.core.quantization.vasq.VasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorStoreFullException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Off-heap vector store that stores quantized vectors via Panama {@link MemorySegment}.
@@ -147,14 +151,14 @@ public class QuantizedVectorStore implements AutoCloseable {
      * @param turboQuantizer      the TurboQuantizer (may be null if not TURBO_QUANT)
      * @param vasqEncoder         the VASQ encoder (may be null if not VASQ)
      * @param similarityFunction  the similarity function used for distance context preparation
-     * @throws IllegalArgumentException if capacity is not positive, or if required quantizer is missing
+     * @throws SpectorValidationException if capacity is not positive, or if required quantizer is missing
      */
     public QuantizedVectorStore(int dimensions, int capacity, QuantizationType quantizationType,
                                  ScalarQuantizer quantizer, NonUniformQuantizer nonUniformQuantizer,
                                  TurboQuantizer turboQuantizer, VasqEncoder vasqEncoder,
                                  SimilarityFunction similarityFunction) {
-        if (capacity <= 0) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.DIMENSIONS_INVALID.format(0));
-        if (quantizationType == null) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("quantizationType"));
+        if (capacity <= 0) throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, 0);
+        if (quantizationType == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "quantizationType");
 
         // Delegate validation + strategy creation to the Abstract Factory (with dimension checks)
         this.strategy = QuantizationStrategyFactory.createWithDimCheck(
@@ -210,8 +214,7 @@ public class QuantizedVectorStore implements AutoCloseable {
         try {
             ensureOpen();
             if (vector.length != dimensions) {
-                throw new IllegalArgumentException(
-                        "Expected " + dimensions + " dims, got " + vector.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
             }
 
             Integer existing = idToIndex.get(id);
@@ -223,7 +226,7 @@ public class QuantizedVectorStore implements AutoCloseable {
             int index = count.getAndIncrement();
             if (index >= capacity) {
                 count.decrementAndGet();
-                throw new IllegalStateException("Store is full: capacity=" + capacity);
+                throw new SpectorStoreFullException(capacity);
             }
 
             writeQuantized(index, vector);
@@ -378,12 +381,12 @@ public class QuantizedVectorStore implements AutoCloseable {
     }
 
     private void ensureOpen() {
-        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+        if (closed) throw new SpectorSegmentClosedException();
     }
 
     private void validateIndex(int index) {
         if (index < 0 || index >= count.get()) {
-            throw new IndexOutOfBoundsException("index=" + index + ", size=" + count.get());
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "index", 0, count.get() - 1, index);
         }
     }
 }

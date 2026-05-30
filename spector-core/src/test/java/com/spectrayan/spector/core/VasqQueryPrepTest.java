@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.quantization.vasq.*;
 import org.junit.jupiter.api.Test;
 
@@ -126,12 +128,12 @@ class VasqQueryPrepTest {
     void wrongDimThrows() {
         VasqParams params = calibrate(100, DIM, 10L);
         VasqQueryPrep prep = new VasqQueryPrep(params);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> prep.prepare(new float[DIM + 1]));
     }
 
     @Test
     void nullParamsThrows() {
-        assertThrows(NullPointerException.class, () -> new VasqQueryPrep(null));
+        assertThrows(SpectorValidationException.class, () -> new VasqQueryPrep(null));
     }
 }

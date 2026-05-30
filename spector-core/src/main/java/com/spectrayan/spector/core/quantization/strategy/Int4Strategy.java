@@ -1,4 +1,5 @@
 package com.spectrayan.spector.core.quantization.strategy;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import com.spectrayan.spector.core.quantization.NibblePacker;
 import com.spectrayan.spector.core.quantization.NonUniformQuantizer;
@@ -7,6 +8,8 @@ import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Quantization strategy for 4-bit nibble-packed quantization via {@link NonUniformQuantizer}.
@@ -65,7 +68,7 @@ final class Int4Strategy implements QuantizationStrategy {
     @Override
     public float distance(MemorySegment segment, long offset, DistanceContext ctx) {
         if (!(ctx instanceof DistanceContext.PackedContext pc)) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("context", "expected PackedContext but got " + ctx.getClass().getSimpleName()));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "context", "expected PackedContext but got " + ctx.getClass().getSimpleName());
         }
         // Zero-copy: segment passed directly to the kernel — no byte[] allocation
         float dot = PackedDotProduct.computeInt4(

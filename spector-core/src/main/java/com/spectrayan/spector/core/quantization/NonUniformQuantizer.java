@@ -1,6 +1,9 @@
 package com.spectrayan.spector.core.quantization;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Arrays;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Non-uniform (quantile-based) quantizer for INT4 and INT2 quantization.
@@ -43,24 +46,23 @@ public final class NonUniformQuantizer {
      * @param dimensions    vector dimensionality
      * @param levels        number of quantization levels (e.g. 16 for INT4, 4 for INT2)
      * @return a calibrated non-uniform quantizer
-     * @throws IllegalArgumentException if sample is empty or null, or dimensions &lt; 1, or levels &lt; 2
+     * @throws SpectorValidationException if sample is empty or null, or dimensions &lt; 1, or levels &lt; 2
      */
     public static NonUniformQuantizer calibrate(float[][] sampleVectors,
                                                  int dimensions, int levels) {
         if (sampleVectors == null || sampleVectors.length == 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "sampleVectors");
         }
         if (dimensions < 1) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.DIMENSIONS_INVALID.format(0));
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, 0);
         }
         if (levels < 2) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE.format("levels", 2, Integer.MAX_VALUE, 0));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "levels", 2, Integer.MAX_VALUE, 0);
         }
 
         for (float[] vector : sampleVectors) {
             if (vector.length != dimensions) {
-                throw new IllegalArgumentException(
-                        "Expected " + dimensions + " dims, got " + vector.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
             }
         }
 
@@ -128,12 +130,11 @@ public final class NonUniformQuantizer {
      *
      * @param vector the input float vector
      * @return array of quantized level indices, each in [0, levels-1]
-     * @throws IllegalArgumentException if vector length does not match dimensions
+     * @throws SpectorValidationException if vector length does not match dimensions
      */
     public int[] encode(float[] vector) {
         if (vector.length != dimensions) {
-            throw new IllegalArgumentException(
-                    "Expected " + dimensions + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
         }
 
         int[] result = new int[dimensions];
@@ -150,12 +151,11 @@ public final class NonUniformQuantizer {
      *
      * @param quantized array of level indices
      * @return reconstructed float vector using bucket centroids
-     * @throws IllegalArgumentException if quantized length does not match dimensions
+     * @throws SpectorValidationException if quantized length does not match dimensions
      */
     public float[] decode(int[] quantized) {
         if (quantized.length != dimensions) {
-            throw new IllegalArgumentException(
-                    "Expected " + dimensions + " dims, got " + quantized.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, quantized.length);
         }
 
         float[] result = new float[dimensions];
@@ -171,12 +171,12 @@ public final class NonUniformQuantizer {
      *
      * @param dimension the dimension index
      * @return copy of the boundary array for that dimension
-     * @throws IndexOutOfBoundsException if dimension is out of range
+     * @throws SpectorValidationException if dimension is out of range
      */
     public float[] boundaries(int dimension) {
         if (dimension < 0 || dimension >= dimensions) {
-            throw new IndexOutOfBoundsException(
-                    "Dimension " + dimension + " out of range [0, " + (dimensions - 1) + "]");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, 
+                    "dimension", 0, dimensions - 1, dimension);
         }
         return Arrays.copyOf(boundaries[dimension], levels);
     }
@@ -186,12 +186,12 @@ public final class NonUniformQuantizer {
      *
      * @param dimension the dimension index
      * @return copy of the centroid array for that dimension
-     * @throws IndexOutOfBoundsException if dimension is out of range
+     * @throws SpectorValidationException if dimension is out of range
      */
     public float[] centroids(int dimension) {
         if (dimension < 0 || dimension >= dimensions) {
-            throw new IndexOutOfBoundsException(
-                    "Dimension " + dimension + " out of range [0, " + (dimensions - 1) + "]");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, 
+                    "dimension", 0, dimensions - 1, dimension);
         }
         return Arrays.copyOf(centroids[dimension], levels);
     }

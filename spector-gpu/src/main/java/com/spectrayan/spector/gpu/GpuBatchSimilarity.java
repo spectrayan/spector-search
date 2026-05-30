@@ -14,6 +14,10 @@ import org.slf4j.LoggerFactory;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorGpuException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * GPU-accelerated batch similarity computation via CUDA.
@@ -63,11 +67,11 @@ public final class GpuBatchSimilarity implements AutoCloseable {
     /**
      * Creates a GPU batch similarity engine.
      *
-     * @throws IllegalStateException if CUDA is not available
+     * @throws SpectorGpuException if CUDA is not available
      */
     public GpuBatchSimilarity() {
         if (!GpuCapability.isAvailable()) {
-            throw new IllegalStateException("CUDA GPU not available: " + GpuCapability.detect().report());
+            throw new SpectorServerException(ErrorCode.GPU_NOT_AVAILABLE);
         }
 
         this.arena = Arena.ofShared();
@@ -87,7 +91,7 @@ public final class GpuBatchSimilarity implements AutoCloseable {
                             ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT));
             int result = (int) cuCtxCreate.invoke(ctxPtr, 0, 0);
             if (result != 0) {
-                throw new RuntimeException("cuCtxCreate failed: " + result);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuCtxCreate failed", result);
             }
             this.cuContext = ctxPtr.get(ValueLayout.ADDRESS, 0);
 
@@ -114,7 +118,7 @@ public final class GpuBatchSimilarity implements AutoCloseable {
             log.info("GpuBatchSimilarity initialized: {}", GpuCapability.detect().report());
 
         } catch (Throwable e) {
-            throw new RuntimeException("Failed to initialize CUDA context", e);
+            throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "Failed to initialize CUDA context");
         }
 
         // Initialize kernel launcher for actual GPU compute
@@ -266,11 +270,11 @@ public final class GpuBatchSimilarity implements AutoCloseable {
             MemorySegment ptrHolder = localArena.allocate(ValueLayout.JAVA_LONG);
             int result = (int) cuMemAlloc.invoke(ptrHolder, bytes);
             if (result != 0) {
-                throw new RuntimeException("cuMemAlloc failed: " + result);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuMemAlloc failed", result);
             }
             return ptrHolder.get(ValueLayout.JAVA_LONG, 0);
         } catch (Throwable e) {
-            throw new RuntimeException("Device memory allocation failed", e);
+            throw new SpectorGpuException(ErrorCode.GPU_MEMORY_ALLOC_FAILED, e, 0);
         }
     }
 
@@ -308,6 +312,6 @@ public final class GpuBatchSimilarity implements AutoCloseable {
     }
 
     private void ensureOpen() {
-        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+        if (closed) throw new SpectorSegmentClosedException();
     }
 }

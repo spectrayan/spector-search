@@ -15,6 +15,9 @@ import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 import com.spectrayan.spector.storage.Document;
 import com.spectrayan.spector.storage.DocumentStore;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorServerException;
 
 /**
  * Full RAG pipeline orchestrator: query → embed → retrieve → assemble context.
@@ -71,8 +74,8 @@ public class RagPipeline {
      *
      * @param request the RAG request
      * @return RAG response with assembled context and attributions
-     * @throws IllegalArgumentException if the request is invalid
-     * @throws IllegalStateException    if the embedding provider is unavailable
+     * @throws SpectorValidationException if the request is invalid
+     * @throws SpectorServerException     if the embedding provider is unavailable
      */
     public RagResponse execute(RagRequest request) {
         long start = System.nanoTime();
@@ -90,7 +93,7 @@ public class RagPipeline {
             queryVector = embeddingProvider.embed(request.query()).vector();
         } catch (Exception e) {
             log.warn("Embedding failed for RAG query: {}", e.getMessage());
-            throw new IllegalStateException("Embedding service unavailable", e);
+            throw new SpectorServerException(ErrorCode.EMBEDDING_UNAVAILABLE, e);
         }
 
         // Search
@@ -130,11 +133,10 @@ public class RagPipeline {
 
     private void validate(RagRequest request) {
         if (request.query() == null || request.query().isBlank()) {
-            throw new IllegalArgumentException("A non-empty query is required");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "query");
         }
         if (request.query().length() > MAX_QUERY_LENGTH) {
-            throw new IllegalArgumentException(
-                    "Query must not exceed " + MAX_QUERY_LENGTH + " characters");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "query.length", 1, MAX_QUERY_LENGTH, 0);
         }
     }
 

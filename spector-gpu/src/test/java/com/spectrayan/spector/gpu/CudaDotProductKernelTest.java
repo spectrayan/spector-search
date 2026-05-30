@@ -1,5 +1,9 @@
 package com.spectrayan.spector.gpu;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -111,7 +115,7 @@ class CudaDotProductKernelTest {
         float[] query = new float[16];
         float[] database = new float[16];
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(query, database, 1, 16));
     }
 
@@ -120,7 +124,7 @@ class CudaDotProductKernelTest {
         float[] query = new float[4096];
         float[] database = new float[4096];
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(query, database, 1, 4096));
     }
 
@@ -129,31 +133,31 @@ class CudaDotProductKernelTest {
         float[] query = new float[64];
         float[] database = new float[64];
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(query, database, 1, 48));
     }
 
     @Test
     void compute_nullQuery_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(null, new float[32], 1, 32));
     }
 
     @Test
     void compute_nullDatabase_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(new float[32], null, 1, 32));
     }
 
     @Test
     void compute_negativeBatchSize_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(new float[32], new float[32], -1, 32));
     }
 
     @Test
     void compute_batchSizeTooLarge_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(new float[32], new float[32], 1_000_001, 32));
     }
 
@@ -162,7 +166,7 @@ class CudaDotProductKernelTest {
         float[] query = new float[16]; // shorter than dims=32
         float[] database = new float[32];
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(query, database, 1, 32));
     }
 
@@ -171,7 +175,7 @@ class CudaDotProductKernelTest {
         float[] query = new float[32];
         float[] database = new float[32]; // 1 vector, but asking for 2
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(query, database, 2, 32));
     }
 
@@ -274,7 +278,7 @@ class CudaDotProductKernelTest {
     @Test
     void close_preventsSubsequentCompute() {
         kernel.close();
-        assertThrows(IllegalStateException.class,
+        assertThrows(SpectorException.class,
                 () -> kernel.compute(new float[32], new float[32], 1, 32));
     }
 

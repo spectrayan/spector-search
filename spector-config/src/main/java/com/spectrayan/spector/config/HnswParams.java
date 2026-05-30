@@ -1,6 +1,7 @@
 package com.spectrayan.spector.config;
 
 import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorConfigValueException;
 
 /**
  * Configuration parameters for the HNSW (Hierarchical Navigable Small World) index.
@@ -29,9 +30,9 @@ public record HnswParams(
     }
 
     public HnswParams {
-        if (m < 2) throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "m", m + " (must be >= 2)");
-        if (efConstruction < 1) throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "efConstruction", efConstruction + " (must be >= 1)");
-        if (efSearch < 1) throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "efSearch", efSearch + " (must be >= 1)");
+        if (m < 2) throw new SpectorConfigValueException("m", m + " (must be >= 2)");
+        if (efConstruction < 1) throw new SpectorConfigValueException("efConstruction", efConstruction + " (must be >= 1)");
+        if (efSearch < 1) throw new SpectorConfigValueException("efSearch", efSearch + " (must be >= 1)");
     }
 
     /**

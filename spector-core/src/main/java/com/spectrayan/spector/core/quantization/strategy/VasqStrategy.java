@@ -1,4 +1,5 @@
 package com.spectrayan.spector.core.quantization.strategy;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
 import com.spectrayan.spector.core.quantization.vasq.VasqParams;
@@ -7,6 +8,8 @@ import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Quantization strategy for VASQ (FWHT-rotated asymmetric INT8 quantization).
@@ -106,7 +109,7 @@ public final class VasqStrategy implements QuantizationStrategy {
     @Override
     public float distance(MemorySegment segment, long offset, DistanceContext ctx) {
         if (!(ctx instanceof DistanceContext.VasqCtx vc)) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("context", "expected VasqCtx but got " + ctx.getClass().getSimpleName()));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "context", "expected VasqCtx but got " + ctx.getClass().getSimpleName());
         }
         return similarityFunction.computeVasq(segment, offset, vc.paddedDim(), vc.state());
     }

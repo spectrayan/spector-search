@@ -1,5 +1,8 @@
 package org.springframework.ai.vectorstore.spector.rag;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 /**
  * Configuration for RAG retrieval operations in {@link SpectorRagService}.
  *
@@ -20,14 +23,13 @@ public record RagConfig(int topK, float similarityThreshold, int tokenLimit) {
 
     public RagConfig {
         if (topK < 1 || topK > 100) {
-            throw new IllegalArgumentException("topK must be between 1 and 100, got: " + topK);
+            throw new SpectorValidationException(ErrorCode.TOP_K_INVALID, 1, topK);
         }
         if (similarityThreshold < 0.0f || similarityThreshold > 1.0f) {
-            throw new IllegalArgumentException(
-                    "similarityThreshold must be between 0.0 and 1.0, got: " + similarityThreshold);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "similarityThreshold", 0.0, 1.0, similarityThreshold);
         }
         if (tokenLimit < 1 || tokenLimit > 8192) {
-            throw new IllegalArgumentException("tokenLimit must be between 1 and 8192, got: " + tokenLimit);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "tokenLimit", 1, 8192, tokenLimit);
         }
     }
 

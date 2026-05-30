@@ -86,7 +86,7 @@ class QuantizationTypeTest {
         // VASQ storage size depends on paddedDim = nextPow2(dimensions), not dimensions.
         // Use VasqEncoder.bytesPerVector() instead.
         org.junit.jupiter.api.Assertions.assertThrows(
-                UnsupportedOperationException.class,
+                com.spectrayan.spector.commons.error.SpectorValidationException.class,
                 () -> QuantizationType.VASQ.bytesPerVector(768));
     }
 }

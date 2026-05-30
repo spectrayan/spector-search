@@ -10,6 +10,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Detects potential memory leaks in Panama FFM MemorySegment allocations by
@@ -72,12 +74,11 @@ public class PanamaMemoryDetector {
      *
      * @param lifetimeThreshold threshold beyond which a segment is reported as a leak candidate;
      *                          minimum value is 1 second
-     * @throws IllegalArgumentException if threshold is less than 1 second
+     * @throws SpectorValidationException if threshold is less than 1 second
      */
     public PanamaMemoryDetector(Duration lifetimeThreshold) {
         if (lifetimeThreshold == null || lifetimeThreshold.compareTo(MIN_THRESHOLD) < 0) {
-            throw new IllegalArgumentException(
-                    "Lifetime threshold must be at least 1 second, got: " + lifetimeThreshold);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "lifetimeThreshold", 1, Integer.MAX_VALUE, lifetimeThreshold);
         }
         this.lifetimeThreshold = lifetimeThreshold;
         this.activeSegments = new ConcurrentHashMap<>();

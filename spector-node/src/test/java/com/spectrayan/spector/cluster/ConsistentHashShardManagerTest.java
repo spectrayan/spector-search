@@ -1,5 +1,9 @@
 package com.spectrayan.spector.cluster;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -36,13 +40,13 @@ class ConsistentHashShardManagerTest {
 
     @Test
     void shouldRejectShardCountBelowMinimum() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new ConsistentHashShardManager(1));
     }
 
     @Test
     void shouldRejectShardCountAboveMaximum() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new ConsistentHashShardManager(257));
     }
 
@@ -93,33 +97,33 @@ class ConsistentHashShardManagerTest {
 
     @Test
     void shouldRejectNullDocumentId() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> manager.assignShard(null));
     }
 
     @Test
     void shouldRejectEmptyDocumentId() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> manager.assignShard(""));
     }
 
     @Test
     void shouldRejectInvalidShardIndex() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> manager.addShard(5, "node5:8080"));
     }
 
     @Test
     void shouldRejectNullEndpoint() {
         var mgr = new ConsistentHashShardManager(4);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> mgr.addShard(0, null));
     }
 
     @Test
     void shouldRejectBlankEndpoint() {
         var mgr = new ConsistentHashShardManager(4);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> mgr.addShard(0, "  "));
     }
 
@@ -254,7 +258,7 @@ class ConsistentHashShardManagerTest {
     @Test
     void shouldThrowWhenNoShardsRegistered() {
         var mgr = new ConsistentHashShardManager(4);
-        assertThrows(IllegalStateException.class,
+        assertThrows(SpectorException.class,
                 () -> mgr.assignShard("doc-1"));
     }
 

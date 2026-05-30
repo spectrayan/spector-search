@@ -1,5 +1,8 @@
 package com.spectrayan.spector.commons.concurrent;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -379,8 +382,8 @@ public final class ConcurrentTasks {
      */
     public record LabeledTask<T>(String label, Callable<T> callable) {
         public LabeledTask {
-            java.util.Objects.requireNonNull(label, "label must not be null");
-            java.util.Objects.requireNonNull(callable, "callable must not be null");
+            if (label == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "label"); }
+            if (callable == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "callable"); }
         }
     }
 

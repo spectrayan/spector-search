@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+import com.spectrayan.spector.commons.error.SpectorHnswBuildException;
+
 
 import com.spectrayan.spector.config.HnswParams;
 import java.util.Arrays;
@@ -12,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Multi-threaded HNSW index builder using virtual threads.
@@ -27,7 +31,7 @@ import com.spectrayan.spector.core.similarity.SimilarityFunction;
  * <h3>Error Handling</h3>
  * If any virtual thread encounters an unrecoverable error during parallel
  * construction, the entire build is aborted, the partial graph is discarded,
- * and a {@link HnswBuildException} is thrown.
+ * and a {@link SpectorHnswBuildException} is thrown.
  *
  * @see HnswIndex
  * @see AbstractHnswIndex
@@ -50,19 +54,18 @@ public class ParallelHnswBuilder {
      * @param params             HNSW tuning parameters
      * @param similarityFunction the similarity/distance function
      * @return the constructed HNSW index
-     * @throws HnswBuildException if parallel construction fails
-     * @throws IllegalArgumentException if vectors is null or empty, or dimensions are inconsistent
+     * @throws SpectorHnswBuildException if parallel construction fails
+     * @throws SpectorValidationException if vectors is null or empty, or dimensions are inconsistent
      */
     public HnswIndex build(float[][] vectors, HnswParams params, SimilarityFunction similarityFunction) {
         if (vectors == null || vectors.length == 0) {
-            throw new IllegalArgumentException("Vectors array must not be null or empty");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Vectors array");
         }
 
         int dimensions = vectors[0].length;
         for (int i = 1; i < vectors.length; i++) {
             if (vectors[i].length != dimensions) {
-                throw new IllegalArgumentException(
-                        "Inconsistent dimensions: vector[0]=" + dimensions + ", vector[" + i + "]=" + vectors[i].length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vectors[i].length);
             }
         }
 
@@ -138,9 +141,9 @@ public class ParallelHnswBuilder {
             scope.join();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new HnswBuildException("Parallel HNSW build interrupted", e);
+            throw new SpectorHnswBuildException("Parallel HNSW build interrupted", e);
         } catch (Exception e) {
-            throw new HnswBuildException(
+            throw new SpectorHnswBuildException(
                     "Parallel HNSW build failed: " + e.getMessage(), e);
         }
 

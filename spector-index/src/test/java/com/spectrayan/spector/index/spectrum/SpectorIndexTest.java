@@ -1,5 +1,9 @@
 package com.spectrayan.spector.index.spectrum;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.config.HnswParams;
 import com.spectrayan.spector.index.ScoredResult;
@@ -65,14 +69,14 @@ class SpectorIndexTest {
     void addBeforeTrain_throws() {
         var index = buildIndex(32, 16, 4);
         assertThatThrownBy(() -> index.add("x", 0, new float[32]))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(SpectorException.class);
     }
 
     @Test
     void searchBeforeTrain_throws() {
         var index = buildIndex(32, 16, 4);
         assertThatThrownBy(() -> index.search(new float[32], 5))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(SpectorException.class);
     }
 
     @Test
@@ -82,9 +86,9 @@ class SpectorIndexTest {
         var index = buildIndex(dims, 16, 4);
         index.train(vecs);
         assertThatThrownBy(() -> index.add("x", 0, new float[dims + 1]))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> index.search(new float[dims + 1], 5))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     // ── Recall@10 ────────────────────────────────────────────────────────────

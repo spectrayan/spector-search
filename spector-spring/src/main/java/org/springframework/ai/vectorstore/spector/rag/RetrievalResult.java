@@ -3,6 +3,8 @@ package org.springframework.ai.vectorstore.spector.rag;
 import com.spectrayan.spector.rag.ChunkAttribution;
 
 import java.util.List;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Result of a RAG retrieval operation from {@link SpectorRagService}.
@@ -19,13 +21,13 @@ public record RetrievalResult(
 
     public RetrievalResult {
         if (documents == null) {
-            throw new IllegalArgumentException("documents must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "documents");
         }
         if (contextText == null) {
-            throw new IllegalArgumentException("contextText must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "contextText");
         }
         if (attributions == null) {
-            throw new IllegalArgumentException("attributions must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "attributions");
         }
         documents = List.copyOf(documents);
         attributions = List.copyOf(attributions);

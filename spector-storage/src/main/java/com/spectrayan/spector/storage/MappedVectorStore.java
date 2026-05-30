@@ -15,6 +15,10 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorStoreFullException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Memory-mapped vector store backed by a file via {@link FileChannel#map}.
@@ -61,7 +65,7 @@ public class MappedVectorStore implements VectorStore {
      */
     public MappedVectorStore(Path filePath, int dimensions, int capacity) throws IOException {
         if (capacity <= 0) {
-            throw new IllegalArgumentException("capacity must be positive: " + capacity);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "capacity", 1, Integer.MAX_VALUE, capacity);
         }
 
         this.layout = new VectorStoreLayout(dimensions);
@@ -102,8 +106,7 @@ public class MappedVectorStore implements VectorStore {
             ensureOpen();
             this.lastAccessed = System.currentTimeMillis();
             if (vector.length != layout.dimensions()) {
-                throw new IllegalArgumentException(
-                        "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
             }
 
             // Update in-place if ID exists
@@ -117,7 +120,7 @@ public class MappedVectorStore implements VectorStore {
             int index = count.getAndIncrement();
             if (index >= capacity) {
                 count.decrementAndGet();
-                throw new IllegalStateException("Store is full: capacity=" + capacity);
+                throw new SpectorStoreFullException(capacity);
             }
 
             layout.writeVector(segment, index, vector);
@@ -264,13 +267,13 @@ public class MappedVectorStore implements VectorStore {
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+            throw new SpectorSegmentClosedException();
         }
     }
 
     private void validateIndex(int index) {
         if (index < 0 || index >= count.get()) {
-            throw new IndexOutOfBoundsException("index=" + index + ", size=" + count.get());
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "index", 0, count.get() - 1, index);
         }
     }
 
@@ -395,4 +398,3 @@ public class MappedVectorStore implements VectorStore {
         }
     }
 }
-

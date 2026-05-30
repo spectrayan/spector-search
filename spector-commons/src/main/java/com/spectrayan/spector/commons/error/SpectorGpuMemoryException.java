@@ -1,4 +1,4 @@
-package com.spectrayan.spector.gpu;
+package com.spectrayan.spector.commons.error;
 
 /**
  * Exception thrown when a GPU memory operation fails.
@@ -6,8 +6,10 @@ package com.spectrayan.spector.gpu;
  * <p>Contains information about the requested allocation size and
  * the currently available device memory, enabling callers to make
  * informed decisions about memory management.</p>
+ *
+ * @see SpectorGpuException
  */
-public class GpuMemoryException extends RuntimeException {
+public class SpectorGpuMemoryException extends SpectorGpuException {
 
     private final long requestedBytes;
     private final long availableBytes;
@@ -19,8 +21,8 @@ public class GpuMemoryException extends RuntimeException {
      * @param requestedBytes the number of bytes that were requested
      * @param availableBytes the number of bytes available (or budget remaining)
      */
-    public GpuMemoryException(String message, long requestedBytes, long availableBytes) {
-        super(message);
+    public SpectorGpuMemoryException(String message, long requestedBytes, long availableBytes) {
+        super(ErrorCode.GPU_MEMORY_EXHAUSTED, requestedBytes, availableBytes);
         this.requestedBytes = requestedBytes;
         this.availableBytes = availableBytes;
     }
@@ -33,8 +35,8 @@ public class GpuMemoryException extends RuntimeException {
      * @param requestedBytes the number of bytes that were requested
      * @param availableBytes the number of bytes available (or budget remaining)
      */
-    public GpuMemoryException(String message, Throwable cause, long requestedBytes, long availableBytes) {
-        super(message, cause);
+    public SpectorGpuMemoryException(String message, Throwable cause, long requestedBytes, long availableBytes) {
+        super(ErrorCode.GPU_MEMORY_EXHAUSTED, cause, requestedBytes, availableBytes);
         this.requestedBytes = requestedBytes;
         this.availableBytes = availableBytes;
     }

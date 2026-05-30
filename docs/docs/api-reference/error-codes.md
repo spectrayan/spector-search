@@ -190,6 +190,7 @@ These errors relate to the document ingestion pipeline.
 | `SPE-600-001` | Unsupported document format | Use a supported format (PDF, TXT, MD, HTML, DOCX). |
 | `SPE-600-002` | Document chunking failed | Check document encoding and content. |
 | `SPE-600-003` | Ingestion pipeline failed | Check logs for the underlying cause. |
+| `SPE-600-004` | Failed to read document | Check file path, read permissions, or ensure the file is not corrupted. |
 
 ---
 

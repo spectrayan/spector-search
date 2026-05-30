@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.quantization.NibblePacker;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -113,14 +115,14 @@ class NibblePackerTest {
     @Test
     void pack_invalidLength_throwsException() {
         int[] values = {1, 2, 3};
-        assertThrows(IllegalArgumentException.class, () -> NibblePacker.pack(values, -1));
-        assertThrows(IllegalArgumentException.class, () -> NibblePacker.pack(values, 4));
+        assertThrows(SpectorValidationException.class, () -> NibblePacker.pack(values, -1));
+        assertThrows(SpectorValidationException.class, () -> NibblePacker.pack(values, 4));
     }
 
     @Test
     void unpack_invalidOriginalLength_throwsException() {
         byte[] packed = {(byte) 0xAB};
-        assertThrows(IllegalArgumentException.class, () -> NibblePacker.unpack(packed, -1));
-        assertThrows(IllegalArgumentException.class, () -> NibblePacker.unpack(packed, 3));
+        assertThrows(SpectorValidationException.class, () -> NibblePacker.unpack(packed, -1));
+        assertThrows(SpectorValidationException.class, () -> NibblePacker.unpack(packed, 3));
     }
 }

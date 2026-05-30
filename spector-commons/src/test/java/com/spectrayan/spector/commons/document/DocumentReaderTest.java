@@ -1,5 +1,7 @@
 package com.spectrayan.spector.commons.document;
 
+import com.spectrayan.spector.commons.error.SpectorDocumentReadException;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -125,7 +127,7 @@ class DocumentReaderTest {
         Files.writeString(file, "This is not a real PDF", StandardCharsets.UTF_8);
 
         assertThatThrownBy(() -> new PdfDocumentReader().read(file))
-                .isInstanceOf(DocumentReadException.class)
+                .isInstanceOf(SpectorDocumentReadException.class)
                 .hasMessageContaining("corrupt.pdf");
     }
 
@@ -134,7 +136,7 @@ class DocumentReaderTest {
         Path file = tempDir.resolve("missing.pdf");
 
         assertThatThrownBy(() -> new PdfDocumentReader().read(file))
-                .isInstanceOf(DocumentReadException.class)
+                .isInstanceOf(SpectorDocumentReadException.class)
                 .hasMessageContaining("does not exist");
     }
 
@@ -146,7 +148,7 @@ class DocumentReaderTest {
         Files.writeString(file, "some data", StandardCharsets.UTF_8);
 
         assertThatThrownBy(() -> DocumentReaderFactory.read(file))
-                .isInstanceOf(DocumentReadException.class)
+                .isInstanceOf(SpectorDocumentReadException.class)
                 .hasMessageContaining("unsupported format")
                 .hasMessageContaining("PDF")
                 .hasMessageContaining("HTML")
@@ -159,7 +161,7 @@ class DocumentReaderTest {
         Files.writeString(file, "some data", StandardCharsets.UTF_8);
 
         assertThatThrownBy(() -> DocumentReaderFactory.read(file))
-                .isInstanceOf(DocumentReadException.class)
+                .isInstanceOf(SpectorDocumentReadException.class)
                 .hasMessageContaining("unsupported format");
     }
 
@@ -193,7 +195,7 @@ class DocumentReaderTest {
         Files.writeString(file, "   \n   \n  ", StandardCharsets.UTF_8);
 
         assertThatThrownBy(() -> new MarkdownDocumentReader().read(file))
-                .isInstanceOf(DocumentReadException.class)
+                .isInstanceOf(SpectorDocumentReadException.class)
                 .hasMessageContaining("no extractable text");
     }
 }

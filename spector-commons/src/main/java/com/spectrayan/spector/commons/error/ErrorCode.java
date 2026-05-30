@@ -2,6 +2,8 @@ package com.spectrayan.spector.commons.error;
 
 import java.util.HashMap;
 import java.util.Map;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * Central registry of all Spector error codes.
@@ -285,6 +287,14 @@ public enum ErrorCode {
     GPU_BUDGET_EXCEEDED       (400_005, ErrorCategory.GPU,
             "GPU memory budget exceeded: requested={}B, budget={}B"),
 
+    /** GPU is not available on this system. */
+    GPU_NOT_AVAILABLE         (400_006, ErrorCategory.GPU,
+            "GPU is not available: {}"),
+
+    /** GPU memory allocation failed. */
+    GPU_MEMORY_ALLOC_FAILED   (400_007, ErrorCategory.GPU,
+            "GPU memory allocation failed: {}"),
+
     // ══════════════════════════════════════════════════════════════════════
     // SERVER (SPE-500-xxx)
     // ══════════════════════════════════════════════════════════════════════
@@ -340,6 +350,10 @@ public enum ErrorCode {
     /** The document format is not supported by any registered parser. */
     INGESTION_FORMAT_UNSUPPORTED(600_001, ErrorCategory.INGESTION,
             "Unsupported document format: {}"),
+
+    /** A document could not be read or processed. */
+    DOCUMENT_READ_FAILED      (600_004, ErrorCategory.INGESTION,
+            "Failed to read document '{}': {}"),
 
     /** Document content chunking failed. */
     INGESTION_CHUNKING_FAILED (600_002, ErrorCategory.INGESTION,

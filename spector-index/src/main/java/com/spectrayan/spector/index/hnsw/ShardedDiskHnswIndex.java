@@ -17,6 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.BitSet;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Read-only HNSW index backed by multiple memory-mapped shard files.
@@ -146,8 +148,7 @@ public class ShardedDiskHnswIndex implements VectorIndex {
 
     @Override
     public void add(String id, int storeIndex, float[] vector) {
-        throw new UnsupportedOperationException(
-                "ShardedDiskHnswIndex is read-only. Build with AbstractHnswIndex → ShardedDiskHnswWriter.");
+        throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "ShardedDiskHnswIndex", "read-only; build with AbstractHnswIndex + ShardedDiskHnswWriter");
     }
 
     @Override
@@ -159,8 +160,7 @@ public class ShardedDiskHnswIndex implements VectorIndex {
     public ScoredResult[] search(float[] query, int k) {
         this.lastAccessed = System.currentTimeMillis();
         if (query.length != manifest.dimensions()) {
-            throw new IllegalArgumentException(
-                    "Expected " + manifest.dimensions() + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, manifest.dimensions(), query.length);
         }
         if (manifest.totalNodeCount() == 0) {
             return new ScoredResult[0];

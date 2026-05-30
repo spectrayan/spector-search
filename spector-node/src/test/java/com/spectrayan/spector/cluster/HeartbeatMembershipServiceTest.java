@@ -1,5 +1,7 @@
 package com.spectrayan.spector.cluster;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,23 +57,23 @@ class HeartbeatMembershipServiceTest {
 
     @Test
     void constructorRejectsNullShardManager() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new HeartbeatMembershipService(null));
     }
 
     @Test
     void constructorRejectsInvalidHeartbeatInterval() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new HeartbeatMembershipService(shardManager, Duration.ofMillis(100), Duration.ofSeconds(10)));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new HeartbeatMembershipService(shardManager, Duration.ofSeconds(31), Duration.ofSeconds(10)));
     }
 
     @Test
     void constructorRejectsInvalidFailureTimeout() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new HeartbeatMembershipService(shardManager, Duration.ofSeconds(2), Duration.ofSeconds(2)));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new HeartbeatMembershipService(shardManager, Duration.ofSeconds(2), Duration.ofSeconds(121)));
     }
 
@@ -90,14 +92,14 @@ class HeartbeatMembershipServiceTest {
     @Test
     void registerNodeRejectsNullId() {
         service = new HeartbeatMembershipService(shardManager);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> service.registerNode(null, "localhost:6000"));
     }
 
     @Test
     void registerNodeRejectsBlankEndpoint() {
         service = new HeartbeatMembershipService(shardManager);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> service.registerNode("node-1", "  "));
     }
 
@@ -133,7 +135,7 @@ class HeartbeatMembershipServiceTest {
     @Test
     void markUnavailableRejectsUnknownNode() {
         service = new HeartbeatMembershipService(shardManager);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> service.markUnavailable("nonexistent"));
     }
 

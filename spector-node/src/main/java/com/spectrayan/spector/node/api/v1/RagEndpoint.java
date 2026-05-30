@@ -8,6 +8,7 @@ import com.spectrayan.spector.node.api.ApiModule;
 import com.spectrayan.spector.node.api.dto.RagRequest;
 import com.spectrayan.spector.node.exception.ApiExceptionHandler;
 import com.spectrayan.spector.node.service.RagService;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * RAG (Retrieval-Augmented Generation) API v1 endpoint.

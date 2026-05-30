@@ -1,8 +1,12 @@
 package com.spectrayan.spector.core.quantization;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Arrays;
 
 import com.spectrayan.spector.core.simd.RandomRotation;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * TurboQuant quantizer — random rotation + optimal scalar quantization.
@@ -101,18 +105,18 @@ public final class TurboQuantizer {
      * @param bitsPerDim    bits per dimension (2, 4, or 8)
      * @param seed          random seed for rotation matrix
      * @return a calibrated TurboQuantizer
-     * @throws IllegalArgumentException if parameters are invalid
+     * @throws SpectorValidationException if parameters are invalid
      */
     public static TurboQuantizer calibrate(float[][] sampleVectors, int dimensions,
                                             int bitsPerDim, long seed) {
         if (sampleVectors == null || sampleVectors.length == 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "sampleVectors");
         }
         if (dimensions < 1) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.DIMENSIONS_INVALID.format(0));
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, 0);
         }
         if (bitsPerDim != 2 && bitsPerDim != 4 && bitsPerDim != 8) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.BIT_WIDTH_INVALID.format("2, 4, 8", bitsPerDim));
+            throw new SpectorValidationException(ErrorCode.BIT_WIDTH_INVALID, "2, 4, 8", bitsPerDim);
         }
 
         // Generate rotation
@@ -127,8 +131,7 @@ public final class TurboQuantizer {
         float[] rotated = new float[dimensions];
         for (float[] vector : sampleVectors) {
             if (vector.length != dimensions) {
-                throw new IllegalArgumentException(
-                        "Expected " + dimensions + " dims, got " + vector.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
             }
             rotation.rotate(vector, rotated);
             for (int d = 0; d < dimensions; d++) {
@@ -176,8 +179,7 @@ public final class TurboQuantizer {
      */
     public TurboCode encode(float[] vector) {
         if (vector.length != dimensions) {
-            throw new IllegalArgumentException(
-                    "Expected " + dimensions + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
         }
 
         // Step 1: Compute and store the L2 norm
@@ -371,7 +373,7 @@ public final class TurboQuantizer {
             case 8 -> dimensions;
             case 4 -> NibblePacker.packedSize(dimensions);
             case 2 -> CrumbPacker.packedSize(dimensions);
-            default -> throw new IllegalStateException("Unsupported bits: " + bitsPerDimension);
+            default -> throw new SpectorInternalException(ErrorCode.ARGUMENT_INVALID, "bits", bitsPerDimension);
         };
     }
 
@@ -393,7 +395,7 @@ public final class TurboQuantizer {
             }
             case 4 -> NibblePacker.pack(quantized, dimensions);
             case 2 -> CrumbPacker.pack(quantized, dimensions);
-            default -> throw new IllegalStateException("Unsupported bits: " + bitsPerDimension);
+            default -> throw new SpectorInternalException(ErrorCode.ARGUMENT_INVALID, "bits", bitsPerDimension);
         };
     }
 
@@ -408,7 +410,7 @@ public final class TurboQuantizer {
             }
             case 4 -> NibblePacker.unpack(packed, dimensions);
             case 2 -> CrumbPacker.unpack(packed, dimensions);
-            default -> throw new IllegalStateException("Unsupported bits: " + bitsPerDimension);
+            default -> throw new SpectorInternalException(ErrorCode.ARGUMENT_INVALID, "bits", bitsPerDimension);
         };
     }
 
@@ -428,8 +430,8 @@ public final class TurboQuantizer {
      */
     public record TurboCode(byte[] packed, float norm) {
         public TurboCode {
-            if (packed == null) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("packed"));
-            if (Float.isNaN(norm)) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("norm", "NaN"));
+            if (packed == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "packed");
+            if (Float.isNaN(norm)) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "norm", "NaN");
         }
     }
 }

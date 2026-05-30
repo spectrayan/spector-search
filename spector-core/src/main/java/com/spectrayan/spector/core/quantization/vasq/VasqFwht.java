@@ -1,7 +1,10 @@
 package com.spectrayan.spector.core.quantization.vasq;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Arrays;
 import java.util.Random;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Fast Walsh-Hadamard Transform (FWHT) with random sign flip for variance isotropization.
@@ -39,7 +42,7 @@ public final class VasqFwht {
      *                    (e.g. {@code 42L}) for reproducibility across restarts
      */
     public VasqFwht(int originalDim, long seed) {
-        if (originalDim < 1) throw new IllegalArgumentException("originalDim must be ≥ 1");
+        if (originalDim < 1) throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, 0);
         this.originalDim = originalDim;
         this.paddedDim = nextPowerOfTwo(originalDim);
         this.normFactor = (float) (1.0 / Math.sqrt(paddedDim));
@@ -59,12 +62,11 @@ public final class VasqFwht {
      *
      * @param src the input vector (length must equal {@link #originalDim()})
      * @return rotated vector of length {@link #paddedDim()}
-     * @throws IllegalArgumentException if src.length ≠ originalDim
+     * @throws SpectorValidationException if src.length ≠ originalDim
      */
     public float[] rotate(float[] src) {
         if (src.length != originalDim) {
-            throw new IllegalArgumentException(
-                    "Expected " + originalDim + " dims, got " + src.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, src.length);
         }
         float[] dst = new float[paddedDim]; // zero-filled by JVM
         rotate(src, dst);
@@ -79,16 +81,14 @@ public final class VasqFwht {
      *
      * @param src the input vector (length must equal {@link #originalDim()})
      * @param dst the output buffer (length must equal {@link #paddedDim()})
-     * @throws IllegalArgumentException if src.length ≠ originalDim or dst.length ≠ paddedDim
+     * @throws SpectorValidationException if src.length ≠ originalDim or dst.length ≠ paddedDim
      */
     public void rotate(float[] src, float[] dst) {
         if (src.length != originalDim) {
-            throw new IllegalArgumentException(
-                    "src: expected " + originalDim + " dims, got " + src.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, src.length);
         }
         if (dst.length != paddedDim) {
-            throw new IllegalArgumentException(
-                    "dst: expected " + paddedDim + " dims, got " + dst.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, paddedDim, dst.length);
         }
 
         // 1. Copy src into dst, zero-pad the rest

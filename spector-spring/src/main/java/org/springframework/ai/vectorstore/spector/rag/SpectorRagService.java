@@ -15,6 +15,8 @@ import org.springframework.ai.vectorstore.spector.SpectorVectorStoreException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Spring AI RAG service that integrates Spector Search vector retrieval with
@@ -42,14 +44,14 @@ public class SpectorRagService {
      *
      * @param vectorStore    the vector store for similarity search
      * @param contextBuilder the context builder for assembling retrieval context
-     * @throws IllegalArgumentException if vectorStore or contextBuilder is null
+     * @throws SpectorValidationException if vectorStore or contextBuilder is null
      */
     public SpectorRagService(SpectorVectorStore vectorStore, ContextBuilder contextBuilder) {
         if (vectorStore == null) {
-            throw new IllegalArgumentException("vectorStore must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "vectorStore");
         }
         if (contextBuilder == null) {
-            throw new IllegalArgumentException("contextBuilder must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "contextBuilder");
         }
         this.vectorStore = vectorStore;
         this.contextBuilder = contextBuilder;
@@ -64,15 +66,15 @@ public class SpectorRagService {
      * @param queryEmbedding the query vector embedding to search for
      * @param config         the RAG configuration (topK, threshold, tokenLimit)
      * @return the retrieval result containing scored documents, context text, and attributions
-     * @throws IllegalArgumentException if queryEmbedding is null/empty or config is null
+     * @throws SpectorValidationException if queryEmbedding is null/empty or config is null
      * @throws SpectorRagServiceException if a dependency (vector store or context builder) fails
      */
     public RetrievalResult retrieve(float[] queryEmbedding, RagConfig config) {
         if (queryEmbedding == null || queryEmbedding.length == 0) {
-            throw new IllegalArgumentException("queryEmbedding must not be null or empty");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "queryEmbedding");
         }
         if (config == null) {
-            throw new IllegalArgumentException("config must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "config");
         }
 
         List<Document> searchResults;

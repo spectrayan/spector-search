@@ -1,5 +1,7 @@
 package com.spectrayan.spector.commons.document;
 
+import com.spectrayan.spector.commons.error.SpectorDocumentReadException;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,7 +47,7 @@ public final class PdfDocumentReader implements DocumentReader {
             "(-?[\\d.]+)\\s+(-?[\\d.]+)\\s+Td");
 
     @Override
-    public DocumentResult read(Path file) throws DocumentReadException {
+    public DocumentResult read(Path file) throws SpectorDocumentReadException {
         String fileName = file.getFileName().toString();
 
         validateFile(file, fileName);
@@ -56,18 +58,18 @@ public final class PdfDocumentReader implements DocumentReader {
             String text = extractText(content);
 
             if (text.isEmpty()) {
-                throw new DocumentReadException(fileName, "PDF contains no extractable text");
+                throw new SpectorDocumentReadException(fileName, "PDF contains no extractable text");
             }
 
             var metadata = new DocumentMetadata(fileName, "PDF", text.length());
             return new DocumentResult(text, metadata);
 
-        } catch (DocumentReadException e) {
+        } catch (SpectorDocumentReadException e) {
             throw e;
         } catch (IOException e) {
-            throw new DocumentReadException(fileName, "corrupted or unreadable PDF file", e);
+            throw new SpectorDocumentReadException(fileName, "corrupted or unreadable PDF file", e);
         } catch (Exception e) {
-            throw new DocumentReadException(fileName,
+            throw new SpectorDocumentReadException(fileName,
                     "unexpected error reading PDF: " + e.getMessage(), e);
         }
     }
@@ -79,16 +81,16 @@ public final class PdfDocumentReader implements DocumentReader {
 
     private void validateFile(Path file, String fileName) {
         if (!Files.exists(file)) {
-            throw new DocumentReadException(fileName, "file does not exist");
+            throw new SpectorDocumentReadException(fileName, "file does not exist");
         }
         try {
             long size = Files.size(file);
             if (size > MAX_FILE_SIZE) {
-                throw new DocumentReadException(fileName,
+                throw new SpectorDocumentReadException(fileName,
                         "file size %d bytes exceeds the 100 MB limit".formatted(size));
             }
         } catch (IOException e) {
-            throw new DocumentReadException(fileName, "unable to determine file size", e);
+            throw new SpectorDocumentReadException(fileName, "unable to determine file size", e);
         }
     }
 
@@ -96,18 +98,18 @@ public final class PdfDocumentReader implements DocumentReader {
         try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
             byte[] header = new byte[5];
             if (raf.read(header) < 5) {
-                throw new DocumentReadException(fileName, "file is too small to be a valid PDF");
+                throw new SpectorDocumentReadException(fileName, "file is too small to be a valid PDF");
             }
             for (int i = 0; i < PDF_HEADER.length; i++) {
                 if (header[i] != PDF_HEADER[i]) {
-                    throw new DocumentReadException(fileName,
+                    throw new SpectorDocumentReadException(fileName,
                             "corrupted or unreadable PDF file (invalid header)");
                 }
             }
-        } catch (DocumentReadException e) {
+        } catch (SpectorDocumentReadException e) {
             throw e;
         } catch (IOException e) {
-            throw new DocumentReadException(fileName, "corrupted or unreadable PDF file", e);
+            throw new SpectorDocumentReadException(fileName, "corrupted or unreadable PDF file", e);
         }
     }
 

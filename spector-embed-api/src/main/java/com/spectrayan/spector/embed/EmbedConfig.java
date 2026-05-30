@@ -1,5 +1,8 @@
 package com.spectrayan.spector.embed;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 /**
  * Configuration for the parallel embedding pipeline.
  *
@@ -13,10 +16,10 @@ public record EmbedConfig(int batchSize, int maxRetries) {
 
     public EmbedConfig {
         if (batchSize <= 0) {
-            throw new IllegalArgumentException("batchSize must be > 0, got: " + batchSize);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "batchSize", 1, Integer.MAX_VALUE, batchSize);
         }
         if (maxRetries < 0) {
-            throw new IllegalArgumentException("maxRetries must be >= 0, got: " + maxRetries);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "maxRetries", maxRetries);
         }
     }
 }

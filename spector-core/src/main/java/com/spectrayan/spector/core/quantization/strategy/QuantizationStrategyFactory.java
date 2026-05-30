@@ -1,4 +1,5 @@
 package com.spectrayan.spector.core.quantization.strategy;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import com.spectrayan.spector.core.quantization.NonUniformQuantizer;
 import com.spectrayan.spector.core.quantization.QuantizationType;
@@ -8,6 +9,8 @@ import com.spectrayan.spector.core.quantization.vasq.Vasq4Encoder;
 import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
 import com.spectrayan.spector.core.quantization.vasq.VasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Abstract Factory for creating {@link QuantizationStrategy} instances.
@@ -51,7 +54,7 @@ public final class QuantizationStrategyFactory {
      * @param vasq4Encoder       required for VASQ_4 (may be null for others)
      * @param similarityFunction the distance metric (must not be null)
      * @return a fully initialized {@link QuantizationStrategy}
-     * @throws IllegalArgumentException if a required sub-quantizer is missing or dimensions mismatch
+     * @throws SpectorValidationException if a required sub-quantizer is missing or dimensions mismatch
      */
     public static QuantizationStrategy create(
             QuantizationType type,
@@ -62,19 +65,19 @@ public final class QuantizationStrategyFactory {
             Vasq4Encoder vasq4Encoder,
             SimilarityFunction similarityFunction) {
 
-        if (type == null) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("QuantizationType"));
-        if (similarityFunction == null) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("SimilarityFunction"));
+        if (type == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "QuantizationType");
+        if (similarityFunction == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "SimilarityFunction");
 
         return switch (type) {
             case SCALAR_INT8 -> {
                 if (scalarQuantizer == null) {
-                    throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("ScalarQuantizer for SCALAR_INT8"));
+                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "ScalarQuantizer for SCALAR_INT8");
                 }
                 yield new Int8Strategy(scalarQuantizer, similarityFunction);
             }
             case SCALAR_INT4 -> {
                 if (nonUniformQuantizer == null) {
-                    throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("NonUniformQuantizer for SCALAR_INT4"));
+                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "NonUniformQuantizer for SCALAR_INT4");
                 }
                 validateLevels(nonUniformQuantizer, type);
                 yield new Int4Strategy(nonUniformQuantizer, similarityFunction,
@@ -82,7 +85,7 @@ public final class QuantizationStrategyFactory {
             }
             case SCALAR_INT2 -> {
                 if (nonUniformQuantizer == null) {
-                    throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("NonUniformQuantizer for SCALAR_INT2"));
+                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "NonUniformQuantizer for SCALAR_INT2");
                 }
                 validateLevels(nonUniformQuantizer, type);
                 yield new Int2Strategy(nonUniformQuantizer, similarityFunction,
@@ -90,24 +93,23 @@ public final class QuantizationStrategyFactory {
             }
             case TURBO_QUANT -> {
                 if (turboQuantizer == null) {
-                    throw new IllegalArgumentException("TurboQuantizer is required for TURBO_QUANT");
+                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "TurboQuantizer for TURBO_QUANT");
                 }
                 yield new TurboQuantStrategy(turboQuantizer, similarityFunction);
             }
             case VASQ -> {
                 if (vasqEncoder == null) {
-                    throw new IllegalArgumentException("VasqEncoder is required for VASQ");
+                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "VasqEncoder for VASQ");
                 }
                 yield new VasqStrategy(vasqEncoder, similarityFunction);
             }
             case VASQ_4 -> {
                 if (vasq4Encoder == null) {
-                    throw new IllegalArgumentException("Vasq4Encoder is required for VASQ_4");
+                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Vasq4Encoder for VASQ_4");
                 }
                 yield new Vasq4Strategy(vasq4Encoder, similarityFunction);
             }
-            case NONE -> throw new IllegalArgumentException(
-                    "NONE is not a quantized type — use a plain float store instead");
+            case NONE -> throw new SpectorValidationException(ErrorCode.QUANTIZATION_TYPE_INVALID, "NONE");
         };
     }
 
@@ -144,7 +146,7 @@ public final class QuantizationStrategyFactory {
      * @param vasq4Encoder       required for VASQ_4
      * @param similarityFunction the distance metric
      * @return a fully initialized {@link QuantizationStrategy}
-     * @throws IllegalArgumentException if required quantizer missing or dimension mismatch detected
+     * @throws SpectorValidationException if required quantizer missing or dimension mismatch detected
      */
     public static QuantizationStrategy createWithDimCheck(
             QuantizationType type,
@@ -159,29 +161,24 @@ public final class QuantizationStrategyFactory {
         // Dimension consistency checks (mirrors original QuantizedVectorStore validation)
         if (type == QuantizationType.SCALAR_INT8 && scalarQuantizer != null
                 && scalarQuantizer.dimensions() != dimensions) {
-            throw new IllegalArgumentException(
-                    "ScalarQuantizer dims " + scalarQuantizer.dimensions() + " != store dims " + dimensions);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, scalarQuantizer.dimensions(), dimensions);
         }
         if ((type == QuantizationType.SCALAR_INT4 || type == QuantizationType.SCALAR_INT2)
                 && nonUniformQuantizer != null
                 && nonUniformQuantizer.dimensions() != dimensions) {
-            throw new IllegalArgumentException(
-                    "NonUniformQuantizer dims " + nonUniformQuantizer.dimensions() + " != store dims " + dimensions);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, nonUniformQuantizer.dimensions(), dimensions);
         }
         if (type == QuantizationType.TURBO_QUANT && turboQuantizer != null
                 && turboQuantizer.dimensions() != dimensions) {
-            throw new IllegalArgumentException(
-                    "TurboQuantizer dims " + turboQuantizer.dimensions() + " != store dims " + dimensions);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, turboQuantizer.dimensions(), dimensions);
         }
         if (type == QuantizationType.VASQ && vasqEncoder != null
                 && vasqEncoder.params().originalDim() != dimensions) {
-            throw new IllegalArgumentException(
-                    "VasqEncoder originalDim " + vasqEncoder.params().originalDim() + " != store dims " + dimensions);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, vasqEncoder.params().originalDim(), dimensions);
         }
         if (type == QuantizationType.VASQ_4 && vasq4Encoder != null
                 && vasq4Encoder.params().originalDim() != dimensions) {
-            throw new IllegalArgumentException(
-                    "Vasq4Encoder originalDim " + vasq4Encoder.params().originalDim() + " != store dims " + dimensions);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, vasq4Encoder.params().originalDim(), dimensions);
         }
 
         return create(type, scalarQuantizer, nonUniformQuantizer, turboQuantizer,
@@ -253,8 +250,7 @@ public final class QuantizationStrategyFactory {
     private static void validateLevels(NonUniformQuantizer nuq, QuantizationType type) {
         int expected = type.levels();
         if (nuq.levels() != expected) {
-            throw new IllegalArgumentException(
-                    "NonUniformQuantizer has " + nuq.levels() + " levels but " + type + " requires " + expected);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "levels", type + " requires " + expected + " but got " + nuq.levels());
         }
     }
 }

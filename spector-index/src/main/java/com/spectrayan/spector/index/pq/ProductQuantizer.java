@@ -4,6 +4,8 @@ import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import java.util.Arrays;
 import java.util.Random;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Product Quantizer (PQ) for extreme vector compression.
@@ -58,11 +60,10 @@ public final class ProductQuantizer {
      */
     public static ProductQuantizer train(float[][] samples, int dimensions, int numSubspaces) {
         if (samples.length == 0) {
-            throw new IllegalArgumentException("Need at least 1 training sample");
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "trainingSamples");
         }
         if (dimensions % numSubspaces != 0) {
-            throw new IllegalArgumentException(
-                    "dimensions (" + dimensions + ") must be divisible by numSubspaces (" + numSubspaces + ")");
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "dimensions (" + dimensions + ") must be divisible by numSubspaces (" + numSubspaces + ")");
         }
 
         int dsub = dimensions / numSubspaces;

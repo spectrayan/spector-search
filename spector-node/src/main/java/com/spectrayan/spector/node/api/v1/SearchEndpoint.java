@@ -22,6 +22,7 @@ import com.spectrayan.spector.query.SearchResponse;
 
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * Search API v1 endpoint.

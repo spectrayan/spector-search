@@ -1,5 +1,7 @@
 package com.spectrayan.spector.engine;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
 
 import com.spectrayan.spector.config.SpectorConfig;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -91,7 +93,7 @@ class SpectorEngineTest {
         var engine = new DefaultSpectorEngine(testConfig());
         engine.close();
         assertThatThrownBy(() -> engine.ingest("d1", "text", randomVector(DIM, 1)))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(SpectorException.class);
     }
 
     @Test

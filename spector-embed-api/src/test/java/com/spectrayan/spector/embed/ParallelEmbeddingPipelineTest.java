@@ -1,5 +1,8 @@
 package com.spectrayan.spector.embed;
 
+import com.spectrayan.spector.commons.error.SpectorEmbeddingException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -84,7 +87,7 @@ class ParallelEmbeddingPipelineTest {
             @Override
             public List<EmbeddingResult> embedBatch(List<String> texts) {
                 if (callCount.incrementAndGet() <= 2) {
-                    throw new EmbeddingException("Temporary failure");
+                    throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "Temporary failure");
                 }
                 return texts.stream().map(this::embed).toList();
             }
@@ -108,12 +111,12 @@ class ParallelEmbeddingPipelineTest {
         EmbeddingProvider alwaysFails = new EmbeddingProvider() {
             @Override
             public EmbeddingResult embed(String text) {
-                throw new EmbeddingException("Always fails");
+                throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "Always fails");
             }
 
             @Override
             public List<EmbeddingResult> embedBatch(List<String> texts) {
-                throw new EmbeddingException("Always fails");
+                throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "Always fails");
             }
 
             @Override
@@ -148,7 +151,7 @@ class ParallelEmbeddingPipelineTest {
             public List<EmbeddingResult> embedBatch(List<String> texts) {
                 // Fail if the batch contains "fail"
                 if (texts.stream().anyMatch(t -> t.contains("fail"))) {
-                    throw new EmbeddingException("Batch failed");
+                    throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "Batch failed");
                 }
                 return texts.stream().map(this::embed).toList();
             }

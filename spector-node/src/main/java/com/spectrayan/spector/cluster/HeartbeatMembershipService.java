@@ -1,5 +1,7 @@
 package com.spectrayan.spector.cluster;
 
+import com.spectrayan.spector.commons.error.SpectorMembershipException;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,6 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Heartbeat-based cluster membership service.
@@ -102,11 +106,11 @@ public class HeartbeatMembershipService implements MembershipService {
      * @param shardManager      the shard manager for rebalancing
      * @param heartbeatInterval interval between heartbeat checks (500ms–30s)
      * @param failureTimeout    time after which a non-responding node is marked unavailable (3s–120s)
-     * @throws IllegalArgumentException if intervals are outside valid ranges
+     * @throws SpectorValidationException if intervals are outside valid ranges
      */
     public HeartbeatMembershipService(ShardManager shardManager, Duration heartbeatInterval, Duration failureTimeout) {
         if (shardManager == null) {
-            throw new IllegalArgumentException("ShardManager must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "ShardManager");
         }
         validateHeartbeatInterval(heartbeatInterval);
         validateFailureTimeout(failureTimeout);
@@ -148,10 +152,10 @@ public class HeartbeatMembershipService implements MembershipService {
     @Override
     public void registerNode(String nodeId, String endpoint) {
         if (nodeId == null || nodeId.isBlank()) {
-            throw new IllegalArgumentException("Node ID must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Node ID");
         }
         if (endpoint == null || endpoint.isBlank()) {
-            throw new IllegalArgumentException("Endpoint must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Endpoint");
         }
 
         int attempts = 0;
@@ -174,14 +178,14 @@ public class HeartbeatMembershipService implements MembershipService {
                         Thread.sleep(REGISTRATION_RETRY_DELAY.toMillis());
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        throw new MembershipException(
+                        throw new SpectorMembershipException(
                                 "Registration interrupted for node '" + nodeId + "'", ie);
                     }
                 }
             }
         }
 
-        throw new MembershipException(
+        throw new SpectorMembershipException(
                 "Failed to register node '" + nodeId + "' after " + MAX_REGISTRATION_RETRIES
                         + " attempts", lastException);
     }
@@ -189,13 +193,13 @@ public class HeartbeatMembershipService implements MembershipService {
     @Override
     public void markUnavailable(String nodeId) {
         if (nodeId == null || nodeId.isBlank()) {
-            throw new IllegalArgumentException("Node ID must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Node ID");
         }
 
         synchronized (membershipLock) {
             NodeInfo info = nodes.get(nodeId);
             if (info == null) {
-                throw new IllegalArgumentException("Node '" + nodeId + "' not found in cluster");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "nodeId", nodeId);
             }
 
             if (info.status() == NodeStatus.UNAVAILABLE) {
@@ -453,27 +457,21 @@ public class HeartbeatMembershipService implements MembershipService {
 
     private static void validateHeartbeatInterval(Duration interval) {
         if (interval == null) {
-            throw new IllegalArgumentException("Heartbeat interval must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Heartbeat interval");
         }
         if (interval.compareTo(MIN_HEARTBEAT_INTERVAL) < 0
                 || interval.compareTo(MAX_HEARTBEAT_INTERVAL) > 0) {
-            throw new IllegalArgumentException(
-                    "Heartbeat interval must be between " + MIN_HEARTBEAT_INTERVAL.toMillis()
-                            + "ms and " + MAX_HEARTBEAT_INTERVAL.toSeconds() + "s, got: "
-                            + interval.toMillis() + "ms");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "Heartbeat interval must be between " + MIN_HEARTBEAT_INTERVAL.toMillis() + "ms and " + MAX_HEARTBEAT_INTERVAL.toSeconds() + "s, got: " + interval.toMillis() + "ms");
         }
     }
 
     private static void validateFailureTimeout(Duration timeout) {
         if (timeout == null) {
-            throw new IllegalArgumentException("Failure timeout must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Failure timeout");
         }
         if (timeout.compareTo(MIN_FAILURE_TIMEOUT) < 0
                 || timeout.compareTo(MAX_FAILURE_TIMEOUT) > 0) {
-            throw new IllegalArgumentException(
-                    "Failure timeout must be between " + MIN_FAILURE_TIMEOUT.toSeconds()
-                            + "s and " + MAX_FAILURE_TIMEOUT.toSeconds() + "s, got: "
-                            + timeout.toMillis() + "ms");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "Failure timeout must be between " + MIN_FAILURE_TIMEOUT.toSeconds() + "s and " + MAX_FAILURE_TIMEOUT.toSeconds() + "s, got: " + timeout.toMillis() + "ms");
         }
     }
 

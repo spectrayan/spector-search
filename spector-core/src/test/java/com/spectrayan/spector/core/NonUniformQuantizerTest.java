@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.quantization.NonUniformQuantizer;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -146,13 +148,13 @@ class NonUniformQuantizerTest {
 
     @Test
     void calibrate_emptySampleThrows() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> NonUniformQuantizer.calibrate(new float[0][], 4, 16));
     }
 
     @Test
     void calibrate_nullSampleThrows() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> NonUniformQuantizer.calibrate(null, 4, 16));
     }
 
@@ -161,7 +163,7 @@ class NonUniformQuantizerTest {
         float[][] samples = generateUniformSamples(10, 4, 1);
         NonUniformQuantizer q = NonUniformQuantizer.calibrate(samples, 4, 4);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> q.encode(new float[]{1.0f, 2.0f})); // wrong dimensions
     }
 
@@ -170,7 +172,7 @@ class NonUniformQuantizerTest {
         float[][] samples = generateUniformSamples(10, 4, 1);
         NonUniformQuantizer q = NonUniformQuantizer.calibrate(samples, 4, 4);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> q.decode(new int[]{0, 1})); // wrong dimensions
     }
 
@@ -181,7 +183,7 @@ class NonUniformQuantizerTest {
                 {1.0f, 2.0f}  // wrong length
         };
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> NonUniformQuantizer.calibrate(samples, 3, 4));
     }
 
@@ -190,8 +192,8 @@ class NonUniformQuantizerTest {
         float[][] samples = generateUniformSamples(10, 3, 1);
         NonUniformQuantizer q = NonUniformQuantizer.calibrate(samples, 3, 4);
 
-        assertThrows(IndexOutOfBoundsException.class, () -> q.boundaries(-1));
-        assertThrows(IndexOutOfBoundsException.class, () -> q.boundaries(3));
+        assertThrows(SpectorValidationException.class, () -> q.boundaries(-1));
+        assertThrows(SpectorValidationException.class, () -> q.boundaries(3));
     }
 
     @Test
@@ -199,8 +201,8 @@ class NonUniformQuantizerTest {
         float[][] samples = generateUniformSamples(10, 3, 1);
         NonUniformQuantizer q = NonUniformQuantizer.calibrate(samples, 3, 4);
 
-        assertThrows(IndexOutOfBoundsException.class, () -> q.centroids(-1));
-        assertThrows(IndexOutOfBoundsException.class, () -> q.centroids(3));
+        assertThrows(SpectorValidationException.class, () -> q.centroids(-1));
+        assertThrows(SpectorValidationException.class, () -> q.centroids(3));
     }
 
     @Test

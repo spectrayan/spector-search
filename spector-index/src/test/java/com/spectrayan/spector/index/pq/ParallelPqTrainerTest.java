@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index.pq;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -95,14 +97,14 @@ class ParallelPqTrainerTest {
     @Test
     void train_throwsOnNullVectors() {
         ParallelPqTrainer trainer = new ParallelPqTrainer();
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> trainer.train(null, 4, 256));
     }
 
     @Test
     void train_throwsOnEmptyVectors() {
         ParallelPqTrainer trainer = new ParallelPqTrainer();
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> trainer.train(new float[0][], 4, 256));
     }
 
@@ -110,7 +112,7 @@ class ParallelPqTrainerTest {
     void train_throwsOnIndivisibleDimensions() {
         float[][] vectors = randomVectors(100, 15, 42);
         ParallelPqTrainer trainer = new ParallelPqTrainer();
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> trainer.train(vectors, 4, 256));
     }
 
@@ -118,9 +120,9 @@ class ParallelPqTrainerTest {
     void train_throwsOnInvalidNumCentroids() {
         float[][] vectors = randomVectors(100, 16, 42);
         ParallelPqTrainer trainer = new ParallelPqTrainer();
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> trainer.train(vectors, 4, 0));
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> trainer.train(vectors, 4, 257));
     }
 
@@ -128,7 +130,7 @@ class ParallelPqTrainerTest {
     void train_throwsOnInvalidNumSubspaces() {
         float[][] vectors = randomVectors(100, 16, 42);
         ParallelPqTrainer trainer = new ParallelPqTrainer();
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> trainer.train(vectors, 0, 256));
     }
 

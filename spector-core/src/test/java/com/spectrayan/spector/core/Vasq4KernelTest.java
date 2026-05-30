@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.quantization.vasq.*;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -245,13 +247,13 @@ class Vasq4KernelTest {
     void encoder_rejectsWrongBitWidth() {
         // VASQ-8 params should be rejected by Vasq4Encoder
         VasqParams int8Params = VasqCalibrator.calibrate(corpus, DIM, SEED);
-        assertThrows(IllegalArgumentException.class, () -> new Vasq4Encoder(int8Params));
+        assertThrows(SpectorValidationException.class, () -> new Vasq4Encoder(int8Params));
     }
 
     @Test
     void queryPrep_rejectsWrongBitWidth() {
         VasqParams int8Params = VasqCalibrator.calibrate(corpus, DIM, SEED);
-        assertThrows(IllegalArgumentException.class, () -> new Vasq4QueryPrep(int8Params));
+        assertThrows(SpectorValidationException.class, () -> new Vasq4QueryPrep(int8Params));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

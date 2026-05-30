@@ -13,6 +13,10 @@ import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorMask;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
 
 /**
  * Parallel Product Quantization trainer with SIMD-accelerated K-Means.
@@ -69,7 +73,7 @@ public final class ParallelPqTrainer {
      */
     public ParallelPqTrainer(int maxIterations, long seed) {
         if (maxIterations <= 0) {
-            throw new IllegalArgumentException("maxIterations must be positive: " + maxIterations);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "maxIterations", 1, Integer.MAX_VALUE, maxIterations);
         }
         this.maxIterations = maxIterations;
         this.seed = seed;
@@ -83,7 +87,7 @@ public final class ParallelPqTrainer {
      * @param numCentroids  number of centroids per subspace (typically 256)
      * @param maxIterations maximum K-Means iterations (overrides constructor value)
      * @return codebooks of shape [M][numCentroids][D/M]
-     * @throws IllegalArgumentException if inputs are invalid
+     * @throws SpectorValidationException if inputs are invalid
      */
     public float[][][] train(float[][] vectors, int numSubspaces, int numCentroids, int maxIterations) {
         validateInputs(vectors, numSubspaces, numCentroids);
@@ -121,10 +125,10 @@ public final class ParallelPqTrainer {
                 }
             }
         } catch (ConcurrentExecutionException e) {
-            throw new RuntimeException("PQ subspace training failed", e.getCause());
+            throw new SpectorInternalException(ErrorCode.INTERNAL_ERROR, e.getCause(), "PQ subspace training failed");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("PQ training interrupted", e);
+            throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "PQ training interrupted");
         }
 
         return codebooks;
@@ -331,22 +335,20 @@ public final class ParallelPqTrainer {
 
     private static void validateInputs(float[][] vectors, int numSubspaces, int numCentroids) {
         if (vectors == null || vectors.length == 0) {
-            throw new IllegalArgumentException("Training vectors must not be null or empty");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Training vectors");
         }
         if (numSubspaces <= 0) {
-            throw new IllegalArgumentException("numSubspaces must be positive: " + numSubspaces);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "numSubspaces", 1, Integer.MAX_VALUE, numSubspaces);
         }
         if (numCentroids <= 0 || numCentroids > KSUB) {
-            throw new IllegalArgumentException(
-                    "numCentroids must be between 1 and " + KSUB + ": " + numCentroids);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "numCentroids", 1, KSUB, numCentroids);
         }
         int dimensions = vectors[0].length;
         if (dimensions <= 0) {
-            throw new IllegalArgumentException("Vector dimensions must be positive");
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, 0);
         }
         if (dimensions % numSubspaces != 0) {
-            throw new IllegalArgumentException(
-                    "dimensions (" + dimensions + ") must be divisible by numSubspaces (" + numSubspaces + ")");
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "dimensions (" + dimensions + ") must be divisible by numSubspaces (" + numSubspaces + ")");
         }
     }
 }

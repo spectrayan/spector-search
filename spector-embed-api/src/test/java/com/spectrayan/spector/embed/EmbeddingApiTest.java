@@ -1,5 +1,8 @@
 package com.spectrayan.spector.embed;
 
+import com.spectrayan.spector.commons.error.SpectorEmbeddingException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
@@ -54,14 +57,14 @@ class EmbeddingApiTest {
 
     @Test
     void embeddingExceptionMessage() {
-        var ex = new EmbeddingException("test error");
-        assertThat(ex.getMessage()).isEqualTo("test error");
+        var ex = new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "test error");
+        assertThat(ex.getMessage()).contains("test error").contains("SPE-300-002");
     }
 
     @Test
     void embeddingExceptionWithCause() {
         var cause = new RuntimeException("root");
-        var ex = new EmbeddingException("wrapper", cause);
+        var ex = new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, cause, "wrapper");
         assertThat(ex.getCause()).isEqualTo(cause);
     }
 

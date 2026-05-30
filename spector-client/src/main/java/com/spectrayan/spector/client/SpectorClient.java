@@ -18,6 +18,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * Thread-safe Java client SDK for Spector Search REST API.
@@ -261,7 +264,7 @@ public class SpectorClient implements AutoCloseable {
         /** Sets the server host (default: localhost). */
         public Builder host(String host) {
             if (host == null || host.isBlank()) {
-                throw new IllegalArgumentException("host must not be null or blank");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "host");
             }
             this.host = host;
             return this;
@@ -270,7 +273,7 @@ public class SpectorClient implements AutoCloseable {
         /** Sets the server port (default: 7070). */
         public Builder port(int port) {
             if (port <= 0 || port > 65535) {
-                throw new IllegalArgumentException("port must be between 1 and 65535");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "port", 1, 65535, 0);
             }
             this.port = port;
             return this;
@@ -285,7 +288,7 @@ public class SpectorClient implements AutoCloseable {
         /** Sets the maximum connection pool size (default: 10). */
         public Builder maxConnections(int maxConnections) {
             if (maxConnections <= 0) {
-                throw new IllegalArgumentException("maxConnections must be positive");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "maxConnections", 1, Integer.MAX_VALUE, 0);
             }
             this.maxConnections = maxConnections;
             return this;
@@ -294,7 +297,7 @@ public class SpectorClient implements AutoCloseable {
         /** Sets the connection timeout (default: 5 seconds). */
         public Builder connectTimeout(Duration connectTimeout) {
             if (connectTimeout == null || connectTimeout.isNegative() || connectTimeout.isZero()) {
-                throw new IllegalArgumentException("connectTimeout must be a positive duration");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "connectTimeout", "must be a positive duration");
             }
             this.connectTimeout = connectTimeout;
             return this;
@@ -303,7 +306,7 @@ public class SpectorClient implements AutoCloseable {
         /** Sets the per-request timeout (default: 30 seconds). */
         public Builder requestTimeout(Duration requestTimeout) {
             if (requestTimeout == null || requestTimeout.isNegative() || requestTimeout.isZero()) {
-                throw new IllegalArgumentException("requestTimeout must be a positive duration");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "requestTimeout", "must be a positive duration");
             }
             this.requestTimeout = requestTimeout;
             return this;

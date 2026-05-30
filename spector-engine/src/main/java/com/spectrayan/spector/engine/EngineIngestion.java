@@ -22,6 +22,8 @@ import com.spectrayan.spector.index.KeywordIndex;
 import com.spectrayan.spector.storage.Document;
 import com.spectrayan.spector.storage.DocumentStore;
 import com.spectrayan.spector.storage.VectorStore;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Handles all document ingestion logic for the Spector engine.
@@ -341,8 +343,7 @@ final class EngineIngestion {
 
     private void requireEmbeddingProvider() {
         if (embeddingProvider == null) {
-            throw new IllegalStateException(
-                    com.spectrayan.spector.commons.error.ErrorCode.EMBEDDING_PROVIDER_MISSING.format());
+            throw new SpectorInternalException(ErrorCode.ARGUMENT_INVALID, com.spectrayan.spector.commons.error.ErrorCode.EMBEDDING_PROVIDER_MISSING.format());
         }
     }
 }

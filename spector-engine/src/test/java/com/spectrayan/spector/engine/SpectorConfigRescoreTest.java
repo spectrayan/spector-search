@@ -2,7 +2,7 @@ package com.spectrayan.spector.engine;
 
 
 import com.spectrayan.spector.config.SpectorConfig;
-import com.spectrayan.spector.config.SpectorConfigException;
+import com.spectrayan.spector.commons.error.SpectorConfigException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;

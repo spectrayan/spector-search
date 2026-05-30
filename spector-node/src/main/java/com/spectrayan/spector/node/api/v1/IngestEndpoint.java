@@ -12,6 +12,7 @@ import com.spectrayan.spector.node.api.dto.BulkIngestRequest;
 import com.spectrayan.spector.node.api.dto.IngestRequest;
 import com.spectrayan.spector.node.exception.ApiExceptionHandler;
 import com.spectrayan.spector.node.service.IngestService;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * Ingest API v1 endpoint.

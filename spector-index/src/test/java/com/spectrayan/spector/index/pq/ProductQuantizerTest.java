@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index.pq;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -108,7 +110,7 @@ class ProductQuantizerTest {
     @Test
     void dimensionsMustBeDivisibleByM() {
         float[][] samples = randomVectors(100, 15, 42);
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> ProductQuantizer.train(samples, 15, 4),
                 "15 not divisible by 4");
     }

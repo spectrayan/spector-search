@@ -248,7 +248,7 @@ class SpectorPropertiesTest {
     @Test
     void configFile_notFound_throws() {
         assertThatThrownBy(() -> SpectorProperties.load(Path.of("/nonexistent/config.yml")))
-                .isInstanceOf(SpectorConfigException.class)
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorConfigNotFoundException.class)
                 .hasMessageContaining("not found");
     }
 

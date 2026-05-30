@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 
 import com.spectrayan.spector.config.HnswParams;
 import java.util.Random;
@@ -118,13 +120,13 @@ class ParallelHnswBuilderTest {
     @Test
     void build_nullVectors_throwsException() {
         assertThatThrownBy(() -> builder.build(null, HnswParams.DEFAULT, SimilarityFunction.COSINE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test
     void build_emptyVectors_throwsException() {
         assertThatThrownBy(() -> builder.build(new float[0][], HnswParams.DEFAULT, SimilarityFunction.COSINE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test
@@ -134,8 +136,8 @@ class ParallelHnswBuilderTest {
                 new float[]{1.0f, 2.0f} // different dimensions
         };
         assertThatThrownBy(() -> builder.build(vectors, HnswParams.DEFAULT, SimilarityFunction.COSINE))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Inconsistent dimensions");
+                .isInstanceOf(SpectorValidationException.class)
+                .hasMessageContaining("dimensions");
     }
 
     // ─────────────── Helpers ───────────────

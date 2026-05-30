@@ -1,5 +1,9 @@
 package com.spectrayan.spector.gpu;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,37 +51,37 @@ class BatchGpuSearcherTest {
 
     @Test
     void constructor_rejectsNullKernel() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new BatchGpuSearcher(null, memoryManager, Duration.ofMillis(10), 1024));
     }
 
     @Test
     void constructor_rejectsNullMemoryManager() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new BatchGpuSearcher(stubKernel, null, Duration.ofMillis(10), 1024));
     }
 
     @Test
     void constructor_rejectsWindowBelowMinimum() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new BatchGpuSearcher(stubKernel, memoryManager, Duration.ofMillis(0), 1024));
     }
 
     @Test
     void constructor_rejectsWindowAboveMaximum() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new BatchGpuSearcher(stubKernel, memoryManager, Duration.ofMillis(101), 1024));
     }
 
     @Test
     void constructor_rejectsBatchSizeZero() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new BatchGpuSearcher(stubKernel, memoryManager, Duration.ofMillis(10), 0));
     }
 
     @Test
     void constructor_rejectsBatchSizeAboveMax() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new BatchGpuSearcher(stubKernel, memoryManager, Duration.ofMillis(10), 1025));
     }
 
@@ -263,7 +267,7 @@ class BatchGpuSearcherTest {
         float[] database = createDatabase(NUM_VECTORS, DIMENSIONS);
         float[] query = createQuery(DIMENSIONS, 1.0f);
 
-        assertThrows(IllegalStateException.class, () ->
+        assertThrows(SpectorException.class, () ->
                 searcher.batchSearch(List.of(query), database, NUM_VECTORS, DIMENSIONS, 5));
     }
 
@@ -272,14 +276,14 @@ class BatchGpuSearcherTest {
     @Test
     void batchSearch_rejectsNullQueries() {
         float[] database = createDatabase(NUM_VECTORS, DIMENSIONS);
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 searcher.batchSearch(null, database, NUM_VECTORS, DIMENSIONS, 5));
     }
 
     @Test
     void batchSearch_rejectsNullDatabase() {
         float[] query = createQuery(DIMENSIONS, 1.0f);
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 searcher.batchSearch(List.of(query), null, NUM_VECTORS, DIMENSIONS, 5));
     }
 
@@ -288,9 +292,9 @@ class BatchGpuSearcherTest {
         float[] database = createDatabase(NUM_VECTORS, DIMENSIONS);
         float[] query = createQuery(DIMENSIONS, 1.0f);
 
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 searcher.batchSearch(List.of(query), database, NUM_VECTORS, DIMENSIONS, 0));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 searcher.batchSearch(List.of(query), database, NUM_VECTORS, DIMENSIONS, 1001));
     }
 
@@ -298,7 +302,7 @@ class BatchGpuSearcherTest {
     void batchSearch_rejectsNegativeDimensions() {
         float[] database = createDatabase(NUM_VECTORS, DIMENSIONS);
         float[] query = createQuery(DIMENSIONS, 1.0f);
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 searcher.batchSearch(List.of(query), database, NUM_VECTORS, -1, 5));
     }
 

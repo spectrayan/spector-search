@@ -1,6 +1,9 @@
 package com.spectrayan.spector.core.quantization.vasq;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Arrays;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Immutable calibration parameters for the VASQ quantizer.
@@ -61,7 +64,7 @@ public final class VasqParams {
                float[] means, float[] scales, float[] invScales,
                VasqFwht fwht, int bitWidth) {
         if (bitWidth != BIT_WIDTH_8 && bitWidth != BIT_WIDTH_4) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.BIT_WIDTH_INVALID.format("4, 8", bitWidth));
+            throw new SpectorValidationException(ErrorCode.BIT_WIDTH_INVALID, "4, 8", bitWidth);
         }
         this.originalDim = originalDim;
         this.paddedDim   = paddedDim;

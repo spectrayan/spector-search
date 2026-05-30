@@ -1,20 +1,22 @@
-package com.spectrayan.spector.index;
+package com.spectrayan.spector.commons.error;
 
 /**
  * Exception thrown when parallel HNSW index construction fails.
  *
  * <p>This indicates that a virtual thread encountered an unrecoverable error
  * during parallel construction. The partial graph is discarded.</p>
+ *
+ * @see SpectorIndexException
  */
-public class HnswBuildException extends RuntimeException {
+public class SpectorHnswBuildException extends SpectorIndexException {
 
     /**
      * Creates a new build exception.
      *
      * @param message description of the failure
      */
-    public HnswBuildException(String message) {
-        super(message);
+    public SpectorHnswBuildException(String message) {
+        super(ErrorCode.HNSW_BUILD_FAILED, message);
     }
 
     /**
@@ -23,7 +25,7 @@ public class HnswBuildException extends RuntimeException {
      * @param message description of the failure
      * @param cause   the underlying cause
      */
-    public HnswBuildException(String message, Throwable cause) {
-        super(message, cause);
+    public SpectorHnswBuildException(String message, Throwable cause) {
+        super(ErrorCode.HNSW_BUILD_FAILED, cause, message);
     }
 }

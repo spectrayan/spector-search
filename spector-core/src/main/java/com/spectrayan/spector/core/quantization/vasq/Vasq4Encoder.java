@@ -1,7 +1,10 @@
 package com.spectrayan.spector.core.quantization.vasq;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * VASQ-4 encoder — FWHT rotation + offset-encoded INT4 quantization with nibble packing.
@@ -49,13 +52,12 @@ public final class Vasq4Encoder {
      * Creates a VASQ-4 encoder from pre-calibrated 4-bit parameters.
      *
      * @param params calibrated {@link VasqParams} with {@link VasqParams#BIT_WIDTH_4}
-     * @throws IllegalArgumentException if params.bitWidth() is not 4
+     * @throws SpectorValidationException if params.bitWidth() is not 4
      */
     public Vasq4Encoder(VasqParams params) {
-        if (params == null) throw new NullPointerException("params must not be null");
+        if (params == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "params");
         if (params.bitWidth() != VasqParams.BIT_WIDTH_4) {
-            throw new IllegalArgumentException(
-                    "Vasq4Encoder requires 4-bit params, got bitWidth=" + params.bitWidth());
+            throw new SpectorValidationException(ErrorCode.BIT_WIDTH_INVALID, "4", params.bitWidth());
         }
         this.params = params;
         this.paddedDim = params.paddedDim();
@@ -72,13 +74,12 @@ public final class Vasq4Encoder {
      * @param vector  the original float32 vector (length = originalDim)
      * @param segment off-heap memory segment to write into
      * @param offset  byte offset within the segment for this vector's storage
-     * @throws IllegalArgumentException if vector.length ≠ originalDim
+     * @throws SpectorValidationException if vector.length ≠ originalDim
      */
     public void encode(float[] vector, MemorySegment segment, long offset) {
         int originalDim = params.originalDim();
         if (vector.length != originalDim) {
-            throw new IllegalArgumentException(
-                    "Expected " + originalDim + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, vector.length);
         }
 
         float[] means     = params.means();

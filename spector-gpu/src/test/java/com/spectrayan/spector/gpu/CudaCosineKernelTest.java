@@ -1,5 +1,7 @@
 package com.spectrayan.spector.gpu;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -224,7 +226,7 @@ class CudaCosineKernelTest {
         float[] query = new float[16];
         float[] database = new float[16];
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(query, database, 1, 16));
     }
 
@@ -233,7 +235,7 @@ class CudaCosineKernelTest {
         float[] query = new float[4096];
         float[] database = new float[4096];
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(query, database, 1, 4096));
     }
 
@@ -242,13 +244,13 @@ class CudaCosineKernelTest {
         float[] query = new float[64];
         float[] database = new float[64];
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(query, database, 1, 48));
     }
 
     @Test
     void compute_nullQuery_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> kernel.compute(null, new float[32], 1, 32));
     }
 

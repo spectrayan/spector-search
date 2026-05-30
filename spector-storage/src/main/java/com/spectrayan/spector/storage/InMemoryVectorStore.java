@@ -10,6 +10,10 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorStoreFullException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * In-memory vector store backed by a contiguous off-heap {@link MemorySegment}.
@@ -49,7 +53,7 @@ public class InMemoryVectorStore implements VectorStore {
      */
     public InMemoryVectorStore(int dimensions, int capacity) {
         if (capacity <= 0) {
-            throw new IllegalArgumentException("capacity must be positive: " + capacity);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "capacity", 1, Integer.MAX_VALUE, capacity);
         }
 
         this.layout = new VectorStoreLayout(dimensions);
@@ -71,8 +75,7 @@ public class InMemoryVectorStore implements VectorStore {
         try {
             ensureOpen();
             if (vector.length != layout.dimensions()) {
-                throw new IllegalArgumentException(
-                        "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
             }
 
             // Check if ID already exists (update in-place)
@@ -86,8 +89,7 @@ public class InMemoryVectorStore implements VectorStore {
             int index = count.getAndIncrement();
             if (index >= capacity) {
                 count.decrementAndGet();
-                throw new IllegalStateException(
-                        "Store is full: capacity=" + capacity);
+                throw new SpectorStoreFullException(capacity);
             }
 
             layout.writeVector(segment, index, vector);
@@ -161,13 +163,13 @@ public class InMemoryVectorStore implements VectorStore {
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+            throw new SpectorSegmentClosedException();
         }
     }
 
     private void validateIndex(int index) {
         if (index < 0 || index >= count.get()) {
-            throw new IndexOutOfBoundsException(
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, 
                     "index=" + index + ", size=" + count.get());
         }
     }

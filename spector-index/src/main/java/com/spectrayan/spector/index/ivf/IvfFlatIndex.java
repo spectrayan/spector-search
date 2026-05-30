@@ -11,6 +11,9 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.StampedLock;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * IVF-Flat (Inverted File with exact distance) vector index.
@@ -81,7 +84,7 @@ public class IvfFlatIndex implements VectorIndex {
      */
     public IvfFlatIndex(int dimensions, SimilarityFunction similarityFunction) {
         if (dimensions <= 0) {
-            throw new IllegalArgumentException("Dimensions must be positive, got " + dimensions);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, dimensions);
         }
         this.dimensions = dimensions;
         this.similarityFunction = similarityFunction;
@@ -95,22 +98,19 @@ public class IvfFlatIndex implements VectorIndex {
      * @param trainingVectors representative training vectors
      * @param numCells        number of Voronoi cells (partitions), must be between
      *                        {@link #MIN_CELLS} and {@link #MAX_CELLS}
-     * @throws IllegalArgumentException if numCells is out of range or training set is too small
-     * @throws IllegalStateException    if the index has already been trained
+     * @throws SpectorValidationException if numCells is out of range or training set is too small
+     * @throws SpectorValidationException    if the index has already been trained
      */
     public void train(float[][] trainingVectors, int numCells) {
         if (trained) {
-            throw new IllegalStateException("Index has already been trained.");
+            throw new SpectorInternalException(ErrorCode.INVARIANT_VIOLATED, "Index already trained");
         }
         if (numCells < MIN_CELLS || numCells > MAX_CELLS) {
-            throw new IllegalArgumentException(
-                    "numCells must be between " + MIN_CELLS + " and " + MAX_CELLS + ", got " + numCells);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "numCells", MIN_CELLS, MAX_CELLS, numCells);
         }
         if (trainingVectors == null || trainingVectors.length < numCells) {
             int provided = (trainingVectors == null) ? 0 : trainingVectors.length;
-            throw new IllegalArgumentException(
-                    "Training requires at least " + numCells + " vectors (the configured number of cells), "
-                            + "but only " + provided + " were provided.");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Training requires at least " + numCells + " vectors (the configured number of cells), " + "but only " + provided + " were provided.");
         }
 
         log.info("Training IVF-Flat: {} samples, numCells={}", trainingVectors.length, numCells);
@@ -133,10 +133,10 @@ public class IvfFlatIndex implements VectorIndex {
     @Override
     public void add(String id, int storeIndex, float[] vector) {
         if (!trained) {
-            throw new IllegalStateException("Index must be trained before adding vectors. Call train() first.");
+            throw new SpectorInternalException(ErrorCode.INDEX_NOT_TRAINED);
         }
         if (vector.length != dimensions) {
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
         }
 
         long stamp = stampedLock.writeLock();
@@ -156,19 +156,18 @@ public class IvfFlatIndex implements VectorIndex {
      * @param nprobe number of cells to probe (1 to numCells)
      * @param topK   number of results to return
      * @return scored results sorted by relevance
-     * @throws IllegalStateException    if the index is not trained
-     * @throws IllegalArgumentException if nprobe is invalid
+     * @throws SpectorValidationException    if the index is not trained
+     * @throws SpectorValidationException if nprobe is invalid
      */
     public ScoredResult[] search(float[] query, int nprobe, int topK) {
         if (!trained) {
-            throw new IllegalStateException("Index must be trained before searching. Call train() first.");
+            throw new SpectorInternalException(ErrorCode.INDEX_NOT_TRAINED);
         }
         if (query.length != dimensions) {
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, query.length);
         }
         if (nprobe < 1 || nprobe > numCells) {
-            throw new IllegalArgumentException(
-                    "nprobe must be between 1 and " + numCells + ", got " + nprobe);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "nprobe", 1, numCells, nprobe);
         }
         if (totalVectors == 0) {
             return new ScoredResult[0];

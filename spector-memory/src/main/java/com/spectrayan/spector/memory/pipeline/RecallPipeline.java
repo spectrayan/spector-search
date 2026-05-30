@@ -1,5 +1,8 @@
 package com.spectrayan.spector.memory.pipeline;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
 import com.spectrayan.spector.embed.EmbeddingProvider;
@@ -145,7 +148,7 @@ public final class RecallPipeline {
      * @param listener called after each successful recall with the final results
      */
     public void addListener(RecallListener listener) {
-        listeners.add(Objects.requireNonNull(listener));
+        if (listener == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "listener"); } listeners.add(listener);
     }
 
     /**
@@ -156,7 +159,7 @@ public final class RecallPipeline {
      * @return ranked list of cognitive results
      */
     public List<CognitiveResult> recall(String queryText, RecallOptions options) {
-        Objects.requireNonNull(queryText, "queryText is required");
+        if (queryText == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "queryText"); }
         if (options == null) options = RecallOptions.DEFAULT;
 
         log.debug("Recall query: '{}', topK={}", queryText, options.topK());

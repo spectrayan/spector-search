@@ -29,7 +29,7 @@ public class IngestRequest {
      * @param expectedDimensions the expected vector dimensions from engine config
      * @throws ValidationException if validation fails
      */
-    public void validateForIngest(int expectedDimensions) throws SpectorValidationException {
+    public void validateForIngest(int expectedDimensions) {
         if (id == null || id.isEmpty()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "id", "required");
         if (content == null || content.isEmpty()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "content", "required");
         if (vector == null || vector.length == 0) {
@@ -45,7 +45,7 @@ public class IngestRequest {
      *
      * @throws ValidationException if validation fails
      */
-    public void validateForAutoIngest() throws SpectorValidationException {
+    public void validateForAutoIngest() {
         if (id == null || id.isEmpty()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "id", "required");
         if (content == null || content.isEmpty()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "content", "required");
     }

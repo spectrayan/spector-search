@@ -1,9 +1,12 @@
 package com.spectrayan.spector.core.similarity;
+import com.spectrayan.spector.commons.error.SpectorException;
 import com.spectrayan.spector.core.simd.SimdCapability;
 
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorMask;
 import jdk.incubator.vector.VectorSpecies;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * SIMD-accelerated dot product computation.
@@ -32,7 +35,7 @@ public final class DotProduct {
      * @param a first vector
      * @param b second vector
      * @return dot product value
-     * @throws IllegalArgumentException if arrays have different lengths
+     * @throws SpectorValidationException if arrays have different lengths
      */
     public static float compute(float[] a, float[] b) {
         return compute(a, 0, b, 0, a.length);
@@ -51,7 +54,7 @@ public final class DotProduct {
      * @param bOffset offset into {@code b}
      * @param length number of elements to process
      * @return dot product value
-     * @throws IllegalArgumentException if length is negative or offsets are out of bounds
+     * @throws SpectorValidationException if length is negative or offsets are out of bounds
      */
     public static float compute(float[] a, int aOffset, float[] b, int bOffset, int length) {
         validateInputs(a, aOffset, b, bOffset, length);
@@ -81,15 +84,13 @@ public final class DotProduct {
 
     private static void validateInputs(float[] a, int aOffset, float[] b, int bOffset, int length) {
         if (length < 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NEGATIVE.format("length", length));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "length", length);
         }
         if (aOffset < 0 || aOffset + length > a.length) {
-            throw new IllegalArgumentException(
-                    String.format("a: offset=%d, length=%d, array.length=%d", aOffset, length, a.length));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, String.format("a: offset=%d, length=%d, array.length=%d", aOffset, length, a.length));
         }
         if (bOffset < 0 || bOffset + length > b.length) {
-            throw new IllegalArgumentException(
-                    String.format("b: offset=%d, length=%d, array.length=%d", bOffset, length, b.length));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, String.format("b: offset=%d, length=%d, array.length=%d", bOffset, length, b.length));
         }
     }
 }

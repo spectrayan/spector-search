@@ -5,6 +5,8 @@ import java.util.Comparator;
 import java.util.List;
 
 import com.spectrayan.spector.commons.WordTokenizer;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Assembles scored chunks into a coherent context string within a configured token limit.
@@ -40,13 +42,11 @@ public class ContextBuilder {
      * @param chunks     the scored chunks from retrieval
      * @param tokenLimit the maximum number of tokens allowed in the assembled context
      * @return the assembled context result with attributions
-     * @throws IllegalArgumentException if tokenLimit is outside the valid range [256, 131072]
+     * @throws SpectorValidationException if tokenLimit is outside the valid range [256, 131072]
      */
     public ContextResult build(List<ScoredChunk> chunks, int tokenLimit) {
         if (tokenLimit < MIN_TOKEN_LIMIT || tokenLimit > MAX_TOKEN_LIMIT) {
-            throw new IllegalArgumentException(
-                    "tokenLimit must be between " + MIN_TOKEN_LIMIT + " and " + MAX_TOKEN_LIMIT
-                            + ", got: " + tokenLimit);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "tokenLimit", MIN_TOKEN_LIMIT, MAX_TOKEN_LIMIT, tokenLimit);
         }
 
         if (chunks == null || chunks.isEmpty()) {

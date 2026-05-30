@@ -15,6 +15,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Manages replication of shard data across cluster nodes for fault tolerance.
@@ -92,7 +96,7 @@ public class ReplicationManager implements AutoCloseable {
      *
      * @param replicaCount initial replica count (1–5)
      * @param membershipService optional membership service for reporting unavailable shards (may be null)
-     * @throws IllegalArgumentException if replicaCount is outside [1, 5]
+     * @throws SpectorValidationException if replicaCount is outside [1, 5]
      */
     public ReplicationManager(int replicaCount, MembershipService membershipService) {
         validateReplicaCount(replicaCount);
@@ -110,7 +114,7 @@ public class ReplicationManager implements AutoCloseable {
      */
     public void start() {
         if (closed) {
-            throw new IllegalStateException("ReplicationManager has been closed");
+            throw new SpectorSegmentClosedException();
         }
         healthCheckFuture = scheduler.scheduleAtFixedRate(
                 this::checkReplicaHealth,
@@ -125,7 +129,7 @@ public class ReplicationManager implements AutoCloseable {
      * Sets the replica count for all shards.
      *
      * @param count replica count (1–5)
-     * @throws IllegalArgumentException if count is outside [1, 5]
+     * @throws SpectorValidationException if count is outside [1, 5]
      */
     public void setReplicaCount(int count) {
         validateReplicaCount(count);
@@ -147,14 +151,14 @@ public class ReplicationManager implements AutoCloseable {
      *
      * @param shardIndex     the shard index
      * @param primaryEndpoint the endpoint of the primary node
-     * @throws IllegalArgumentException if shardIndex is negative or endpoint is null/blank
+     * @throws SpectorValidationException if shardIndex is negative or endpoint is null/blank
      */
     public void registerShard(int shardIndex, String primaryEndpoint) {
         if (shardIndex < 0) {
-            throw new IllegalArgumentException("Shard index must be non-negative: " + shardIndex);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "shardIndex", shardIndex);
         }
         if (primaryEndpoint == null || primaryEndpoint.isBlank()) {
-            throw new IllegalArgumentException("Primary endpoint must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Primary endpoint");
         }
         primaryEndpoints.put(shardIndex, primaryEndpoint);
         replicationGroups.computeIfAbsent(shardIndex, k -> new CopyOnWriteArrayList<>());
@@ -169,24 +173,22 @@ public class ReplicationManager implements AutoCloseable {
      * @param shardIndex      the shard index
      * @param replicaId       unique identifier for the replica
      * @param replicaEndpoint the endpoint of the replica node
-     * @throws IllegalArgumentException if parameters are invalid
-     * @throws IllegalStateException    if adding would exceed the configured replica count
+     * @throws SpectorValidationException if parameters are invalid
+     * @throws SpectorValidationException    if adding would exceed the configured replica count
      */
     public void addReplica(int shardIndex, String replicaId, String replicaEndpoint) {
         if (replicaId == null || replicaId.isBlank()) {
-            throw new IllegalArgumentException("Replica ID must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Replica ID");
         }
         if (replicaEndpoint == null || replicaEndpoint.isBlank()) {
-            throw new IllegalArgumentException("Replica endpoint must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Replica endpoint");
         }
 
         CopyOnWriteArrayList<ReplicaInfo> group = replicationGroups.computeIfAbsent(
                 shardIndex, k -> new CopyOnWriteArrayList<>());
 
         if (group.size() >= replicaCount) {
-            throw new IllegalStateException(
-                    "Cannot add replica: shard " + shardIndex + " already has " +
-                            group.size() + " replicas (max: " + replicaCount + ")");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Cannot add replica: shard " + shardIndex + " already has " + group.size() + " replicas (max: " + replicaCount + ")");
         }
 
         ReplicaInfo replica = new ReplicaInfo(replicaId, replicaEndpoint, ReplicaState.SYNCING, Instant.now());
@@ -204,12 +206,12 @@ public class ReplicationManager implements AutoCloseable {
      * is reported to the MembershipService.</p>
      *
      * @param shardIndex the shard index whose primary has failed
-     * @throws IllegalArgumentException if shardIndex is not registered
+     * @throws SpectorValidationException if shardIndex is not registered
      */
     public void promoteReplica(int shardIndex) {
         ReentrantReadWriteLock lock = shardLocks.get(shardIndex);
         if (lock == null) {
-            throw new IllegalArgumentException("Shard " + shardIndex + " is not registered");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "shardIndex", shardIndex);
         }
 
         lock.writeLock().lock();
@@ -282,12 +284,12 @@ public class ReplicationManager implements AutoCloseable {
      */
     public boolean synchronizeReplica(int shardIndex, String replicaEndpoint) {
         if (replicaEndpoint == null || replicaEndpoint.isBlank()) {
-            throw new IllegalArgumentException("Replica endpoint must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Replica endpoint");
         }
 
         CopyOnWriteArrayList<ReplicaInfo> group = replicationGroups.get(shardIndex);
         if (group == null) {
-            throw new IllegalArgumentException("Shard " + shardIndex + " is not registered");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "shardIndex", shardIndex);
         }
 
         // Find the replica
@@ -380,7 +382,7 @@ public class ReplicationManager implements AutoCloseable {
      */
     public void replicateWrite(int shardIndex, WriteOperation operation) {
         if (operation == null) {
-            throw new IllegalArgumentException("Write operation must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Write operation");
         }
 
         // Append to write-ahead log for delta sync
@@ -519,9 +521,7 @@ public class ReplicationManager implements AutoCloseable {
 
     private void validateReplicaCount(int count) {
         if (count < MIN_REPLICA_COUNT || count > MAX_REPLICA_COUNT) {
-            throw new IllegalArgumentException(
-                    "Replica count must be between " + MIN_REPLICA_COUNT +
-                            " and " + MAX_REPLICA_COUNT + ", got: " + count);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "replicaCount", MIN_REPLICA_COUNT, MAX_REPLICA_COUNT, count);
         }
     }
 

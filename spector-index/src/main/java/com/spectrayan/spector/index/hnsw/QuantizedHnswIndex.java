@@ -23,6 +23,8 @@ import com.spectrayan.spector.core.quantization.vasq.VasqCalibrator;
 import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
 import com.spectrayan.spector.core.quantization.vasq.VasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * HNSW vector index with scalar quantization (INT8, INT4, INT2, VASQ) support.
@@ -178,14 +180,14 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
      * @param params               HNSW parameters
      * @param preCalibrated        a fully built {@link VasqStrategy} (non-null)
      * @param oversamplingFactor   rescore oversampling (1 = no rescore, 3 = recommended)
-     * @throws NullPointerException if {@code preCalibrated} is null
+     * @throws SpectorValidationException if {@code preCalibrated} is null
      */
     public static QuantizedHnswIndex vasqPreCalibrated(int dimensions, int capacity,
                                                         SimilarityFunction similarityFunction,
                                                         HnswParams params,
                                                         VasqStrategy preCalibrated,
                                                         int oversamplingFactor) {
-        if (preCalibrated == null) throw new NullPointerException("preCalibrated VasqStrategy must not be null");
+        if (preCalibrated == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "preCalibrated VasqStrategy");
         return new QuantizedHnswIndex(dimensions, capacity, similarityFunction, params,
                 preCalibrated, QuantizationType.VASQ, oversamplingFactor);
     }
@@ -225,7 +227,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
                                                          HnswParams params,
                                                          Vasq4Strategy preCalibrated,
                                                          int oversamplingFactor) {
-        if (preCalibrated == null) throw new NullPointerException("preCalibrated Vasq4Strategy must not be null");
+        if (preCalibrated == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "preCalibrated Vasq4Strategy");
         return new QuantizedHnswIndex(dimensions, capacity, similarityFunction, params,
                 preCalibrated, QuantizationType.VASQ_4, oversamplingFactor);
     }
@@ -264,8 +266,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
         if (this.quantizationType == QuantizationType.SCALAR_INT4
                 || this.quantizationType == QuantizationType.SCALAR_INT2) {
             if (nonUniformQuantizer == null) {
-                throw new IllegalArgumentException(
-                        "NonUniformQuantizer is required for " + quantizationType);
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "NonUniformQuantizer (required for " + quantizationType + ")");
             }
             this.strategy = QuantizationStrategyFactory.create(
                     this.quantizationType, null, nonUniformQuantizer, null, null, similarityFunction);
@@ -428,7 +429,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
     @Override
     public ScoredResult[] search(float[] query, int k) {
         if (query.length != dimensions) {
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, query.length);
         }
         if (nodeCount == 0) {
             return new ScoredResult[0];

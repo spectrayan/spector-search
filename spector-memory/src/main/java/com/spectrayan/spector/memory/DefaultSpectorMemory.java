@@ -52,6 +52,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Default implementation of {@link SpectorMemory} — the Zero-GC Cognitive Backbone for Autonomous Agents.
@@ -116,8 +119,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         this.dimensions = builder.dimensions;
         this.persistenceMode = builder.persistenceMode;
         this.persistencePath = builder.persistencePath;
-        EmbeddingProvider embeddingProvider = Objects.requireNonNull(builder.embeddingProvider,
-                "embeddingProvider is required");
+        if (builder.embeddingProvider == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "embeddingProvider is required"); } EmbeddingProvider embeddingProvider = builder.embeddingProvider;
         this.circadianPolicy = builder.circadianPolicy;
         this.virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -286,7 +288,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
                 }
             } catch (Exception e) {
                 log.error("Failed to remember '{}': {}", id, e.getMessage(), e);
-                throw new RuntimeException("Memory ingestion failed for id=" + id, e);
+                throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "Memory ingestion failed for id=" + id);
             }
         }, virtualExecutor);
     }
@@ -314,7 +316,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
     @Override
     public void forget(String id) {
-        Objects.requireNonNull(id, "id is required");
+        if (id == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "id"); }
         MemoryLocation loc = index.locate(id);
         if (loc == null) {
             log.warn("Forget: memory '{}' not found in index", id);
@@ -348,7 +350,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
     @Override
     public void reinforce(String memoryId, byte valence) {
-        Objects.requireNonNull(memoryId, "memoryId is required");
+        if (memoryId == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "memoryId"); }
         MemoryLocation loc = index.locate(memoryId);
         if (loc == null) {
             log.warn("Reinforce: memory '{}' not found", memoryId);
@@ -432,8 +434,8 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
     @Override
     public int decay(Duration olderThan, float factor) {
-        Objects.requireNonNull(olderThan, "olderThan is required");
-        if (factor < 0f || factor > 1f) throw new IllegalArgumentException("factor must be in [0, 1]");
+        if (olderThan == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "olderThan"); }
+        if (factor < 0f || factor > 1f) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "factor", 0, 1, 0);
 
         long nowMs = System.currentTimeMillis();
         long thresholdMs = nowMs - olderThan.toMillis();
@@ -470,6 +472,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
             log.info("Decay: {} memories older than {} multiplied by {}", affected, olderThan, factor);
             return affected;
         } catch (ConcurrentExecutionException | InterruptedException e) {
+            Thread.currentThread().interrupt();
             log.warn("Parallel decay failed, falling back to sequential: {}", e.getMessage());
             // Sequential fallback
             int affected = 0;

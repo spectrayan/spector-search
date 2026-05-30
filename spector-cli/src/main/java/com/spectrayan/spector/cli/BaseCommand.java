@@ -6,6 +6,8 @@ import picocli.CommandLine;
 
 import java.io.PrintWriter;
 import java.time.Duration;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Base class for CLI subcommands. Provides access to inherited options
@@ -80,6 +82,6 @@ abstract class BaseCommand implements Runnable {
             return root;
         }
         // Should not happen if Picocli wiring is correct
-        throw new IllegalStateException("Cannot resolve root SpectorCtl command");
+        throw new SpectorInternalException(ErrorCode.INTERNAL_ERROR, "Cannot resolve root SpectorCtl command");
     }
 }

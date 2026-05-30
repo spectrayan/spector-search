@@ -1,4 +1,8 @@
 package com.spectrayan.spector.core.quantization.vasq;
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Prepares a {@link Vasq4QueryState} from a raw float32 query vector.
@@ -44,13 +48,12 @@ public final class Vasq4QueryPrep {
      * Creates a query preparer backed by the given 4-bit calibration parameters.
      *
      * @param params calibrated VASQ-4 parameters (non-null, bitWidth must be 4)
-     * @throws IllegalArgumentException if params.bitWidth() ≠ 4
+     * @throws SpectorValidationException if params.bitWidth() ≠ 4
      */
     public Vasq4QueryPrep(VasqParams params) {
-        if (params == null) throw new NullPointerException("params must not be null");
+        if (params == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "params");
         if (params.bitWidth() != VasqParams.BIT_WIDTH_4) {
-            throw new IllegalArgumentException(
-                    "Vasq4QueryPrep requires 4-bit params, got bitWidth=" + params.bitWidth());
+            throw new SpectorValidationException(ErrorCode.BIT_WIDTH_INVALID, "4", params.bitWidth());
         }
         this.params = params;
         this.paddedDim = params.paddedDim();
@@ -72,7 +75,7 @@ public final class Vasq4QueryPrep {
      *
      * @param query the float32 query vector (length must equal {@code params.originalDim()})
      * @return a {@link Vasq4QueryState} ready for {@link Vasq4SimdKernel}
-     * @throws IllegalArgumentException if query.length ≠ originalDim
+     * @throws SpectorValidationException if query.length ≠ originalDim
      */
     public Vasq4QueryState prepare(float[] query) {
         int originalDim  = params.originalDim();
@@ -80,8 +83,7 @@ public final class Vasq4QueryPrep {
         float[] scales   = params.scales();
 
         if (query.length != originalDim) {
-            throw new IllegalArgumentException(
-                    "Expected " + originalDim + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, query.length);
         }
 
         // 1. Exact query norm squared (double accumulator for precision)

@@ -1,4 +1,8 @@
 package com.spectrayan.spector.core.quantization;
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Supported vector quantization strategies.
@@ -157,12 +161,10 @@ public enum QuantizationType {
             case SCALAR_INT2 -> (dimensions + 3) / 4;
             // VASQ storage size = 4 + nextPow2(dimensions), not a simple function of dimensions.
             // Use VasqParams.bytesPerVector() or VasqEncoder.bytesPerVector() instead.
-            case VASQ -> throw new UnsupportedOperationException(
-                    "VASQ bytesPerVector depends on paddedDim=nextPow2(dimensions). "
-                  + "Use VasqEncoder.bytesPerVector() instead.");
-            case VASQ_4 -> throw new UnsupportedOperationException(
-                    "VASQ_4 bytesPerVector depends on paddedDim=nextPow2(dimensions). "
-                  + "Use Vasq4Encoder.bytesPerVector() instead.");
+            case VASQ -> throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID,
+                            "bytesPerVector", "VASQ depends on paddedDim. Use VasqEncoder.bytesPerVector()");
+            case VASQ_4 -> throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID,
+                            "bytesPerVector", "VASQ_4 depends on paddedDim. Use Vasq4Encoder.bytesPerVector()");
         };
     }
 }

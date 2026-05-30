@@ -2,6 +2,8 @@ package com.spectrayan.spector.index.fuzz;
 
 import java.nio.file.Path;
 import java.util.List;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Configuration for an index fuzz testing run.
@@ -21,13 +23,13 @@ public record FuzzConfig(
 ) {
     public FuzzConfig {
         if (minOperations < 10_000) {
-            throw new IllegalArgumentException("minOperations must be at least 10,000, got " + minOperations);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "minOperations", 10000, Integer.MAX_VALUE, minOperations);
         }
         if (targetIndexes == null || targetIndexes.isEmpty()) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("targetIndexes"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "targetIndexes");
         }
         if (dimensions < 2) {
-            throw new IllegalArgumentException("dimensions must be at least 2, got " + dimensions);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, dimensions);
         }
     }
 

@@ -127,7 +127,7 @@ class DiskHnswIndexTest {
         DiskHnswWriter.write(inMemory, indexFile);
 
         try (var diskIndex = DiskHnswIndex.open(indexFile)) {
-            assertThrows(UnsupportedOperationException.class,
+            assertThrows(com.spectrayan.spector.commons.error.SpectorException.class,
                     () -> diskIndex.add("new-doc", 1, new float[dims]));
         }
     }

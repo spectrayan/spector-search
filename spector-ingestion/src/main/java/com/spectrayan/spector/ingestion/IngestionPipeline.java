@@ -14,6 +14,9 @@ import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.embed.EmbedConfig;
 import com.spectrayan.spector.embed.ParallelEmbeddingPipeline;
 import com.spectrayan.spector.embed.PipelineEmbeddingResult;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Unified ingestion pipeline: chunk → embed → store.
@@ -93,7 +96,7 @@ public class IngestionPipeline {
      * @param id      document ID
      * @param content text content
      * @return ingestion result
-     * @throws IllegalStateException if no embedding provider is configured
+     * @throws SpectorValidationException if no embedding provider is configured
      */
     public IngestionResult ingest(String id, String content) {
         requireEmbeddingProvider();
@@ -237,9 +240,7 @@ public class IngestionPipeline {
 
     private void requireEmbeddingProvider() {
         if (embeddingProvider == null) {
-            throw new IllegalStateException(
-                    "No EmbeddingProvider configured. Use builder().embeddingProvider(provider) "
-                    + "or use ingest(id, content, vector) with a pre-computed vector.");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "No EmbeddingProvider configured. Use builder().embeddingProvider(provider) " + "or use ingest(id, content, vector) with a pre-computed vector.");
         }
     }
 
@@ -309,11 +310,11 @@ public class IngestionPipeline {
          * Builds the pipeline.
          *
          * @return configured ingestion pipeline
-         * @throws IllegalStateException if no target is set
+         * @throws SpectorValidationException if no target is set
          */
         public IngestionPipeline build() {
             if (target == null) {
-                throw new IllegalStateException("IngestionTarget is required");
+                throw new SpectorInternalException(ErrorCode.ARGUMENT_NULL, "IngestionTarget");
             }
             return new IngestionPipeline(this);
         }

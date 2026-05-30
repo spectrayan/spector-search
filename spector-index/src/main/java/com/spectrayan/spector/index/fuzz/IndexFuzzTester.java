@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index.fuzz;
 
+import com.spectrayan.spector.commons.error.SpectorIndexIntegrityException;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -382,14 +384,14 @@ public class IndexFuzzTester {
         for (int i = 0; i < nodeCount; i++) {
             int[] neighbors = hnswIndex.getNeighborsAtLayer(i, 0);
             if (neighbors == null || neighbors.length == 0) {
-                throw new IndexIntegrityException(
+                throw new SpectorIndexIntegrityException(
                         "HNSW node " + i + " has no neighbors at layer 0 (nodeCount=" + nodeCount + ")");
             }
 
             // Check neighbor indices are valid
             for (int neighbor : neighbors) {
                 if (neighbor < 0 || neighbor >= nodeCount) {
-                    throw new IndexIntegrityException(
+                    throw new SpectorIndexIntegrityException(
                             "HNSW node " + i + " has invalid neighbor index " + neighbor
                                     + " (nodeCount=" + nodeCount + ")");
                 }
@@ -398,7 +400,7 @@ public class IndexFuzzTester {
             // Check max connections constraint
             int maxConn = hnswIndex.params().maxLevel0Connections();
             if (neighbors.length > maxConn) {
-                throw new IndexIntegrityException(
+                throw new SpectorIndexIntegrityException(
                         "HNSW node " + i + " has " + neighbors.length
                                 + " neighbors at layer 0, exceeding max " + maxConn);
             }
@@ -408,7 +410,7 @@ public class IndexFuzzTester {
     private void verifyIvfIntegrity() {
         int reportedSize = ivfIndex.size();
         if (reportedSize != ivfInsertCount) {
-            throw new IndexIntegrityException(
+            throw new SpectorIndexIntegrityException(
                     "IVF reported size " + reportedSize + " != expected " + ivfInsertCount);
         }
     }

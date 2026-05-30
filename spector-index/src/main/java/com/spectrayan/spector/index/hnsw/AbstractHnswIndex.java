@@ -12,6 +12,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorIndexFullException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Abstract base class for HNSW (Hierarchical Navigable Small World) indexes.
@@ -172,13 +175,13 @@ public abstract class AbstractHnswIndex implements VectorIndex {
     @Override
     public void add(String id, int storeIndex, float[] vector) {
         if (vector.length != dimensions) {
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
         }
 
         writeLock.lock();
         try {
             if (nodeCount >= capacity) {
-                throw new IllegalStateException("Index is full: capacity=" + capacity);
+                throw new SpectorIndexFullException(capacity);
             }
 
             int nodeIdx = nodeCount;
@@ -271,7 +274,7 @@ public abstract class AbstractHnswIndex implements VectorIndex {
         writeLock.lock();
         try {
             if (nodeCount >= capacity) {
-                throw new IllegalStateException("Index is full: capacity=" + capacity);
+                throw new SpectorIndexFullException(capacity);
             }
 
             int nodeIdx = nodeCount;
@@ -319,7 +322,7 @@ public abstract class AbstractHnswIndex implements VectorIndex {
     @Override
     public ScoredResult[] search(float[] query, int k) {
         if (query.length != dimensions) {
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, query.length);
         }
         if (nodeCount == 0) {
             return new ScoredResult[0];

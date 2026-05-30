@@ -4,6 +4,9 @@ import com.spectrayan.spector.core.similarity.EuclideanDistance;
 
 import java.util.Arrays;
 import java.util.Random;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * K-Means++ clustering utility.
@@ -47,13 +50,12 @@ public final class KMeans {
      * @param maxIterations maximum Lloyd's iterations (training stops early on convergence)
      * @param seed          random seed for reproducible K-Means++ initialization
      * @return {@code float[k][dimensions]} centroid array
-     * @throws IllegalArgumentException if {@code samples.length < k}
+     * @throws SpectorValidationException if {@code samples.length < k}
      */
     public static float[][] train(float[][] samples, int k, int maxIterations, long seed) {
         int n = samples.length;
         if (n < k) {
-            throw new IllegalArgumentException(
-                    "K-Means requires at least k=" + k + " samples, got " + n);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "samples", k, Integer.MAX_VALUE, n);
         }
         int dimensions = samples[0].length;
         float[][] centers = new float[k][dimensions];

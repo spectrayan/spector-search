@@ -6,6 +6,8 @@ import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Binary file format for persisting HNSW indexes to disk.
@@ -85,13 +87,10 @@ public final class IndexFileFormat {
         /** Validates the header. */
         public void validate() {
             if (magic != MAGIC) {
-                throw new IllegalArgumentException(
-                        "Invalid magic: expected 0x" + Integer.toHexString(MAGIC)
-                                + ", got 0x" + Integer.toHexString(magic));
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Invalid magic: expected 0x" + Integer.toHexString(MAGIC) + ", got 0x" + Integer.toHexString(magic));
             }
             if (version != VERSION) {
-                throw new IllegalArgumentException(
-                        "Unsupported version: " + version + " (expected " + VERSION + ")");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Unsupported version: " + version + " (expected " + VERSION + ")");
             }
         }
 

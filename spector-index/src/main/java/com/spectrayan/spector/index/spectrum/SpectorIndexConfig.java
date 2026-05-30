@@ -2,6 +2,8 @@ package com.spectrayan.spector.index.spectrum;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.config.HnswParams;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Configuration for the {@link SpectorIndex} adaptive vector index.
@@ -51,19 +53,19 @@ public record SpectorIndexConfig(
 
     public SpectorIndexConfig {
         if (nCentroids < 2)
-            throw new IllegalArgumentException("nCentroids must be ≥ 2, got " + nCentroids);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "nCentroids", 2, Integer.MAX_VALUE, nCentroids);
         if (nProbe < 1 || nProbe > nCentroids)
-            throw new IllegalArgumentException("nProbe must be in [1, nCentroids], got " + nProbe);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "nProbe", 1, 0, nProbe);
         if (shardThreshold < 1)
-            throw new IllegalArgumentException("shardThreshold must be ≥ 1, got " + shardThreshold);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "shardThreshold", 1, Integer.MAX_VALUE, shardThreshold);
         if (oversamplingFactor < 1)
-            throw new IllegalArgumentException("oversamplingFactor must be ≥ 1, got " + oversamplingFactor);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "oversamplingFactor", 1, Integer.MAX_VALUE, oversamplingFactor);
         if (kMeansIterations < 1)
-            throw new IllegalArgumentException("kMeansIterations must be ≥ 1, got " + kMeansIterations);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "kMeansIterations", 1, Integer.MAX_VALUE, kMeansIterations);
         if (similarityFunction == null)
-            throw new NullPointerException("similarityFunction must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "similarityFunction");
         if (hnswParams == null)
-            throw new NullPointerException("hnswParams must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "hnswParams");
     }
 
     /** Returns a copy with a different {@code nProbe}. */

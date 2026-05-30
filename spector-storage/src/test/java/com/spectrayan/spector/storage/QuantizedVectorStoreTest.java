@@ -1,5 +1,7 @@
 package com.spectrayan.spector.storage;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -193,25 +195,25 @@ class QuantizedVectorStoreTest {
 
     @Test
     void rejectsNullQuantizationType() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new QuantizedVectorStore(DIMS, CAPACITY, null, null, null));
     }
 
     @Test
     void rejectsMissingScalarQuantizerForInt8() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new QuantizedVectorStore(DIMS, CAPACITY, QuantizationType.SCALAR_INT8, null, null));
     }
 
     @Test
     void rejectsMissingNonUniformQuantizerForInt4() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new QuantizedVectorStore(DIMS, CAPACITY, QuantizationType.SCALAR_INT4, null, null));
     }
 
     @Test
     void rejectsMissingNonUniformQuantizerForInt2() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new QuantizedVectorStore(DIMS, CAPACITY, QuantizationType.SCALAR_INT2, null, null));
     }
 
@@ -220,7 +222,7 @@ class QuantizedVectorStoreTest {
         float[][] samples = generateSamples(50, 16);
         NonUniformQuantizer nuq = NonUniformQuantizer.calibrate(samples, 16, 16);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new QuantizedVectorStore(DIMS, CAPACITY, QuantizationType.SCALAR_INT4, null, nuq));
     }
 
@@ -230,7 +232,7 @@ class QuantizedVectorStoreTest {
         // Calibrate with 4 levels but try to use with INT4 (needs 16)
         NonUniformQuantizer nuq = NonUniformQuantizer.calibrate(samples, DIMS, 4);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new QuantizedVectorStore(DIMS, CAPACITY, QuantizationType.SCALAR_INT4, null, nuq));
     }
 
@@ -240,7 +242,7 @@ class QuantizedVectorStoreTest {
         // Calibrate with 16 levels but try to use with INT2 (needs 4)
         NonUniformQuantizer nuq = NonUniformQuantizer.calibrate(samples, DIMS, 16);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> new QuantizedVectorStore(DIMS, CAPACITY, QuantizationType.SCALAR_INT2, null, nuq));
     }
 

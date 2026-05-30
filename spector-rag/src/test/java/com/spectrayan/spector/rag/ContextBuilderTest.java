@@ -1,5 +1,7 @@
 package com.spectrayan.spector.rag;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -133,14 +135,14 @@ class ContextBuilderTest {
     @Test
     void tokenLimitBelowMinimumThrowsException() {
         assertThatThrownBy(() -> builder.build(List.of(), 100))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("256");
     }
 
     @Test
     void tokenLimitAboveMaximumThrowsException() {
         assertThatThrownBy(() -> builder.build(List.of(), 200_000))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("131072");
     }
 
@@ -184,23 +186,23 @@ class ContextBuilderTest {
     @Test
     void chunkAttributionRejectsInvalidInput() {
         assertThatThrownBy(() -> new ChunkAttribution(null, 0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> new ChunkAttribution("", 0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> new ChunkAttribution("doc", -1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test
     void scoredChunkRejectsNullChunk() {
         assertThatThrownBy(() -> new ScoredChunk(null, 0.5f))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test
     void scoredChunkRejectsNanScore() {
         TextChunk chunk = new TextChunk("hello", 1, 0, 5, "doc");
         assertThatThrownBy(() -> new ScoredChunk(chunk, Float.NaN))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 }

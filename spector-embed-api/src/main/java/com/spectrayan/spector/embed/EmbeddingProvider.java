@@ -1,5 +1,7 @@
 package com.spectrayan.spector.embed;
 
+import com.spectrayan.spector.commons.error.SpectorEmbeddingException;
+
 import java.util.List;
 
 /**
@@ -40,7 +42,7 @@ public interface EmbeddingProvider extends AutoCloseable {
      *
      * @param text the input text
      * @return embedding result containing the vector
-     * @throws EmbeddingException if embedding fails
+     * @throws SpectorEmbeddingException if embedding fails
      */
     EmbeddingResult embed(String text);
 
@@ -52,7 +54,7 @@ public interface EmbeddingProvider extends AutoCloseable {
      *
      * @param texts list of input texts
      * @return list of embedding results (same order as input)
-     * @throws EmbeddingException if embedding fails
+     * @throws SpectorEmbeddingException if embedding fails
      */
     default List<EmbeddingResult> embedBatch(List<String> texts) {
         return texts.stream().map(this::embed).toList();

@@ -1,4 +1,5 @@
 package com.spectrayan.spector.core.similarity;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import com.spectrayan.spector.core.simd.SimdCapability;
 

@@ -1,5 +1,9 @@
 package com.spectrayan.spector.cluster;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -42,18 +46,18 @@ class ReplicationManagerTest {
 
     @Test
     void setReplicaCount_belowMinimum_throws() {
-        assertThrows(IllegalArgumentException.class, () -> replicationManager.setReplicaCount(0));
+        assertThrows(SpectorValidationException.class, () -> replicationManager.setReplicaCount(0));
     }
 
     @Test
     void setReplicaCount_aboveMaximum_throws() {
-        assertThrows(IllegalArgumentException.class, () -> replicationManager.setReplicaCount(6));
+        assertThrows(SpectorValidationException.class, () -> replicationManager.setReplicaCount(6));
     }
 
     @Test
     void constructor_invalidReplicaCount_throws() {
-        assertThrows(IllegalArgumentException.class, () -> new ReplicationManager(0, null));
-        assertThrows(IllegalArgumentException.class, () -> new ReplicationManager(6, null));
+        assertThrows(SpectorValidationException.class, () -> new ReplicationManager(0, null));
+        assertThrows(SpectorValidationException.class, () -> new ReplicationManager(6, null));
     }
 
     // --- Shard registration tests ---
@@ -66,19 +70,19 @@ class ReplicationManagerTest {
 
     @Test
     void registerShard_negativeIndex_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> replicationManager.registerShard(-1, "node1:9090"));
     }
 
     @Test
     void registerShard_nullEndpoint_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> replicationManager.registerShard(0, null));
     }
 
     @Test
     void registerShard_blankEndpoint_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> replicationManager.registerShard(0, "  "));
     }
 
@@ -103,14 +107,14 @@ class ReplicationManagerTest {
         replicationManager.addReplica(0, "r1", "node2:9090");
         replicationManager.addReplica(0, "r2", "node3:9090");
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(SpectorException.class,
                 () -> replicationManager.addReplica(0, "r3", "node4:9090"));
     }
 
     @Test
     void addReplica_nullId_throws() {
         replicationManager.registerShard(0, "primary:9090");
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> replicationManager.addReplica(0, null, "node2:9090"));
     }
 
@@ -144,7 +148,7 @@ class ReplicationManagerTest {
 
     @Test
     void promoteReplica_unregisteredShard_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> replicationManager.promoteReplica(99));
     }
 
@@ -173,7 +177,7 @@ class ReplicationManagerTest {
 
     @Test
     void synchronizeReplica_unregisteredShard_throws() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> replicationManager.synchronizeReplica(99, "node:9090"));
     }
 
@@ -227,7 +231,7 @@ class ReplicationManagerTest {
     @Test
     void replicateWrite_nullOperation_throws() {
         replicationManager.registerShard(0, "primary:9090");
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> replicationManager.replicateWrite(0, null));
     }
 

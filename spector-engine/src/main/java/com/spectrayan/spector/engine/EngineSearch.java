@@ -11,6 +11,8 @@ import com.spectrayan.spector.index.VectorIndex;
 import com.spectrayan.spector.query.HybridSearchOrchestrator;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Handles all search logic for the Spector engine.
@@ -101,8 +103,7 @@ final class EngineSearch {
 
     private void requireEmbeddingProvider() {
         if (embeddingProvider == null) {
-            throw new IllegalStateException(
-                    com.spectrayan.spector.commons.error.ErrorCode.EMBEDDING_PROVIDER_MISSING.format());
+            throw new SpectorInternalException(ErrorCode.ARGUMENT_INVALID, com.spectrayan.spector.commons.error.ErrorCode.EMBEDDING_PROVIDER_MISSING.format());
         }
     }
 }

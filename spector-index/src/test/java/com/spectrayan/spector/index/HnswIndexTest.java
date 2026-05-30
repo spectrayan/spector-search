@@ -1,5 +1,9 @@
 package com.spectrayan.spector.index;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 
 import com.spectrayan.spector.config.HnswParams;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,7 +148,7 @@ class HnswIndexTest {
     void wrongDimensionsThrows() {
         try (var idx = new HnswIndex(DIM, 100, SimilarityFunction.COSINE)) {
             assertThatThrownBy(() -> idx.add("x", 0, new float[DIM + 1]))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(SpectorValidationException.class);
         }
     }
 
@@ -154,7 +158,7 @@ class HnswIndexTest {
             idx.add("a", 0, new float[]{1, 0, 0});
             idx.add("b", 1, new float[]{0, 1, 0});
             assertThatThrownBy(() -> idx.add("c", 2, new float[]{0, 0, 1}))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(SpectorException.class);
         }
     }
 

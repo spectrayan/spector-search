@@ -24,6 +24,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 import java.nio.file.Path;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Spring Boot auto-configuration for embedded Spector Search.
@@ -110,9 +112,7 @@ public class SpectorAutoConfiguration {
         EmbeddingProvider embedder = embedderProvider.getIfAvailable();
 
         if (embedder == null) {
-            throw new IllegalStateException(
-                    "SpectorMemory requires an EmbeddingProvider bean. " +
-                    "Configure an embedding provider or disable memory with spector.memory.enabled=false");
+            throw new SpectorInternalException(ErrorCode.ARGUMENT_NULL, "EmbeddingProvider bean (configure provider or set spector.memory.enabled=false)");
         }
 
         var builder = DefaultSpectorMemory.builder()

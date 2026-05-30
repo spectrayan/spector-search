@@ -1,6 +1,10 @@
 package com.spectrayan.spector.ingestion;
 
 import com.spectrayan.spector.embed.EmbeddingProvider;
+import com.spectrayan.spector.commons.error.SpectorEmbeddingException;
+import com.spectrayan.spector.commons.error.SpectorEmbeddingUnavailableException;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Factory for creating {@link EmbeddingProvider} instances.
@@ -18,7 +22,7 @@ public final class EmbeddingProviderFactory {
      * @param baseUrl Ollama server URL (e.g., "http://localhost:11434")
      * @param model   embedding model name (e.g., "nomic-embed-text")
      * @return configured embedding provider
-     * @throws RuntimeException if spector-embed-ollama is not on the classpath
+     * @throws SpectorEmbeddingException if spector-embed-ollama is not on the classpath
      */
     public static EmbeddingProvider create(String baseUrl, String model) {
         try {
@@ -33,10 +37,9 @@ public final class EmbeddingProviderFactory {
             var constructor = providerClass.getConstructor(configClass);
             return (EmbeddingProvider) constructor.newInstance(config);
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException("spector-embed-ollama not on classpath. "
-                    + "Add it as a runtime dependency.", e);
+            throw new SpectorEmbeddingUnavailableException("Ollama (spector-embed-ollama not on classpath)", e);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create OllamaEmbeddingProvider", e);
+            throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "Failed to create OllamaEmbeddingProvider");
         }
     }
 }

@@ -19,6 +19,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Spring AI {@link VectorStore} implementation backed by Spector Search.
@@ -115,8 +117,7 @@ public class SpectorVectorStore implements VectorStore {
     public void delete(Filter.Expression filterExpression) {
         // Filter-based deletion is not directly supported by Spector engine.
         // This implementation could be extended to query matching docs and delete them.
-        throw new UnsupportedOperationException(
-                "Filter-based deletion is not yet supported by SpectorVectorStore");
+        throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "SpectorVectorStore", "filter-based deletion is not yet supported");
     }
 
     @Override

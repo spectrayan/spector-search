@@ -26,6 +26,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorMemoryTierFullException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Time-partitioned mmap store for Episodic memory.
@@ -461,7 +464,7 @@ public final class EpisodicMemoryStore implements TierStore {
          */
         public synchronized void append(CognitiveHeader header, byte[] quantizedVec) {
             if (count >= capacity) {
-                throw new IllegalStateException("Partition full: " + path);
+                throw new SpectorMemoryTierFullException("EPISODIC", capacity);
             }
 
             long offset = recordOffset(count);

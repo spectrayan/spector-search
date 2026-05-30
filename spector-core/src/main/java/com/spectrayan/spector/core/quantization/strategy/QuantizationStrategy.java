@@ -2,6 +2,8 @@ package com.spectrayan.spector.core.quantization.strategy;
 
 import java.lang.foreign.MemorySegment;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
 /**
  * Strategy interface for vector quantization operations.
  *

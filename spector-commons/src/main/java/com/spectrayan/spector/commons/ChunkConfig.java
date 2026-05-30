@@ -1,5 +1,8 @@
 package com.spectrayan.spector.commons;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 /**
  * Configuration for the {@link TokenAwareChunker}.
  *
@@ -11,17 +14,15 @@ public record ChunkConfig(int maxTokens, int overlapTokens) {
     /**
      * Validates the configuration parameters.
      *
-     * @throws IllegalArgumentException if maxTokens is not in [1, 8192] or
+     * @throws SpectorValidationException if maxTokens is not in [1, 8192] or
      *                                  overlapTokens is not in [0, maxTokens - 1]
      */
     public ChunkConfig {
         if (maxTokens <= 0 || maxTokens > 8192) {
-            throw new IllegalArgumentException(
-                    "maxTokens must be greater than 0 and at most 8192, got: " + maxTokens);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "maxTokens", 1, 8192, maxTokens);
         }
         if (overlapTokens < 0 || overlapTokens >= maxTokens) {
-            throw new IllegalArgumentException(
-                    "overlap must be >= 0 and less than maxTokens (" + maxTokens + "), got: " + overlapTokens);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "overlapTokens", 0, maxTokens - 1, overlapTokens);
         }
     }
 

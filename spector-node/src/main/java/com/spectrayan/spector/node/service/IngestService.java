@@ -13,6 +13,8 @@ import com.spectrayan.spector.node.event.SpectorBulkIngestCompletedEvent;
 import com.spectrayan.spector.node.event.SpectorDocumentDeletedEvent;
 import com.spectrayan.spector.node.event.SpectorDocumentIngestedEvent;
 import com.spectrayan.spector.node.event.SpectorEventBus;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * Ingest service facade — encapsulates local vs cluster routing for document ingestion.

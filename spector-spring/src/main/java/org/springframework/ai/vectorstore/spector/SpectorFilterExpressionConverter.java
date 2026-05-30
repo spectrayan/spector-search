@@ -9,6 +9,8 @@ import org.springframework.ai.vectorstore.filter.Filter.Value;
 import org.springframework.ai.vectorstore.filter.FilterExpressionConverter;
 
 import java.util.List;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Converts Spring AI {@link Filter.Expression} into Spector Search filter query strings.
@@ -90,7 +92,7 @@ public class SpectorFilterExpressionConverter implements FilterExpressionConvert
             case GTE -> ">=";
             case LT -> "<";
             case LTE -> "<=";
-            default -> throw new IllegalArgumentException("Unsupported comparison type: " + type);
+            default -> throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "comparisonType", type);
         };
     }
 

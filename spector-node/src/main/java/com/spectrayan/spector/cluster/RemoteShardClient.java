@@ -1,5 +1,8 @@
 package com.spectrayan.spector.cluster;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorClusterException;
+import com.spectrayan.spector.commons.error.SpectorShardUnavailableException;
 import com.spectrayan.spector.cluster.proto.*;
 import com.spectrayan.spector.index.ScoredResult;
 
@@ -84,8 +87,7 @@ public class RemoteShardClient implements AutoCloseable {
             SearchResponse response = stub.vectorSearch(request);
             return toScoredResults(response);
         } catch (Exception e) {
-            log.warn("Vector search failed on shard '{}': {}", endpoint.shardId(), e.getMessage());
-            return new ScoredResult[0];
+            throw new SpectorShardUnavailableException(endpoint.shardId(), e);
         }
     }
 
@@ -105,8 +107,7 @@ public class RemoteShardClient implements AutoCloseable {
             SearchResponse response = stub.keywordSearch(request);
             return toScoredResults(response);
         } catch (Exception e) {
-            log.warn("Keyword search failed on shard '{}': {}", endpoint.shardId(), e.getMessage());
-            return new ScoredResult[0];
+            throw new SpectorShardUnavailableException(endpoint.shardId(), e);
         }
     }
 
@@ -128,8 +129,7 @@ public class RemoteShardClient implements AutoCloseable {
             SearchResponse response = stub.hybridSearch(request);
             return toScoredResults(response);
         } catch (Exception e) {
-            log.warn("Hybrid search failed on shard '{}': {}", endpoint.shardId(), e.getMessage());
-            return new ScoredResult[0];
+            throw new SpectorShardUnavailableException(endpoint.shardId(), e);
         }
     }
 
@@ -152,8 +152,7 @@ public class RemoteShardClient implements AutoCloseable {
             IngestResponse response = stub.ingest(builder.build());
             return response.getSuccess();
         } catch (Exception e) {
-            log.warn("Ingest failed on shard '{}': {}", endpoint.shardId(), e.getMessage());
-            return false;
+            throw new SpectorShardUnavailableException(endpoint.shardId(), e);
         }
     }
 

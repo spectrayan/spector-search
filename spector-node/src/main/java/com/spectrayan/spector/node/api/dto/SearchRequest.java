@@ -31,7 +31,11 @@ public class SearchRequest {
         if (mode != null) {
             try {
                 return SearchQuery.SearchMode.valueOf(mode.toUpperCase());
-            } catch (IllegalArgumentException ignored) {}
+            } catch (IllegalArgumentException ignored) {
+                // Invalid mode string — fall through to auto-detection
+                System.getLogger(SearchRequest.class.getName())
+                        .log(System.Logger.Level.WARNING, "Unknown search mode ''{0}'', auto-detecting", mode);
+            }
         }
         if (text != null && vector != null) return SearchQuery.SearchMode.HYBRID;
         if (vector != null) return SearchQuery.SearchMode.VECTOR;
@@ -44,7 +48,7 @@ public class SearchRequest {
      * @return the search query
      * @throws ValidationException if the request is invalid
      */
-    public SearchQuery toQuery() throws SpectorValidationException {
+    public SearchQuery toQuery() {
         int k = topK > 0 ? topK : 10;
         return switch (resolvedMode()) {
             case KEYWORD -> {

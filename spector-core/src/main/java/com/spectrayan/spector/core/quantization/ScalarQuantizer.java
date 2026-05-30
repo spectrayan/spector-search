@@ -1,6 +1,9 @@
 package com.spectrayan.spector.core.quantization;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Arrays;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Scalar quantizer — maps float32 vectors to int8 (byte) vectors.
@@ -61,11 +64,11 @@ public final class ScalarQuantizer {
      * @param sampleVectors representative vector sample (at least 100 recommended)
      * @param dimensions    vector dimensionality
      * @return a calibrated quantizer
-     * @throws IllegalArgumentException if sample is empty or dimensions mismatch
+     * @throws SpectorValidationException if sample is empty or dimensions mismatch
      */
     public static ScalarQuantizer calibrate(float[][] sampleVectors, int dimensions) {
         if (sampleVectors == null || sampleVectors.length == 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "sampleVectors");
         }
 
         float[] mins = new float[dimensions];
@@ -75,8 +78,7 @@ public final class ScalarQuantizer {
 
         for (float[] vector : sampleVectors) {
             if (vector.length != dimensions) {
-                throw new IllegalArgumentException(
-                        "Expected " + dimensions + " dims, got " + vector.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
             }
             for (int d = 0; d < dimensions; d++) {
                 if (vector[d] < mins[d]) mins[d] = vector[d];
@@ -105,7 +107,7 @@ public final class ScalarQuantizer {
      */
     public static ScalarQuantizer fromBounds(int dimensions, float[] mins, float[] maxs) {
         if (mins.length != dimensions || maxs.length != dimensions) {
-            throw new IllegalArgumentException("mins/maxs length must match dimensions");
+            throw new SpectorValidationException(ErrorCode.LENGTH_MISMATCH, "mins/maxs", 0, "dimensions", 0);
         }
         return new ScalarQuantizer(dimensions,
                 Arrays.copyOf(mins, dimensions),

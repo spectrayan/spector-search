@@ -1,5 +1,7 @@
 package com.spectrayan.spector.index.ivf;
 
+import com.spectrayan.spector.commons.error.SpectorException;
+
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.index.ScoredResult;
 
@@ -46,14 +48,14 @@ class IvfPqIndexTest {
     @Test
     void searchWithoutTraining_throws() {
         var index = new IvfPqIndex(32, 16, 4, 8, SimilarityFunction.COSINE);
-        assertThrows(IllegalStateException.class,
+        assertThrows(SpectorException.class,
                 () -> index.search(new float[32], 5));
     }
 
     @Test
     void addWithoutTraining_throws() {
         var index = new IvfPqIndex(32, 16, 4, 8, SimilarityFunction.COSINE);
-        assertThrows(IllegalStateException.class,
+        assertThrows(SpectorException.class,
                 () -> index.add("doc-0", 0, new float[32]));
     }
 

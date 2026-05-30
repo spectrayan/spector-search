@@ -1,5 +1,9 @@
 package com.spectrayan.spector.config;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorConfigNotFoundException;
+
 import org.apache.commons.configuration2.CombinedConfiguration;
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.MapConfiguration;
@@ -20,6 +24,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Spring Boot-style hierarchical configuration loader for Spector Search.
@@ -80,7 +85,7 @@ public final class SpectorProperties {
     private final CombinedConfiguration config;
 
     private SpectorProperties(CombinedConfiguration config) {
-        this.config = Objects.requireNonNull(config);
+        if (config == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "config"); } this.config = config;
     }
 
     // ─────────────── Static Factory Methods ───────────────
@@ -449,7 +454,7 @@ public final class SpectorProperties {
 
         private void loadFileOrFail(CombinedConfiguration combined, Path path, String name) {
             if (!Files.isRegularFile(path)) {
-                throw new SpectorConfigException(com.spectrayan.spector.commons.error.ErrorCode.CONFIG_FILE_NOT_FOUND, path.toAbsolutePath());
+                throw new SpectorConfigNotFoundException(path.toAbsolutePath().toString());
             }
             loadFileIfExists(combined, path, name);
         }

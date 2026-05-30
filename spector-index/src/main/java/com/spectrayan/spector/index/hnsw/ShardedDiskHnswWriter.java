@@ -18,6 +18,8 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Serializes an in-memory {@link AbstractHnswIndex} into multiple shard files.
@@ -57,13 +59,13 @@ public final class ShardedDiskHnswWriter {
      * @param shardDir     directory for shard files and manifest (created if absent)
      * @param nodesPerShard maximum nodes per shard (last shard may have fewer)
      * @throws IOException if writing fails
-     * @throws IllegalArgumentException if nodesPerShard <= 0
+     * @throws SpectorValidationException if nodesPerShard <= 0
      */
     public static void write(AbstractHnswIndex index, Path shardDir, int nodesPerShard)
             throws IOException {
 
         if (nodesPerShard <= 0) {
-            throw new IllegalArgumentException("nodesPerShard must be positive: " + nodesPerShard);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "nodesPerShard", 1, Integer.MAX_VALUE, nodesPerShard);
         }
 
         int totalNodes = index.size();

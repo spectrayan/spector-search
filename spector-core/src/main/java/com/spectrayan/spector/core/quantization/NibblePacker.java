@@ -1,4 +1,8 @@
 package com.spectrayan.spector.core.quantization;
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Packs and unpacks 4-bit (nibble) values into byte arrays for INT4 quantized storage.
@@ -19,12 +23,11 @@ public final class NibblePacker {
      * @param values array of values, each in [0, 15]
      * @param length number of values to pack from the array
      * @return packed byte array
-     * @throws IllegalArgumentException if length is negative or exceeds array length
+     * @throws SpectorValidationException if length is negative or exceeds array length
      */
     public static byte[] pack(int[] values, int length) {
         if (length < 0 || length > values.length) {
-            throw new IllegalArgumentException(
-                    "length must be in [0, values.length], got " + length);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "length", 0, 0, length);
         }
 
         int packedLength = packedSize(length);
@@ -45,12 +48,11 @@ public final class NibblePacker {
      * @param packed the packed byte array
      * @param originalLength the number of values that were originally packed
      * @return array of unpacked 4-bit values
-     * @throws IllegalArgumentException if originalLength is negative or exceeds capacity
+     * @throws SpectorValidationException if originalLength is negative or exceeds capacity
      */
     public static int[] unpack(byte[] packed, int originalLength) {
         if (originalLength < 0 || originalLength > packed.length * 2) {
-            throw new IllegalArgumentException(
-                    "originalLength must be in [0, packed.length * 2], got " + originalLength);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "originalLength", 0, 0, originalLength);
         }
 
         int[] values = new int[originalLength];

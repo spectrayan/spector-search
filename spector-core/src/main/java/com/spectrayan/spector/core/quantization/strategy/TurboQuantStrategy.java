@@ -1,10 +1,13 @@
 package com.spectrayan.spector.core.quantization.strategy;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import com.spectrayan.spector.core.quantization.TurboQuantizer;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Quantization strategy for TurboQuant (random-rotation + optimal scalar quantization).
@@ -45,7 +48,7 @@ final class TurboQuantStrategy implements QuantizationStrategy {
     @Override
     public float distance(MemorySegment segment, long offset, DistanceContext ctx) {
         if (!(ctx instanceof DistanceContext.TurboContext tc)) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("context", "expected TurboContext but got " + ctx.getClass().getSimpleName()));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "context", "expected TurboContext but got " + ctx.getClass().getSimpleName());
         }
         byte[] packed = new byte[bpv];
         MemorySegment.copy(segment, ValueLayout.JAVA_BYTE, offset, packed, 0, bpv);

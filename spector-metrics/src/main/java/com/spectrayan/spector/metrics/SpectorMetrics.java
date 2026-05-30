@@ -1,5 +1,8 @@
 package com.spectrayan.spector.metrics;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -34,11 +37,11 @@ public final class SpectorMetrics {
      * are recorded. Thread-safe via volatile write.</p>
      *
      * @param registry the meter registry to use
-     * @throws NullPointerException if registry is null
+     * @throws SpectorValidationException if registry is null
      */
     public static void init(MeterRegistry registry) {
         if (registry == null) {
-            throw new NullPointerException("MeterRegistry must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "MeterRegistry");
         }
         SpectorMetrics.registry = registry;
     }

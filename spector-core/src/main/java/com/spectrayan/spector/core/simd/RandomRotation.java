@@ -1,9 +1,12 @@
 package com.spectrayan.spector.core.simd;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Random;
 
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorSpecies;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Random orthogonal rotation for isotropizing vector distributions.
@@ -63,7 +66,7 @@ public final class RandomRotation {
      */
     public static RandomRotation generate(int dimensions, long seed) {
         if (dimensions < 1) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.DIMENSIONS_INVALID.format(0));
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, 0);
         }
 
         Random rng = new Random(seed);
@@ -82,8 +85,7 @@ public final class RandomRotation {
      */
     public float[] rotate(float[] vector) {
         if (vector.length != dimensions) {
-            throw new IllegalArgumentException(
-                    "Expected " + dimensions + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
         }
         float[] result = new float[dimensions];
         matvecSimd(matrix, vector, result, dimensions);
@@ -111,8 +113,7 @@ public final class RandomRotation {
      */
     public float[] inverseRotate(float[] vector) {
         if (vector.length != dimensions) {
-            throw new IllegalArgumentException(
-                    "Expected " + dimensions + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
         }
         float[] result = new float[dimensions];
         matvecSimd(matrixTransposed, vector, result, dimensions);

@@ -18,6 +18,8 @@ import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import com.spectrayan.spector.commons.concurrent.ConcurrentTasks.LabeledTask;
 import com.spectrayan.spector.commons.concurrent.ConcurrentTasks.PartialResult;
 import com.spectrayan.spector.index.ScoredResult;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Distributed query coordinator that fans out search queries to all shards
@@ -70,17 +72,15 @@ public class DistributedQueryCoordinator implements AutoCloseable {
      *
      * @param shardEndpoints the shard endpoints to fan out queries to
      * @param timeout        per-shard timeout (must be between 1s and 60s)
-     * @throws IllegalArgumentException if timeout is outside the allowed range
+     * @throws SpectorValidationException if timeout is outside the allowed range
      */
     public DistributedQueryCoordinator(List<ShardEndpoint> shardEndpoints, Duration timeout) {
-        Objects.requireNonNull(shardEndpoints, "shardEndpoints must not be null");
-        Objects.requireNonNull(timeout, "timeout must not be null");
+        if (shardEndpoints == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "shardEndpoints"); }
+        if (timeout == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "timeout"); }
 
         long timeoutSeconds = timeout.toSeconds();
         if (timeoutSeconds < MIN_TIMEOUT_SECONDS || timeoutSeconds > MAX_TIMEOUT_SECONDS) {
-            throw new IllegalArgumentException(
-                    "Timeout must be between " + MIN_TIMEOUT_SECONDS + " and " + MAX_TIMEOUT_SECONDS
-                            + " seconds, got: " + timeoutSeconds);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "Timeout", MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, timeoutSeconds);
         }
 
         this.shardEndpoints = List.copyOf(shardEndpoints);
@@ -95,7 +95,7 @@ public class DistributedQueryCoordinator implements AutoCloseable {
      * @return merged query result with metadata about timed-out shards
      */
     public QueryResult fanOutVectorSearch(float[] queryVector, int topK) {
-        Objects.requireNonNull(queryVector, "queryVector must not be null");
+        if (queryVector == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "queryVector"); }
         validateTopK(topK);
 
         return fanOut(shardEndpoints, client -> client.vectorSearch(queryVector, topK), topK);
@@ -109,7 +109,7 @@ public class DistributedQueryCoordinator implements AutoCloseable {
      * @return merged query result with metadata about timed-out shards
      */
     public QueryResult fanOutKeywordSearch(String queryText, int topK) {
-        Objects.requireNonNull(queryText, "queryText must not be null");
+        if (queryText == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "queryText"); }
         validateTopK(topK);
 
         return fanOut(shardEndpoints, client -> client.keywordSearch(queryText, topK), topK);
@@ -124,8 +124,8 @@ public class DistributedQueryCoordinator implements AutoCloseable {
      * @return merged query result with metadata about timed-out shards
      */
     public QueryResult fanOutHybridSearch(String queryText, float[] queryVector, int topK) {
-        Objects.requireNonNull(queryText, "queryText must not be null");
-        Objects.requireNonNull(queryVector, "queryVector must not be null");
+        if (queryText == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "queryText"); }
+        if (queryVector == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "queryVector"); }
         validateTopK(topK);
 
         return fanOut(shardEndpoints, client -> client.hybridSearch(queryText, queryVector, topK), topK);
@@ -244,7 +244,7 @@ public class DistributedQueryCoordinator implements AutoCloseable {
 
     private static void validateTopK(int topK) {
         if (topK < 1 || topK > 10_000) {
-            throw new IllegalArgumentException("topK must be between 1 and 10,000, got: " + topK);
+            throw new SpectorValidationException(ErrorCode.TOP_K_INVALID, 1, topK);
         }
     }
 
@@ -268,10 +268,10 @@ public class DistributedQueryCoordinator implements AutoCloseable {
     public record ShardEndpoint(String shardId, String host, int port) {
 
         public ShardEndpoint {
-            Objects.requireNonNull(shardId, "shardId must not be null");
-            Objects.requireNonNull(host, "host must not be null");
+            if (shardId == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "shardId"); }
+            if (host == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "host"); }
             if (port <= 0 || port > 65535) {
-                throw new IllegalArgumentException("port must be between 1 and 65535, got: " + port);
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "port", 1, 65535, port);
             }
         }
 

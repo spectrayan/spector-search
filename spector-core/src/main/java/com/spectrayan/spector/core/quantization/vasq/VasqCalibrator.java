@@ -1,8 +1,11 @@
 package com.spectrayan.spector.core.quantization.vasq;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Calibrates VASQ quantization parameters from a representative sample corpus.
@@ -81,20 +84,19 @@ public final class VasqCalibrator {
      * @param originalDim   vector dimensionality
      * @param seed          FWHT sign-flip seed; must match the seed used at encode time
      * @return calibrated {@link VasqParams}
-     * @throws IllegalArgumentException if sampleVectors is empty or dimensions don't match
+     * @throws SpectorValidationException if sampleVectors is empty or dimensions don't match
      */
     public static VasqParams calibrate(List<float[]> sampleVectors,
                                         int originalDim, long seed) {
         if (sampleVectors == null || sampleVectors.isEmpty()) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "sampleVectors");
         }
         // Subsample if needed
         List<float[]> sample = subsampleList(sampleVectors, MAX_SAMPLE_SIZE, seed);
         int n = sample.size();
         for (float[] v : sample) {
             if (v.length != originalDim) {
-                throw new IllegalArgumentException(
-                        "Expected " + originalDim + " dims, got " + v.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, v.length);
             }
         }
         VasqFwht fwht = new VasqFwht(originalDim, seed);
@@ -135,7 +137,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate(float[][] samples, int n,
                                         int originalDim, long seed) {
         if (samples == null || n <= 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("samples"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "samples");
         }
         int useN = Math.min(n, MAX_SAMPLE_SIZE);
         // Subsample if needed — Fisher-Yates partial shuffle on the indices
@@ -149,8 +151,7 @@ public final class VasqCalibrator {
         for (int i = 0; i < useN; i++) {
             float[] src = samples[indices[i]];
             if (src.length != originalDim) {
-                throw new IllegalArgumentException(
-                        "Expected " + originalDim + " dims at index " + indices[i] + ", got " + src.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, src.length);
             }
             System.arraycopy(src, 0, tempVec, 0, originalDim);
             fwht.rotate(tempVec, rotated[i]);
@@ -182,7 +183,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate(float[] flatData, int n,
                                         int originalDim, long seed) {
         if (flatData == null || n <= 0 || originalDim <= 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("flatData"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "flatData");
         }
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);
@@ -224,14 +225,13 @@ public final class VasqCalibrator {
     public static VasqParams calibrate4bit(List<float[]> sampleVectors,
                                             int originalDim, long seed) {
         if (sampleVectors == null || sampleVectors.isEmpty()) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "sampleVectors");
         }
         List<float[]> sample = subsampleList(sampleVectors, MAX_SAMPLE_SIZE, seed);
         int n = sample.size();
         for (float[] v : sample) {
             if (v.length != originalDim) {
-                throw new IllegalArgumentException(
-                        "Expected " + originalDim + " dims, got " + v.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, v.length);
             }
         }
         VasqFwht fwht  = new VasqFwht(originalDim, seed);
@@ -264,7 +264,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate4bit(float[][] samples, int n,
                                             int originalDim, long seed) {
         if (samples == null || n <= 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("samples"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "samples");
         }
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);
@@ -277,8 +277,7 @@ public final class VasqCalibrator {
         for (int i = 0; i < useN; i++) {
             float[] src = samples[idxs[i]];
             if (src.length != originalDim) {
-                throw new IllegalArgumentException(
-                        "Expected " + originalDim + " dims at index " + idxs[i] + ", got " + src.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, src.length);
             }
             System.arraycopy(src, 0, tempVec, 0, originalDim);
             fwht.rotate(tempVec, rotated[i]);
@@ -300,7 +299,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate4bit(float[] flatData, int n,
                                             int originalDim, long seed) {
         if (flatData == null || n <= 0 || originalDim <= 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("flatData"));
+            throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "flatData");
         }
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);

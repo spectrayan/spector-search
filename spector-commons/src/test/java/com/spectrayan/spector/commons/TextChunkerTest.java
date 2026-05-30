@@ -109,11 +109,11 @@ class TextChunkerTest {
     @Test
     void invalidConfigThrows() {
         assertThatThrownBy(() -> new TextChunker(0, 0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class);
         assertThatThrownBy(() -> new TextChunker(100, 100))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class);
         assertThatThrownBy(() -> new TextChunker(100, -1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class);
     }
 
     @Test

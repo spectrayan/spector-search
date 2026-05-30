@@ -1,10 +1,11 @@
 package com.spectrayan.spector.embed.ollama;
 
+import com.spectrayan.spector.commons.error.SpectorEmbeddingException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.spectrayan.spector.embed.EmbeddingConfig;
-import com.spectrayan.spector.embed.EmbeddingException;
 
 import org.junit.jupiter.api.Test;
 
@@ -45,7 +46,7 @@ class OllamaEmbeddingProviderTest {
     void embedNullTextThrows() {
         var provider = OllamaEmbeddingProvider.create("test");
         assertThatThrownBy(() -> provider.embed(null))
-                .isInstanceOf(EmbeddingException.class)
+                .isInstanceOf(SpectorEmbeddingException.class)
                 .hasMessageContaining("blank");
     }
 
@@ -53,7 +54,7 @@ class OllamaEmbeddingProviderTest {
     void embedBlankTextThrows() {
         var provider = OllamaEmbeddingProvider.create("test");
         assertThatThrownBy(() -> provider.embed("  "))
-                .isInstanceOf(EmbeddingException.class)
+                .isInstanceOf(SpectorEmbeddingException.class)
                 .hasMessageContaining("blank");
     }
 
@@ -70,7 +71,7 @@ class OllamaEmbeddingProviderTest {
                 .withTimeout(Duration.ofMillis(500));
         var provider = new OllamaEmbeddingProvider(config);
         assertThatThrownBy(() -> provider.embed("test text"))
-                .isInstanceOf(EmbeddingException.class)
-                .hasMessageContaining("Failed");
+                .isInstanceOf(SpectorEmbeddingException.class)
+                .hasMessageContaining("SPE-300");
     }
 }

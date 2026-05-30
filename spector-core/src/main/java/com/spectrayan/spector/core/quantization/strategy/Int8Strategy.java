@@ -1,10 +1,13 @@
 package com.spectrayan.spector.core.quantization.strategy;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import com.spectrayan.spector.core.quantization.ScalarQuantizer;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Quantization strategy for INT8 scalar quantization via {@link ScalarQuantizer}.
@@ -62,7 +65,7 @@ final class Int8Strategy implements QuantizationStrategy {
     @Override
     public float distance(MemorySegment segment, long offset, DistanceContext ctx) {
         if (!(ctx instanceof DistanceContext.Int8Context ic)) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("context", "expected Int8Context but got " + ctx.getClass().getSimpleName()));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "context", "expected Int8Context but got " + ctx.getClass().getSimpleName());
         }
         // Zero-copy: segment is passed directly to the kernel — no byte[] allocation
         return similarityFunction.computeQuantizedFromSegment(

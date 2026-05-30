@@ -1,6 +1,7 @@
 package com.spectrayan.spector.config;
 
 import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorConfigValueException;
 
 import java.nio.file.Path;
 
@@ -18,7 +19,7 @@ import java.nio.file.Path;
  *   <li>{@code documents.dat} — Document text content</li>
  *   <li>{@code id-mappings.dat} — String ID → integer index mappings</li>
  *   <li>{@code index_shards/} — Directory for sharded index + vector files</li>
- * </ul>
+ *   </ul>
  *
  * @param indexFile      HNSW index file name
  * @param vectorsFile    memory-mapped vectors file name
@@ -45,15 +46,15 @@ public record PersistenceFiles(
 
     public PersistenceFiles {
         if (indexFile == null || indexFile.isBlank())
-            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "indexFile", "must not be blank");
+            throw new SpectorConfigValueException("indexFile", "must not be blank");
         if (vectorsFile == null || vectorsFile.isBlank())
-            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "vectorsFile", "must not be blank");
+            throw new SpectorConfigValueException("vectorsFile", "must not be blank");
         if (documentsFile == null || documentsFile.isBlank())
-            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "documentsFile", "must not be blank");
+            throw new SpectorConfigValueException("documentsFile", "must not be blank");
         if (idMappingsFile == null || idMappingsFile.isBlank())
-            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "idMappingsFile", "must not be blank");
+            throw new SpectorConfigValueException("idMappingsFile", "must not be blank");
         if (shardDirName == null || shardDirName.isBlank())
-            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "shardDirName", "must not be blank");
+            throw new SpectorConfigValueException("shardDirName", "must not be blank");
     }
 
     /**

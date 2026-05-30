@@ -18,7 +18,7 @@ public class BulkIngestRequest {
      *
      * @throws ValidationException if validation fails
      */
-    public void validate() throws SpectorValidationException {
+    public void validate() {
         if (documents == null || documents.isEmpty()) {
             throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "documents", "non-empty array required");
         }

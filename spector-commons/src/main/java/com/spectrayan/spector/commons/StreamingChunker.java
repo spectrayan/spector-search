@@ -11,6 +11,8 @@ import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Streaming chunker for very large files that cannot fit into memory.
@@ -47,8 +49,8 @@ public final class StreamingChunker {
      */
     public static Iterator<TextChunker.Chunk> chunkIterator(
             Reader reader, String documentId, int chunkSize, int overlap) {
-        if (chunkSize <= 0) throw new IllegalArgumentException("chunkSize must be > 0");
-        if (overlap < 0 || overlap >= chunkSize) throw new IllegalArgumentException("overlap must be in [0, chunkSize)");
+        if (chunkSize <= 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "chunkSize", 1, Integer.MAX_VALUE, 0);
+        if (overlap < 0 || overlap >= chunkSize) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "overlap", 0, 0, 0);
         return new StreamingChunkIterator(reader, documentId, chunkSize, overlap);
     }
 

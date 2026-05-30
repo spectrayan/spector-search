@@ -1,10 +1,13 @@
 package com.spectrayan.spector.core.similarity;
+import com.spectrayan.spector.commons.error.SpectorException;
 import com.spectrayan.spector.core.simd.SimdCapability;
 
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorMask;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * SIMD-accelerated vector utility operations.
@@ -236,11 +239,10 @@ public final class VectorOps {
 
     private static void validateSlice(float[] arr, int offset, int length) {
         if (length < 0) {
-            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NEGATIVE.format("length", length));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "length", length);
         }
         if (offset < 0 || offset + length > arr.length) {
-            throw new IllegalArgumentException(
-                    String.format("offset=%d, length=%d, array.length=%d", offset, length, arr.length));
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, String.format("offset=%d, length=%d, array.length=%d", offset, length, arr.length));
         }
     }
 }

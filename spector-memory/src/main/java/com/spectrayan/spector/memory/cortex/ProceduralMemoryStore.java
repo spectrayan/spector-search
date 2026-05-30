@@ -8,6 +8,9 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorMemoryTierFullException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Small persistent store for procedural memory — prompt templates and tool-usage rules.
@@ -92,7 +95,7 @@ public final class ProceduralMemoryStore extends AbstractTierStore {
      */
     public synchronized void append(CognitiveHeader header, byte[] quantizedVec) {
         if (count >= capacity) {
-            throw new IllegalStateException("ProceduralMemoryStore full (capacity=" + capacity + ")");
+            throw new SpectorMemoryTierFullException("PROCEDURAL", capacity);
         }
 
         long offset = dataOffset() + (long) count * layout.stride();

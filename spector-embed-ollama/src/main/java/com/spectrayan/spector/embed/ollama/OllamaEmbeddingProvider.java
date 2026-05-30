@@ -1,9 +1,11 @@
 package com.spectrayan.spector.embed.ollama;
 
-
 import tools.jackson.databind.ObjectMapper;
 import com.spectrayan.spector.embed.EmbeddingConfig;
-import com.spectrayan.spector.embed.EmbeddingException;
+import com.spectrayan.spector.commons.error.SpectorEmbeddingException;
+import com.spectrayan.spector.commons.error.SpectorEmbeddingUnavailableException;
+import com.spectrayan.spector.commons.error.SpectorEmbeddingTimeoutException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.embed.EmbeddingResult;
 
@@ -85,7 +87,7 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
     @Override
     public EmbeddingResult embed(String text) {
         if (text == null || text.isBlank()) {
-            throw new EmbeddingException("Cannot embed null or blank text");
+            throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "text must not be null or blank");
         }
 
         try {
@@ -104,18 +106,22 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
-                throw new EmbeddingException("Ollama returned HTTP " + response.statusCode()
+                throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "Ollama returned HTTP " + response.statusCode()
                         + ": " + response.body());
             }
 
             return parseEmbedResponse(response.body());
-        } catch (EmbeddingException e) {
+        } catch (SpectorEmbeddingException e) {
             throw e;
+        } catch (java.net.http.HttpTimeoutException e) {
+            throw new SpectorEmbeddingTimeoutException(config.timeout().toMillis(), e);
+        } catch (java.net.ConnectException | java.net.UnknownHostException e) {
+            throw new SpectorEmbeddingUnavailableException(config.baseUrl(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new EmbeddingException("Embedding request interrupted", e);
+            throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, e, "Embedding request interrupted");
         } catch (Exception e) {
-            throw new EmbeddingException("Failed to embed text via Ollama: " + e.getMessage(), e);
+            throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, e, "Ollama: " + e.getMessage());
         }
     }
 
@@ -140,18 +146,22 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
-                throw new EmbeddingException("Ollama batch returned HTTP " + response.statusCode()
+                throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "Ollama batch returned HTTP " + response.statusCode()
                         + ": " + response.body());
             }
 
             return parseBatchResponse(response.body());
-        } catch (EmbeddingException e) {
+        } catch (SpectorEmbeddingException e) {
             throw e;
+        } catch (java.net.http.HttpTimeoutException e) {
+            throw new SpectorEmbeddingTimeoutException(config.timeout().toMillis(), e);
+        } catch (java.net.ConnectException | java.net.UnknownHostException e) {
+            throw new SpectorEmbeddingUnavailableException(config.baseUrl(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new EmbeddingException("Batch embedding interrupted", e);
+            throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, e, "batch embedding interrupted");
         } catch (Exception e) {
-            throw new EmbeddingException("Failed to batch embed via Ollama: " + e.getMessage(), e);
+            throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, e, "Ollama batch: " + e.getMessage());
         }
     }
 
@@ -182,14 +192,14 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
         try (var parser = MAPPER.createParser(json)) {
             float[] vector = parseFirstEmbedding(parser);
             if (vector == null) {
-                throw new EmbeddingException("No embeddings in Ollama response: " + json);
+                throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "no embeddings in Ollama response");
             }
             cachedDimensions = vector.length;
             return new EmbeddingResult(vector, -1, config.model());
-        } catch (EmbeddingException e) {
+        } catch (SpectorEmbeddingException e) {
             throw e;
         } catch (Exception e) {
-            throw new EmbeddingException("Failed to parse Ollama response: " + e.getMessage(), e);
+            throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, e, "failed to parse Ollama response");
         }
     }
 
@@ -198,7 +208,7 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
             List<EmbeddingResult> results = new ArrayList<>();
             // Navigate to "embeddings" array
             if (!advanceToEmbeddingsArray(parser)) {
-                throw new EmbeddingException("No embeddings array in Ollama batch response");
+                throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, "no embeddings array in Ollama batch response");
             }
             // Each element in the "embeddings" array is itself an array of floats
             while (parser.nextToken() == tools.jackson.core.JsonToken.START_ARRAY) {
@@ -209,10 +219,10 @@ public class OllamaEmbeddingProvider implements EmbeddingProvider {
                 cachedDimensions = results.getFirst().dimensions();
             }
             return results;
-        } catch (EmbeddingException e) {
+        } catch (SpectorEmbeddingException e) {
             throw e;
         } catch (Exception e) {
-            throw new EmbeddingException("Failed to parse Ollama batch response: " + e.getMessage(), e);
+            throw new SpectorEmbeddingException(ErrorCode.EMBEDDING_REQUEST_FAILED, e, "failed to parse Ollama batch response");
         }
     }
 

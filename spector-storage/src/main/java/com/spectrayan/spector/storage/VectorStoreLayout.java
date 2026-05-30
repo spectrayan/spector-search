@@ -4,6 +4,8 @@ import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.VarHandle;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Defines the memory layout for contiguous vector storage using Panama's
@@ -28,7 +30,7 @@ public record VectorStoreLayout(int dimensions) {
 
     public VectorStoreLayout {
         if (dimensions <= 0) {
-            throw new IllegalArgumentException("dimensions must be positive: " + dimensions);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "dimensions", 1, Integer.MAX_VALUE, dimensions);
         }
     }
 
@@ -81,8 +83,7 @@ public record VectorStoreLayout(int dimensions) {
      */
     public void writeVector(MemorySegment segment, int vectorIndex, float[] vector) {
         if (vector.length != dimensions) {
-            throw new IllegalArgumentException(
-                    "Expected " + dimensions + " dimensions, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
         }
         long offset = vectorOffset(vectorIndex);
         MemorySegment.copy(vector, 0, segment, ValueLayout.JAVA_FLOAT, offset, dimensions);

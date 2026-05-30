@@ -10,6 +10,10 @@ import java.lang.invoke.MethodHandle;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorGpuException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * CUDA kernel launcher via Panama FFM.
@@ -46,10 +50,10 @@ public final class CudaKernelLauncher implements AutoCloseable {
 
     static {
         try (var is = CudaKernelLauncher.class.getResourceAsStream("/kernels/batch_cosine.ptx")) {
-            if (is == null) throw new RuntimeException("batch_cosine.ptx not found in resources");
+            if (is == null) throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, "batch_cosine.ptx not found in resources");
             BATCH_COSINE_PTX = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         } catch (java.io.IOException e) {
-            throw new RuntimeException("Failed to load PTX kernel", e);
+            throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "Failed to load PTX kernel");
         }
     }
 
@@ -76,11 +80,11 @@ public final class CudaKernelLauncher implements AutoCloseable {
      * <p>Requires the CUDA Toolkit to be installed (provides the PTX JIT compiler
      * in the driver). Without it, cuModuleLoadData will fail with error 218.</p>
      *
-     * @throws RuntimeException if CUDA initialization or PTX loading fails
+     * @throws SpectorValidationException if CUDA initialization or PTX loading fails
      */
     public CudaKernelLauncher() {
         if (!GpuCapability.isAvailable()) {
-            throw new IllegalStateException("CUDA not available");
+            throw new SpectorServerException(ErrorCode.GPU_NOT_AVAILABLE);
         }
 
         this.arena = Arena.ofShared();
@@ -102,7 +106,7 @@ public final class CudaKernelLauncher implements AutoCloseable {
                             ValueLayout.ADDRESS, ValueLayout.ADDRESS));
             int result = (int) cuModuleLoadData.invoke(modulePtr, ptxBytes);
             if (result != 0) {
-                throw new RuntimeException("cuModuleLoadData failed: error " + result);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuModuleLoadData failed", result);
             }
             this.cuModule = modulePtr.get(ValueLayout.ADDRESS, 0).address();
 
@@ -116,7 +120,7 @@ public final class CudaKernelLauncher implements AutoCloseable {
             result = (int) cuModuleGetFunction.invoke(funcPtr,
                     MemorySegment.ofAddress(cuModule), funcName);
             if (result != 0) {
-                throw new RuntimeException("cuModuleGetFunction failed: error " + result);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuModuleGetFunction failed", result);
             }
             this.cuFunction = funcPtr.get(ValueLayout.ADDRESS, 0).address();
 
@@ -157,7 +161,7 @@ public final class CudaKernelLauncher implements AutoCloseable {
             log.info("CudaKernelLauncher initialized: PTX loaded, function 'batch_cosine' ready");
 
         } catch (Throwable e) {
-            throw new RuntimeException("Failed to initialize CUDA kernel launcher", e);
+            throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "Failed to initialize CUDA kernel launcher");
         }
     }
 
@@ -174,7 +178,7 @@ public final class CudaKernelLauncher implements AutoCloseable {
      * @return array of n cosine similarity scores
      */
     public float[] batchCosine(float[] query, float[] database, int n, int dims) {
-        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+        if (closed) throw new SpectorSegmentClosedException();
         if (n == 0) return new float[0];
 
         try (Arena local = Arena.ofConfined()) {
@@ -250,7 +254,7 @@ public final class CudaKernelLauncher implements AutoCloseable {
         } catch (RuntimeException e) {
             throw e;
         } catch (Throwable e) {
-            throw new RuntimeException("CUDA kernel launch failed", e);
+            throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, e, "Kernel launch failed", 0);
         }
     }
 
@@ -262,7 +266,7 @@ public final class CudaKernelLauncher implements AutoCloseable {
 
     private void check(int cudaResult) {
         if (cudaResult != 0) {
-            throw new RuntimeException("CUDA error: " + cudaResult);
+            throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "CUDA error", cudaResult);
         }
     }
 

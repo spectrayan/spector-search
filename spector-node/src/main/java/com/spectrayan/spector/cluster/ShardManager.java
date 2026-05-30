@@ -16,7 +16,7 @@ public interface ShardManager {
      *
      * @param documentId the document identifier
      * @return the shard index (0-based) for the document
-     * @throws IllegalArgumentException if documentId is null or empty
+     * @throws SpectorValidationException if documentId is null or empty
      */
     int assignShard(String documentId);
 
@@ -25,7 +25,7 @@ public interface ShardManager {
      *
      * @param shardIndex   the index of the new shard
      * @param nodeEndpoint the network endpoint (host:port) of the node hosting this shard
-     * @throws IllegalArgumentException if shardIndex is out of configured range or endpoint is invalid
+     * @throws SpectorValidationException if shardIndex is out of configured range or endpoint is invalid
      */
     void addShard(int shardIndex, String nodeEndpoint);
 

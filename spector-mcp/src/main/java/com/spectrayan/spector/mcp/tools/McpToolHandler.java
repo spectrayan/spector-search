@@ -132,9 +132,13 @@ public abstract class McpToolHandler {
                 // Validation errors — expected, no stack trace
                 return errorResult(e.getMessage());
 
+            } catch (com.spectrayan.spector.commons.error.SpectorException e) {
+                log.error("{} failed", name(), e);
+                return errorResult(e.getMessage());
+
             } catch (Exception e) {
                 log.error("{} failed", name(), e);
-                return errorResult(name() + " failed: " + e.getMessage());
+                return errorResult(com.spectrayan.spector.commons.error.ErrorCode.INTERNAL_ERROR.format(e.getMessage()));
             }
         });
     }
@@ -238,9 +242,9 @@ public abstract class McpToolHandler {
      * Thrown when a tool argument is missing, invalid, or a precondition fails.
      * Caught by the base handler and returned as an MCP error result without a stack trace.
      */
-    public static final class ToolArgumentException extends RuntimeException {
+    public static final class ToolArgumentException extends com.spectrayan.spector.commons.error.SpectorValidationException {
         public ToolArgumentException(String message) {
-            super(message);
+            super(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID, message);
         }
     }
 }

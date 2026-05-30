@@ -1,4 +1,8 @@
 package com.spectrayan.spector.core.quantization.vasq;
+import com.spectrayan.spector.commons.error.SpectorException;
+
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Prepares a {@link VasqQueryState} from a raw float32 query vector.
@@ -52,7 +56,7 @@ public final class VasqQueryPrep {
      * @param params calibrated VASQ parameters (non-null)
      */
     public VasqQueryPrep(VasqParams params) {
-        if (params == null) throw new NullPointerException("params must not be null");
+        if (params == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "params");
         this.params = params;
         final int paddedDim = params.paddedDim();
         this.queryScratch   = ThreadLocal.withInitial(() -> new float[][] {
@@ -72,7 +76,7 @@ public final class VasqQueryPrep {
      *
      * @param query the float32 query vector (length must equal {@code params.originalDim()})
      * @return an immutable-by-contract {@link VasqQueryState} ready for {@link VasqSimdKernel}
-     * @throws IllegalArgumentException if query.length ≠ originalDim
+     * @throws SpectorValidationException if query.length ≠ originalDim
      */
     public VasqQueryState prepare(float[] query) {
         int originalDim = params.originalDim();
@@ -81,8 +85,7 @@ public final class VasqQueryPrep {
         float[] scales  = params.scales();
 
         if (query.length != originalDim) {
-            throw new IllegalArgumentException(
-                    "Expected " + originalDim + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, query.length);
         }
 
         // 1. Exact query norm squared (double accumulator for precision)

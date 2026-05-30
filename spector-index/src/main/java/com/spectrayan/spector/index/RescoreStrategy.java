@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.IntFunction;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Rescore strategy that retrieves oversampled candidates from a quantized index
@@ -22,12 +24,11 @@ public final class RescoreStrategy {
      *
      * @param oversamplingFactor multiplier for the requested K to determine candidate count;
      *                           must be at least 1
-     * @throws IllegalArgumentException if oversamplingFactor is less than 1
+     * @throws SpectorValidationException if oversamplingFactor is less than 1
      */
     public RescoreStrategy(int oversamplingFactor) {
         if (oversamplingFactor < 1) {
-            throw new IllegalArgumentException(
-                    "oversamplingFactor must be at least 1, got: " + oversamplingFactor);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "oversamplingFactor", 1, Integer.MAX_VALUE, oversamplingFactor);
         }
         this.oversamplingFactor = oversamplingFactor;
     }

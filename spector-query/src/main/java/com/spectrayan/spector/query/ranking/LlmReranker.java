@@ -15,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Comparator;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * LLM-powered re-ranker using a local Ollama server.
@@ -170,7 +172,7 @@ public class LlmReranker implements Reranker {
                 HttpResponse.BodyHandlers.ofString());
 
         if (response.statusCode() != 200) {
-            throw new RuntimeException("Ollama returned status " + response.statusCode());
+            throw new SpectorServerException(ErrorCode.EMBEDDING_UNAVAILABLE);
         }
 
         // Extract "response" field from JSON (simple parsing)

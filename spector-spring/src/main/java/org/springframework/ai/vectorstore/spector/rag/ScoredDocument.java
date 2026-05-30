@@ -1,5 +1,8 @@
 package org.springframework.ai.vectorstore.spector.rag;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 /**
  * A document result with a relevance score from RAG retrieval.
  *
@@ -12,13 +15,13 @@ public record ScoredDocument(String documentId, String content, float score, int
 
     public ScoredDocument {
         if (documentId == null || documentId.isBlank()) {
-            throw new IllegalArgumentException("documentId must not be null or blank");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "documentId");
         }
         if (score < 0.0f || score > 1.0f) {
-            throw new IllegalArgumentException("score must be between 0.0 and 1.0, got: " + score);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "score", 0, 1, score);
         }
         if (chunkOffset < 0) {
-            throw new IllegalArgumentException("chunkOffset must not be negative");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NEGATIVE, "chunkOffset", 0);
         }
     }
 }

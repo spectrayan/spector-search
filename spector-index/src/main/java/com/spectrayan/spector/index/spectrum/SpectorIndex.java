@@ -16,6 +16,9 @@ import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * SpectorIndex — the flagship adaptive vector index of the Spector search engine.
@@ -156,7 +159,7 @@ public final class SpectorIndex implements VectorIndex {
         }
 
         public SpectorIndex build() {
-            if (dimensions <= 0) throw new IllegalStateException("dimensions must be set and positive");
+            if (dimensions <= 0) throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, 0);
             SpectorIndexConfig cfg = new SpectorIndexConfig(
                     nCentroids, nProbe, shardThreshold, oversamplingFactor,
                     kMeansIterations, similarityFunction, hnswParams);
@@ -184,16 +187,15 @@ public final class SpectorIndex implements VectorIndex {
      * Training is a one-time operation; the index cannot be re-trained after calling this.</p>
      *
      * @param trainingVectors representative sample vectors (≥ nCentroids)
-     * @throws IllegalStateException    if already trained
-     * @throws IllegalArgumentException if the training set is smaller than nCentroids
+     * @throws SpectorValidationException    if already trained
+     * @throws SpectorValidationException if the training set is smaller than nCentroids
      */
     public synchronized void train(float[][] trainingVectors) {
-        if (trained) throw new IllegalStateException("SpectorIndex has already been trained.");
+        if (trained) throw new SpectorInternalException(ErrorCode.INVARIANT_VIOLATED, "Index already trained");
         int n = trainingVectors.length;
         int k = config.nCentroids();
         if (n < k) {
-            throw new IllegalArgumentException(
-                    "Training requires at least " + k + " vectors (nCentroids), got " + n);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Training requires at least " + k + " vectors (nCentroids), got " + n);
         }
 
         log.info("SpectorIndex training: {} samples, nCentroids={}", n, k);
@@ -221,13 +223,13 @@ public final class SpectorIndex implements VectorIndex {
      * If the shard crosses the {@link SpectorIndexConfig#shardThreshold()}, it automatically
      * promotes to HNSW mode.</p>
      *
-     * @throws IllegalStateException if {@link #train} has not been called
+     * @throws SpectorValidationException if {@link #train} has not been called
      */
     @Override
     public void add(String id, int storeIndex, float[] vector) {
         requireTrained();
         if (vector.length != dimensions)
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
 
         int shardIdx = KMeans.nearestCentroid(vector, centroids);
 
@@ -253,13 +255,13 @@ public final class SpectorIndex implements VectorIndex {
      *   <li>Merge candidates from all probed shards and return the global top-K.</li>
      * </ol>
      *
-     * @throws IllegalStateException if {@link #train} has not been called
+     * @throws SpectorValidationException if {@link #train} has not been called
      */
     @Override
     public ScoredResult[] search(float[] query, int k) {
         requireTrained();
         if (query.length != dimensions)
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, query.length);
         if (totalSize.get() == 0) return new ScoredResult[0];
 
         // Step 1: Select nProbe closest centroids (box-free partial sort via KMeans)
@@ -370,7 +372,7 @@ public final class SpectorIndex implements VectorIndex {
      *
      * @return int array of length nCentroids, where entry i is the number of vectors
      *         assigned to centroid i
-     * @throws IllegalStateException if not trained
+     * @throws SpectorValidationException if not trained
      */
     public int[] shardSizes() {
         requireTrained();
@@ -386,8 +388,7 @@ public final class SpectorIndex implements VectorIndex {
 
     private void requireTrained() {
         if (!trained)
-            throw new IllegalStateException(
-                    "SpectorIndex must be trained before use. Call train(trainingVectors) first.");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "SpectorIndex must be trained before use. Call train(trainingVectors) first.");
     }
 
     /**
@@ -456,7 +457,7 @@ public final class SpectorIndex implements VectorIndex {
         boolean loadedTrained = Boolean.parseBoolean(props.getProperty("trained"));
 
         if (loadedDims != dimensions) {
-            throw new IllegalArgumentException("Dimensionality mismatch: expected " + dimensions + ", loaded " + loadedDims);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, loadedDims);
         }
 
         var index = new SpectorIndex(dimensions, config);

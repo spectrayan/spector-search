@@ -1,7 +1,10 @@
 package com.spectrayan.spector.core.quantization.vasq;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Encodes float32 vectors into the VASQ off-heap binary format.
@@ -47,7 +50,7 @@ public final class VasqEncoder {
      * @param params calibrated VASQ parameters (non-null)
      */
     public VasqEncoder(VasqParams params) {
-        if (params == null) throw new NullPointerException("params must not be null");
+        if (params == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "params");
         this.params = params;
         final int paddedDim = params.paddedDim();
         this.rotateScratch  = ThreadLocal.withInitial(() -> new float[paddedDim]);
@@ -64,7 +67,7 @@ public final class VasqEncoder {
      * @param vector  the float32 input vector (length must equal {@link VasqParams#originalDim()})
      * @param segment the off-heap memory segment to write into
      * @param offset  byte offset within the segment for this vector's header
-     * @throws IllegalArgumentException if vector.length ≠ originalDim
+     * @throws SpectorValidationException if vector.length ≠ originalDim
      */
     public void encode(float[] vector, MemorySegment segment, long offset) {
         int originalDim  = params.originalDim();
@@ -73,8 +76,7 @@ public final class VasqEncoder {
         float[] invScales = params.invScales();
 
         if (vector.length != originalDim) {
-            throw new IllegalArgumentException(
-                    "Expected " + originalDim + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, vector.length);
         }
 
         // 1. Exact L2 norm squared (pre-rotation; rotation is orthogonal so ‖x‖=‖Rx‖)

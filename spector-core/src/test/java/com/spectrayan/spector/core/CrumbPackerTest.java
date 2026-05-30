@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.quantization.CrumbPacker;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -126,28 +128,28 @@ class CrumbPackerTest {
     @Test
     void pack_negativeLengthThrows() {
         int[] values = {1, 2, 3};
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> CrumbPacker.pack(values, -1));
     }
 
     @Test
     void pack_lengthExceedsArrayThrows() {
         int[] values = {1, 2};
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> CrumbPacker.pack(values, 5));
     }
 
     @Test
     void unpack_negativeOriginalLengthThrows() {
         byte[] packed = {0x00};
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> CrumbPacker.unpack(packed, -1));
     }
 
     @Test
     void unpack_originalLengthExceedsCapacityThrows() {
         byte[] packed = {0x00};
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> CrumbPacker.unpack(packed, 5));
     }
 

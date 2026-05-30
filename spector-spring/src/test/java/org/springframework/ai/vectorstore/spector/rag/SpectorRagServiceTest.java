@@ -1,5 +1,7 @@
 package org.springframework.ai.vectorstore.spector.rag;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.rag.ContextBuilder;
 
@@ -116,7 +118,7 @@ class SpectorRagServiceTest {
         RagConfig config = RagConfig.defaults();
 
         assertThatThrownBy(() -> ragService.retrieve(null, config))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("queryEmbedding");
     }
 
@@ -125,7 +127,7 @@ class SpectorRagServiceTest {
         RagConfig config = RagConfig.defaults();
 
         assertThatThrownBy(() -> ragService.retrieve(new float[0], config))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("queryEmbedding");
     }
 
@@ -134,21 +136,21 @@ class SpectorRagServiceTest {
         float[] query = {1.0f, 0.0f, 0.0f, 0.0f};
 
         assertThatThrownBy(() -> ragService.retrieve(query, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("config");
     }
 
     @Test
     void constructor_withNullVectorStore_throwsException() {
         assertThatThrownBy(() -> new SpectorRagService(null, contextBuilder))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("vectorStore");
     }
 
     @Test
     void constructor_withNullContextBuilder_throwsException() {
         assertThatThrownBy(() -> new SpectorRagService(vectorStore, null))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SpectorValidationException.class)
                 .hasMessageContaining("contextBuilder");
     }
 
@@ -164,25 +166,25 @@ class SpectorRagServiceTest {
     @Test
     void ragConfig_invalidTopK_throwsException() {
         assertThatThrownBy(() -> new RagConfig(0, 0.5f, 4096))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> new RagConfig(101, 0.5f, 4096))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test
     void ragConfig_invalidThreshold_throwsException() {
         assertThatThrownBy(() -> new RagConfig(5, -0.1f, 4096))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> new RagConfig(5, 1.1f, 4096))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test
     void ragConfig_invalidTokenLimit_throwsException() {
         assertThatThrownBy(() -> new RagConfig(5, 0.5f, 0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> new RagConfig(5, 0.5f, 8193))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     // ─── Helpers ───

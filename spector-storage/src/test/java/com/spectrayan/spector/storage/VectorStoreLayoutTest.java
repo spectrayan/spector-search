@@ -1,5 +1,7 @@
 package com.spectrayan.spector.storage;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -42,8 +44,8 @@ class VectorStoreLayoutTest {
     @Test
     void invalidDimensionsThrows() {
         assertThatThrownBy(() -> new VectorStoreLayout(0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> new VectorStoreLayout(-1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 }

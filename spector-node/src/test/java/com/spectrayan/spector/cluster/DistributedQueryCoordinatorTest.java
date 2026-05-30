@@ -1,5 +1,7 @@
 package com.spectrayan.spector.cluster;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -128,25 +130,25 @@ class DistributedQueryCoordinatorTest {
 
     @Test
     void constructor_timeoutTooLow_throws() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator(List.of(), Duration.ofMillis(500)));
     }
 
     @Test
     void constructor_timeoutTooHigh_throws() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator(List.of(), Duration.ofSeconds(61)));
     }
 
     @Test
     void constructor_nullShardEndpoints_throws() {
-        assertThrows(NullPointerException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator(null));
     }
 
     @Test
     void constructor_nullTimeout_throws() {
-        assertThrows(NullPointerException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator(List.of(), null));
     }
 
@@ -155,7 +157,7 @@ class DistributedQueryCoordinatorTest {
     @Test
     void fanOutVectorSearch_topKZero_throws() {
         var coordinator = new DistributedQueryCoordinator(List.of());
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 coordinator.fanOutVectorSearch(new float[]{1.0f}, 0));
         coordinator.close();
     }
@@ -163,7 +165,7 @@ class DistributedQueryCoordinatorTest {
     @Test
     void fanOutVectorSearch_topKTooLarge_throws() {
         var coordinator = new DistributedQueryCoordinator(List.of());
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 coordinator.fanOutVectorSearch(new float[]{1.0f}, 10_001));
         coordinator.close();
     }
@@ -171,7 +173,7 @@ class DistributedQueryCoordinatorTest {
     @Test
     void fanOutVectorSearch_nullQuery_throws() {
         var coordinator = new DistributedQueryCoordinator(List.of());
-        assertThrows(NullPointerException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 coordinator.fanOutVectorSearch(null, 10));
         coordinator.close();
     }
@@ -200,23 +202,23 @@ class DistributedQueryCoordinatorTest {
 
     @Test
     void shardEndpoint_invalidPort_throws() {
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator.ShardEndpoint("shard-0", "localhost", 0));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator.ShardEndpoint("shard-0", "localhost", -1));
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator.ShardEndpoint("shard-0", "localhost", 70000));
     }
 
     @Test
     void shardEndpoint_nullShardId_throws() {
-        assertThrows(NullPointerException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator.ShardEndpoint(null, "localhost", 9090));
     }
 
     @Test
     void shardEndpoint_nullHost_throws() {
-        assertThrows(NullPointerException.class, () ->
+        assertThrows(SpectorValidationException.class, () ->
                 new DistributedQueryCoordinator.ShardEndpoint("shard-0", null, 9090));
     }
 

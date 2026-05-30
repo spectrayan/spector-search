@@ -17,6 +17,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
 import com.spectrayan.spector.commons.error.SpectorApiException;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
+import com.spectrayan.spector.commons.error.SpectorException;
 
 /**
  * Search service facade — encapsulates local vs cluster routing.

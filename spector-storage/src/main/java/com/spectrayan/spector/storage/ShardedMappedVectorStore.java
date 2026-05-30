@@ -15,6 +15,10 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorStoreFullException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Memory-mapped vector store that spreads vectors across multiple shard files.
@@ -107,8 +111,8 @@ public class ShardedMappedVectorStore implements VectorStore {
      */
     public ShardedMappedVectorStore(Path shardDir, int dimensions, int capacity,
                                      int nodesPerShard) throws IOException {
-        if (capacity <= 0) throw new IllegalArgumentException("capacity must be positive: " + capacity);
-        if (nodesPerShard <= 0) throw new IllegalArgumentException("nodesPerShard must be positive: " + nodesPerShard);
+        if (capacity <= 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "capacity", 1, Integer.MAX_VALUE, capacity);
+        if (nodesPerShard <= 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "nodesPerShard", 1, Integer.MAX_VALUE, nodesPerShard);
 
         this.layout = new VectorStoreLayout(dimensions);
         this.capacity = capacity;
@@ -147,8 +151,7 @@ public class ShardedMappedVectorStore implements VectorStore {
             ensureOpen();
             this.lastAccessed = System.currentTimeMillis();
             if (vector.length != layout.dimensions()) {
-                throw new IllegalArgumentException(
-                        "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
+                throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "Expected " + layout.dimensions() + " dimensions, got " + vector.length);
             }
 
             // Update in-place if ID exists
@@ -162,7 +165,7 @@ public class ShardedMappedVectorStore implements VectorStore {
             int index = count.getAndIncrement();
             if (index >= capacity) {
                 count.decrementAndGet();
-                throw new IllegalStateException("Store is full: capacity=" + capacity);
+                throw new SpectorStoreFullException(capacity);
             }
 
             // Ensure the target shard exists
@@ -469,12 +472,12 @@ public class ShardedMappedVectorStore implements VectorStore {
     }
 
     private void ensureOpen() {
-        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+        if (closed) throw new SpectorSegmentClosedException();
     }
 
     private void validateIndex(int index) {
         if (index < 0 || index >= count.get()) {
-            throw new IndexOutOfBoundsException("index=" + index + ", size=" + count.get());
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "index", 0, count.get() - 1, index);
         }
     }
 }

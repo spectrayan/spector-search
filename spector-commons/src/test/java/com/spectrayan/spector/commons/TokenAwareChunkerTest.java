@@ -19,34 +19,34 @@ class TokenAwareChunkerTest {
     @Test
     void configRejectsZeroMaxTokens() {
         assertThatThrownBy(() -> new ChunkConfig(0, 0))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class)
                 .hasMessageContaining("maxTokens");
     }
 
     @Test
     void configRejectsNegativeMaxTokens() {
         assertThatThrownBy(() -> new ChunkConfig(-1, 0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class);
     }
 
     @Test
     void configRejectsMaxTokensAbove8192() {
         assertThatThrownBy(() -> new ChunkConfig(8193, 0))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class)
                 .hasMessageContaining("8192");
     }
 
     @Test
     void configRejectsOverlapEqualToMaxTokens() {
         assertThatThrownBy(() -> new ChunkConfig(100, 100))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class)
                 .hasMessageContaining("overlap");
     }
 
     @Test
     void configRejectsNegativeOverlap() {
         assertThatThrownBy(() -> new ChunkConfig(100, -1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class);
     }
 
     @Test

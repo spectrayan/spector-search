@@ -1,5 +1,5 @@
 /**
- * Spector exception framework — structured error codes, checked exceptions,
+ * Spector exception framework — structured error codes, exception hierarchy,
  * and categorized error handling.
  *
  * <p>This package provides the foundation for all Spector error handling:
@@ -8,7 +8,7 @@
  *       error codes ({@code SPE-XXX-YYY} schema)</li>
  *   <li>{@link com.spectrayan.spector.commons.error.ErrorCategory} — error category
  *       definitions with numeric ranges</li>
- *   <li>{@link com.spectrayan.spector.commons.error.SpectorException} — abstract checked
+ *   <li>{@link com.spectrayan.spector.commons.error.SpectorException} — abstract
  *       base exception carrying an {@code ErrorCode}</li>
  * </ul>
  *

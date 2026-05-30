@@ -1,6 +1,8 @@
 package com.spectrayan.spector.rag;
 
 import java.util.List;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Result of context assembly by the {@link ContextBuilder}.
@@ -13,10 +15,10 @@ public record ContextResult(String contextText, List<ChunkAttribution> attributi
 
     public ContextResult {
         if (contextText == null) {
-            throw new IllegalArgumentException("contextText must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "contextText");
         }
         if (attributions == null) {
-            throw new IllegalArgumentException("attributions must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "attributions");
         }
         attributions = List.copyOf(attributions);
     }

@@ -13,6 +13,9 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.StampedLock;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * IVF-PQ (Inverted File with Product Quantization) vector index.
@@ -78,8 +81,7 @@ public class IvfPqIndex implements VectorIndex {
     public IvfPqIndex(int dimensions, int nlist, int nprobe, int numSubspaces,
                        SimilarityFunction similarityFunction) {
         if (dimensions % numSubspaces != 0) {
-            throw new IllegalArgumentException(
-                    "dimensions (" + dimensions + ") must be divisible by numSubspaces (" + numSubspaces + ")");
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "dimensions (" + dimensions + ") must be divisible by numSubspaces (" + numSubspaces + ")");
         }
         this.dimensions = dimensions;
         this.nlist = nlist;
@@ -129,8 +131,7 @@ public class IvfPqIndex implements VectorIndex {
      */
     public void train(float[][] samples) {
         if (samples.length < nlist) {
-            throw new IllegalArgumentException(
-                    "Need at least nlist (" + nlist + ") samples, got " + samples.length);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Need at least nlist (" + nlist + ") samples, got " + samples.length);
         }
 
         log.info("Training IVF-PQ: {} samples, nlist={}, M={}", samples.length, nlist, numSubspaces);
@@ -160,10 +161,10 @@ public class IvfPqIndex implements VectorIndex {
     @Override
     public void add(String id, int storeIndex, float[] vector) {
         if (!trained) {
-            throw new IllegalStateException("Index must be trained before adding vectors. Call train() first.");
+            throw new SpectorInternalException(ErrorCode.INDEX_NOT_TRAINED);
         }
         if (vector.length != dimensions) {
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, vector.length);
         }
 
         long stamp = stampedLock.writeLock();
@@ -189,10 +190,10 @@ public class IvfPqIndex implements VectorIndex {
     @Override
     public ScoredResult[] search(float[] query, int k) {
         if (!trained) {
-            throw new IllegalStateException("Index must be trained before searching.");
+            throw new SpectorInternalException(ErrorCode.INDEX_NOT_TRAINED);
         }
         if (query.length != dimensions) {
-            throw new IllegalArgumentException("Expected " + dimensions + " dims, got " + query.length);
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, dimensions, query.length);
         }
         if (totalVectors == 0) {
             return new ScoredResult[0];

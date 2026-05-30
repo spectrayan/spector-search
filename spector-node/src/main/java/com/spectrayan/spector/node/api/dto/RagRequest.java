@@ -31,7 +31,7 @@ public class RagRequest {
      *
      * @throws ValidationException if validation fails
      */
-    public void validate() throws SpectorValidationException {
+    public void validate() {
         if (query == null || query.isBlank()) {
             throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "query", "non-empty query is required");
         }

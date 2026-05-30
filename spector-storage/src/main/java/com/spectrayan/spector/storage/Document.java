@@ -1,5 +1,8 @@
 package com.spectrayan.spector.storage;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 import java.util.Map;
 import java.util.Objects;
 
@@ -22,8 +25,8 @@ public record Document(
         Map<String, Object> metadata
 ) {
     public Document {
-        Objects.requireNonNull(id, "id must not be null");
-        Objects.requireNonNull(content, "content must not be null");
+        if (id == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "id"); }
+        if (content == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "content"); }
         if (title == null) title = "";
         if (metadata == null) metadata = Map.of();
     }

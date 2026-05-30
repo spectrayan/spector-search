@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.quantization.vasq.VasqFwht;
 import org.junit.jupiter.api.Test;
 
@@ -177,12 +179,12 @@ class VasqFwhtTest {
     @Test
     void wrongDimThrows() {
         VasqFwht fwht = new VasqFwht(128, SEED);
-        assertThrows(IllegalArgumentException.class, () -> fwht.rotate(new float[64]));
+        assertThrows(SpectorValidationException.class, () -> fwht.rotate(new float[64]));
     }
 
     @Test
     void invalidDimThrows() {
-        assertThrows(IllegalArgumentException.class, () -> new VasqFwht(0, SEED));
+        assertThrows(SpectorValidationException.class, () -> new VasqFwht(0, SEED));
     }
 
     // ── FWHT butterfly correctness (known output) ─────────────────────────────

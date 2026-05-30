@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.similarity.CosineSimilarity;
 import com.spectrayan.spector.core.similarity.QuantizedCosineSimilarity;
 import com.spectrayan.spector.core.quantization.ScalarQuantizer;
@@ -89,7 +91,7 @@ class ScalarQuantizerTest {
 
     @Test
     void emptySampleThrows() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(SpectorValidationException.class,
                 () -> ScalarQuantizer.calibrate(new float[0][], 4));
     }
 

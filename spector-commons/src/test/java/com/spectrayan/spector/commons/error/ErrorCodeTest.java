@@ -196,12 +196,12 @@ class ErrorCodeTest {
     }
 
     @Test
-    void spectorExceptionIsChecked() {
-        // SpectorException extends Exception (not RuntimeException)
+    void spectorExceptionHierarchy() {
+        // SpectorException extends RuntimeException
         assertThat(Exception.class).isAssignableFrom(SpectorException.class);
         assertThat(RuntimeException.class.isAssignableFrom(SpectorException.class))
-                .describedAs("SpectorException must NOT extend RuntimeException")
-                .isFalse();
+                .describedAs("SpectorException extends RuntimeException")
+                .isTrue();
     }
 
     // ─────────────── ErrorCategory ───────────────

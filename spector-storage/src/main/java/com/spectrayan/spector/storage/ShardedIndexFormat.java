@@ -6,6 +6,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
  * Binary format for the sharded HNSW index manifest.
@@ -102,17 +104,13 @@ public final class ShardedIndexFormat {
         /** Validates manifest integrity. */
         public void validate() {
             if (magic != MAGIC) {
-                throw new IllegalArgumentException(
-                        "Invalid sharded index magic: expected 0x" + Integer.toHexString(MAGIC)
-                                + ", got 0x" + Integer.toHexString(magic));
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Invalid sharded index magic: expected 0x" + Integer.toHexString(MAGIC) + ", got 0x" + Integer.toHexString(magic));
             }
             if (version != VERSION) {
-                throw new IllegalArgumentException(
-                        "Unsupported sharded index version: " + version + " (expected " + VERSION + ")");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "Unsupported sharded index version: " + version + " (expected " + VERSION + ")");
             }
             if (shardCount <= 0 || shardCount != shardEntries.length) {
-                throw new IllegalArgumentException(
-                        "Shard count mismatch: header=" + shardCount + ", entries=" + shardEntries.length);
+                throw new SpectorValidationException(ErrorCode.LENGTH_MISMATCH, "header", shardCount, "entries", shardEntries.length);
             }
         }
 

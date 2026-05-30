@@ -1,5 +1,7 @@
 package com.spectrayan.spector.commons;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -66,11 +68,11 @@ class TokenChunkerTest {
     @Test
     void invalidConfigThrows() {
         assertThatThrownBy(() -> new TokenChunker(0, 0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> new TokenChunker(10, 10))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
         assertThatThrownBy(() -> new TokenChunker(10, -1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     @Test

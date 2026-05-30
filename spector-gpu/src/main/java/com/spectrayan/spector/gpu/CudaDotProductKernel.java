@@ -14,6 +14,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.spectrayan.spector.core.similarity.DotProduct;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+import com.spectrayan.spector.commons.error.SpectorServerException;
+import com.spectrayan.spector.commons.error.SpectorGpuException;
+import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorInternalException;
 
 /**
  * CUDA-accelerated dot-product similarity kernel via Panama FFM.
@@ -293,13 +299,13 @@ public final class CudaDotProductKernel implements SimilarityKernel, AutoCloseab
             MemorySegment querySegment = localArena.allocateFrom(ValueLayout.JAVA_FLOAT, query);
             int htodResult = (int) cuMemcpyHtoD.invoke(dQuery, querySegment, queryBytes);
             if (htodResult != 0) {
-                throw new RuntimeException("cuMemcpyHtoD (query) failed: " + htodResult);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuMemcpyHtoD (query) failed", htodResult);
             }
 
             MemorySegment dbSegment = localArena.allocateFrom(ValueLayout.JAVA_FLOAT, database);
             htodResult = (int) cuMemcpyHtoD.invoke(dDatabase, dbSegment, dbBytes);
             if (htodResult != 0) {
-                throw new RuntimeException("cuMemcpyHtoD (database) failed: " + htodResult);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuMemcpyHtoD (database) failed", htodResult);
             }
 
             // Set up kernel parameters:
@@ -339,20 +345,20 @@ public final class CudaDotProductKernel implements SimilarityKernel, AutoCloseab
                     MemorySegment.NULL  // extra (null)
             );
             if (launchResult != 0) {
-                throw new RuntimeException("cuLaunchKernel failed: " + launchResult);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuLaunchKernel failed", launchResult);
             }
 
             // Synchronize
             int syncResult = (int) cuCtxSynchronize.invoke();
             if (syncResult != 0) {
-                throw new RuntimeException("cuCtxSynchronize failed: " + syncResult);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuCtxSynchronize failed", syncResult);
             }
 
             // Copy results back
             MemorySegment resultSegment = localArena.allocate(ValueLayout.JAVA_FLOAT, numVectors);
             int dtohResult = (int) cuMemcpyDtoH.invoke(resultSegment, dResults, resultBytes);
             if (dtohResult != 0) {
-                throw new RuntimeException("cuMemcpyDtoH failed: " + dtohResult);
+                throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuMemcpyDtoH failed", dtohResult);
             }
 
             // Extract results
@@ -369,7 +375,7 @@ public final class CudaDotProductKernel implements SimilarityKernel, AutoCloseab
         } catch (Throwable e) {
             // Release device memory on failure
             freeDeviceMemory(devicePtrs);
-            throw new RuntimeException("GPU dot-product computation failed", e);
+            throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, e, "dot-product failed", 0);
         }
     }
 
@@ -377,7 +383,7 @@ public final class CudaDotProductKernel implements SimilarityKernel, AutoCloseab
         MemorySegment ptrHolder = localArena.allocate(ValueLayout.JAVA_LONG);
         int result = (int) cuMemAlloc.invoke(ptrHolder, bytes);
         if (result != 0) {
-            throw new RuntimeException("cuMemAlloc failed: " + result + " (requested " + bytes + " bytes)");
+            throw new SpectorGpuException(ErrorCode.GPU_DEVICE_ERROR, "cuMemAlloc failed", result);
         }
         return ptrHolder.get(ValueLayout.JAVA_LONG, 0);
     }
@@ -414,38 +420,31 @@ public final class CudaDotProductKernel implements SimilarityKernel, AutoCloseab
 
     private void validateInputs(float[] query, float[] database, int numVectors, int dimensions) {
         if (dimensions < MIN_DIMENSIONS || dimensions > MAX_DIMENSIONS) {
-            throw new IllegalArgumentException(
-                    "Dimensions must be between " + MIN_DIMENSIONS + " and " + MAX_DIMENSIONS
-                            + ", got: " + dimensions);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "dimensions", MIN_DIMENSIONS, MAX_DIMENSIONS, dimensions);
         }
         if (dimensions % 32 != 0) {
-            throw new IllegalArgumentException(
-                    "Dimensions must be a multiple of 32, got: " + dimensions);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "dimensions (must be multiple of 32)", dimensions);
         }
         if (numVectors < 0 || numVectors > MAX_BATCH_SIZE) {
-            throw new IllegalArgumentException(
-                    "Batch size must be between 0 and " + MAX_BATCH_SIZE + ", got: " + numVectors);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "batchSize", 0, MAX_BATCH_SIZE, numVectors);
         }
         if (query == null) {
-            throw new IllegalArgumentException("Query vector must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Query vector");
         }
         if (database == null) {
-            throw new IllegalArgumentException("Database array must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Database array");
         }
         if (query.length < dimensions) {
-            throw new IllegalArgumentException(
-                    "Query vector length (" + query.length + ") is less than dimensions (" + dimensions + ")");
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "Query vector length (" + query.length + ") is less than dimensions (" + dimensions + ")");
         }
         if (numVectors > 0 && database.length < (long) numVectors * dimensions) {
-            throw new IllegalArgumentException(
-                    "Database array length (" + database.length + ") is less than required ("
-                            + ((long) numVectors * dimensions) + ")");
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, "Database array length (" + database.length + ") is less than required (" + ((long) numVectors * dimensions) + ")");
         }
     }
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
+            throw new SpectorSegmentClosedException();
         }
     }
 }

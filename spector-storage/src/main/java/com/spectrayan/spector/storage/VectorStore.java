@@ -15,8 +15,8 @@ public interface VectorStore extends AutoCloseable {
      * @param id     unique identifier for the vector
      * @param vector the float array (must match the store's configured dimensions)
      * @return the internal integer index assigned to this vector
-     * @throws IllegalArgumentException if vector dimensions don't match
-     * @throws IllegalStateException    if the store is full or closed
+     * @throws SpectorValidationException if vector dimensions don't match
+     * @throws SpectorValidationException    if the store is full or closed
      */
     int put(String id, float[] vector);
 
@@ -33,7 +33,7 @@ public interface VectorStore extends AutoCloseable {
      *
      * @param index the internal integer index (returned by {@link #put})
      * @return a copy of the stored float array
-     * @throws IndexOutOfBoundsException if index is invalid
+     * @throws SpectorValidationException if index is invalid
      */
     float[] getByIndex(int index);
 
@@ -43,7 +43,7 @@ public interface VectorStore extends AutoCloseable {
      * @param index     the internal integer index
      * @param dst       destination array
      * @param dstOffset offset into destination
-     * @throws IndexOutOfBoundsException if index is invalid
+     * @throws SpectorValidationException if index is invalid
      */
     void getByIndex(int index, float[] dst, int dstOffset);
 

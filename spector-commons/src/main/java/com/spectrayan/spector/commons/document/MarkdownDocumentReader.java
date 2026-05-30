@@ -1,5 +1,7 @@
 package com.spectrayan.spector.commons.document;
 
+import com.spectrayan.spector.commons.error.SpectorDocumentReadException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +34,7 @@ public final class MarkdownDocumentReader implements DocumentReader {
     private static final Pattern HTML_TAG = Pattern.compile("<[^>]+>");
 
     @Override
-    public DocumentResult read(Path file) throws DocumentReadException {
+    public DocumentResult read(Path file) throws SpectorDocumentReadException {
         String fileName = file.getFileName().toString();
 
         validateFile(file, fileName);
@@ -42,18 +44,18 @@ public final class MarkdownDocumentReader implements DocumentReader {
             String text = extractText(content);
 
             if (text.isEmpty()) {
-                throw new DocumentReadException(fileName, "Markdown contains no extractable text");
+                throw new SpectorDocumentReadException(fileName, "Markdown contains no extractable text");
             }
 
             var metadata = new DocumentMetadata(fileName, "MARKDOWN", text.length());
             return new DocumentResult(text, metadata);
 
-        } catch (DocumentReadException e) {
+        } catch (SpectorDocumentReadException e) {
             throw e;
         } catch (IOException e) {
-            throw new DocumentReadException(fileName, "unable to read Markdown file", e);
+            throw new SpectorDocumentReadException(fileName, "unable to read Markdown file", e);
         } catch (Exception e) {
-            throw new DocumentReadException(fileName,
+            throw new SpectorDocumentReadException(fileName,
                     "unexpected error reading Markdown: " + e.getMessage(), e);
         }
     }
@@ -65,16 +67,16 @@ public final class MarkdownDocumentReader implements DocumentReader {
 
     private void validateFile(Path file, String fileName) {
         if (!Files.exists(file)) {
-            throw new DocumentReadException(fileName, "file does not exist");
+            throw new SpectorDocumentReadException(fileName, "file does not exist");
         }
         try {
             long size = Files.size(file);
             if (size > MAX_FILE_SIZE) {
-                throw new DocumentReadException(fileName,
+                throw new SpectorDocumentReadException(fileName,
                         "file size %d bytes exceeds the 100 MB limit".formatted(size));
             }
         } catch (IOException e) {
-            throw new DocumentReadException(fileName, "unable to determine file size", e);
+            throw new SpectorDocumentReadException(fileName, "unable to determine file size", e);
         }
     }
 

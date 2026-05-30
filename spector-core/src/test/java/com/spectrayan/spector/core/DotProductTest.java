@@ -1,5 +1,7 @@
 package com.spectrayan.spector.core;
 
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import com.spectrayan.spector.core.similarity.DotProduct;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,7 +70,7 @@ class DotProductTest {
         float[] a = {1f, 2f};
         float[] b = {3f};
         assertThatThrownBy(() -> DotProduct.compute(a, 0, b, 0, 2))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorValidationException.class);
     }
 
     // ── Scalar reference implementation ──

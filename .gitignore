@@ -53,3 +53,5 @@ spector-local.yml
 # ──────────── Documentation build ────────────
 docs/site/
 RnD
+
+.scratch/
