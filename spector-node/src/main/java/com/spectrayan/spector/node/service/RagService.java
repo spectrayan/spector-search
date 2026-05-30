@@ -11,7 +11,7 @@ import com.spectrayan.spector.commons.WordTokenizer;
 import com.spectrayan.spector.embed.EmbeddingException;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.node.api.dto.RagRequest;
-import com.spectrayan.spector.node.exception.SpectorApiException;
+import com.spectrayan.spector.node.exception.LegacySpectorApiException;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 import com.spectrayan.spector.rag.ContextBuilder;
@@ -50,7 +50,7 @@ public class RagService {
         request.validate();
 
         if (!engine.hasEmbeddingProvider()) {
-            throw SpectorApiException.serviceUnavailable("Embedding service is unavailable");
+            throw LegacySpectorApiException.serviceUnavailable("Embedding service is unavailable");
         }
 
         // 1. Embed query
@@ -58,7 +58,7 @@ public class RagService {
         try {
             queryVector = engine.embeddingProvider().embed(request.query).vector();
         } catch (EmbeddingException e) {
-            throw SpectorApiException.serviceUnavailable("Embedding service is unavailable");
+            throw LegacySpectorApiException.serviceUnavailable("Embedding service is unavailable");
         }
 
         // 2. Search
