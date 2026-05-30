@@ -6,98 +6,94 @@ import org.slf4j.LoggerFactory;
 import com.linecorp.armeria.common.HttpRequest;
 import com.linecorp.armeria.common.HttpResponse;
 import com.linecorp.armeria.common.HttpStatus;
+import com.linecorp.armeria.common.MediaType;
 import com.linecorp.armeria.server.ServiceRequestContext;
 import com.linecorp.armeria.server.annotation.ExceptionHandlerFunction;
 
 import com.spectrayan.spector.commons.error.SpectorApiException;
 import com.spectrayan.spector.commons.error.SpectorException;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
-import com.spectrayan.spector.node.api.dto.ErrorResponse;
+import com.spectrayan.spector.node.api.dto.ProblemDetail;
 
 /**
  * Centralized Armeria exception handler for all Spector REST endpoints.
  *
- * <p>Catches exceptions thrown by {@code @Get/@Post/@Delete} handler methods
- * and converts them into structured JSON error responses with error codes.</p>
+ * <p>Produces RFC 9457 {@code application/problem+json} responses.</p>
  *
  * <h3>Exception Mapping</h3>
  * <ul>
- *   <li>{@link SpectorApiException} → HTTP status from exception, structured error code</li>
- *   <li>{@link SpectorValidationException} → 400 Bad Request, structured error code</li>
- *   <li>{@link SpectorException} → 500 Internal, structured error code</li>
- *   <li>{@link LegacySpectorApiException} → status from exception (deprecated)</li>
- *   <li>{@link IllegalArgumentException} → 400 (legacy fallback)</li>
- *   <li>All others → 500</li>
+ *   <li>{@link SpectorApiException} → HTTP status from exception</li>
+ *   <li>{@link SpectorValidationException} → 400 Bad Request</li>
+ *   <li>{@link SpectorException} → 500 Internal Server Error</li>
+ *   <li>{@link IllegalArgumentException} → 400 Bad Request (fallback)</li>
+ *   <li>All others → 500 Internal Server Error</li>
  * </ul>
  *
  * <h3>Logging Policy</h3>
  * <ul>
- *   <li>4xx errors → WARN level, code + message only (no stack trace)</li>
- *   <li>5xx errors → ERROR level, code + message + full stack trace</li>
+ *   <li>4xx errors → WARN level, error code + message only (no stack trace)</li>
+ *   <li>5xx errors → ERROR level, error code + message + full stack trace</li>
  * </ul>
+ *
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457</a>
  */
 public class ApiExceptionHandler implements ExceptionHandlerFunction {
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
+    /** RFC 9457 content type. */
+    private static final MediaType PROBLEM_JSON = MediaType.parse("application/problem+json");
+
     @Override
     public HttpResponse handleException(ServiceRequestContext ctx, HttpRequest req, Throwable cause) {
-        // ── New framework: SpectorApiException with HTTP status + error code ──
+        // ── SpectorApiException — carries its own HTTP status ──
         if (cause instanceof SpectorApiException e) {
             int status = e.httpStatus();
-            if (status >= 500) {
-                log.error("{}: {}", e.codeId(), e.getMessage(), e);
-            } else {
-                log.warn("{}: {}", e.codeId(), e.getMessage());
-            }
-            return HttpResponse.ofJson(
-                    HttpStatus.valueOf(status),
-                    ErrorResponse.of(e.codeId(), e.category().displayName(),
-                            status, e.getMessage(), ctx.path()));
+            logByStatus(status, e.codeId(), e.getMessage(), e);
+            return problemResponse(status, ProblemDetail.fromException(e, status, ctx.path()));
         }
 
-        // ── New framework: SpectorValidationException → 400 ──
+        // ── SpectorValidationException → 400 ──
         if (cause instanceof SpectorValidationException e) {
             log.warn("{}: {}", e.codeId(), e.getMessage());
-            return HttpResponse.ofJson(
-                    HttpStatus.BAD_REQUEST,
-                    ErrorResponse.of(e.codeId(), e.category().displayName(),
-                            400, e.getMessage(), ctx.path()));
+            return problemResponse(400, ProblemDetail.fromException(e, 400, ctx.path()));
         }
 
-        // ── New framework: any other SpectorException → 500 ──
+        // ── Any other SpectorException → 500 ──
         if (cause instanceof SpectorException e) {
             log.error("{}: {}", e.codeId(), e.getMessage(), e);
-            return HttpResponse.ofJson(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    ErrorResponse.of(e.codeId(), e.category().displayName(),
-                            500, e.getMessage(), ctx.path()));
+            return problemResponse(500, ProblemDetail.fromException(e, 500, ctx.path()));
         }
 
-        // ── Legacy: old SpectorApiException (deprecated) ──
-        if (cause instanceof LegacySpectorApiException e) {
-            if (e.statusCode() >= 500) {
-                log.error("API error [{}]: {}", e.statusCode(), e.getMessage(), e);
-            } else {
-                log.warn("API error [{}]: {}", e.statusCode(), e.getMessage());
-            }
-            return HttpResponse.ofJson(
-                    HttpStatus.valueOf(e.statusCode()),
-                    ErrorResponse.of(e.statusCode(), e.getMessage(), ctx.path()));
-        }
-
-        // ── Legacy: raw IllegalArgumentException → 400 ──
+        // ── IllegalArgumentException → 400 (framework/library fallback) ──
         if (cause instanceof IllegalArgumentException e) {
             log.warn("Bad request: {}", e.getMessage());
-            return HttpResponse.ofJson(
-                    HttpStatus.BAD_REQUEST,
-                    ErrorResponse.of(400, e.getMessage(), ctx.path()));
+            return problemResponse(400,
+                    ProblemDetail.of(400, "Bad Request", e.getMessage(), ctx.path()));
         }
 
-        // ── Unexpected — log full stack trace ──
+        // ── Unexpected — 500, full stack trace ──
         log.error("Unexpected error on {}", ctx.path(), cause);
-        return HttpResponse.ofJson(
-                HttpStatus.INTERNAL_SERVER_ERROR,
-                ErrorResponse.of(500, "Internal server error", ctx.path()));
+        return problemResponse(500,
+                ProblemDetail.of(500, "Internal Server Error",
+                        "An unexpected error occurred", ctx.path()));
+    }
+
+    /**
+     * Builds an {@code application/problem+json} HTTP response.
+     */
+    private static HttpResponse problemResponse(int status, ProblemDetail problem) {
+        return HttpResponse.ofJson(HttpStatus.valueOf(status), PROBLEM_JSON, problem);
+    }
+
+    /**
+     * Logs at WARN for 4xx, ERROR (with stack trace) for 5xx.
+     */
+    private static void logByStatus(int status, String codeId, String message, Throwable cause) {
+        if (status >= 500) {
+            log.error("{}: {}", codeId, message, cause);
+        } else {
+            log.warn("{}: {}", codeId, message);
+        }
     }
 }

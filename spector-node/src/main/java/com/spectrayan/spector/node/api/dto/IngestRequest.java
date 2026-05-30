@@ -1,6 +1,7 @@
 package com.spectrayan.spector.node.api.dto;
 
-import com.spectrayan.spector.node.exception.ValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Request DTO for document ingestion ({@code POST /api/v1/ingest}).
@@ -28,15 +29,14 @@ public class IngestRequest {
      * @param expectedDimensions the expected vector dimensions from engine config
      * @throws ValidationException if validation fails
      */
-    public void validateForIngest(int expectedDimensions) {
-        if (id == null || id.isEmpty()) throw new ValidationException("id", "required");
-        if (content == null || content.isEmpty()) throw new ValidationException("content", "required");
+    public void validateForIngest(int expectedDimensions) throws SpectorValidationException {
+        if (id == null || id.isEmpty()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "id", "required");
+        if (content == null || content.isEmpty()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "content", "required");
         if (vector == null || vector.length == 0) {
-            throw new ValidationException("vector", "required (use /api/v1/ingest/auto for auto-embedding)");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "vector", "required (use /api/v1/ingest/auto for auto-embedding)");
         }
         if (vector.length != expectedDimensions) {
-            throw new ValidationException("vector",
-                    "dimension mismatch: expected " + expectedDimensions + ", got " + vector.length);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "vector", "dimension mismatch: expected " + expectedDimensions + ", got " + vector.length);
         }
     }
 
@@ -45,9 +45,9 @@ public class IngestRequest {
      *
      * @throws ValidationException if validation fails
      */
-    public void validateForAutoIngest() {
-        if (id == null || id.isEmpty()) throw new ValidationException("id", "required");
-        if (content == null || content.isEmpty()) throw new ValidationException("content", "required");
+    public void validateForAutoIngest() throws SpectorValidationException {
+        if (id == null || id.isEmpty()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "id", "required");
+        if (content == null || content.isEmpty()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "content", "required");
     }
 
     /** Returns the title, defaulting to empty string if null. */

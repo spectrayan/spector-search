@@ -46,7 +46,7 @@ public class SearchEndpoint implements ApiModule {
     public String pathPrefix() { return ""; }
 
     @Post("/search")
-    public HttpResponse search(SearchRequest request) {
+    public HttpResponse search(SearchRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         SearchResponseDto response = searchService.search(request);
         return HttpResponse.ofJson(response);
     }

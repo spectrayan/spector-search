@@ -1,6 +1,7 @@
 package com.spectrayan.spector.node.api.dto;
 
-import com.spectrayan.spector.node.exception.ValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Request DTO for the RAG endpoint ({@code POST /api/v1/rag}).
@@ -30,12 +31,12 @@ public class RagRequest {
      *
      * @throws ValidationException if validation fails
      */
-    public void validate() {
+    public void validate() throws SpectorValidationException {
         if (query == null || query.isBlank()) {
-            throw new ValidationException("query", "non-empty query is required");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "query", "non-empty query is required");
         }
         if (query.length() > MAX_QUERY_LENGTH) {
-            throw new ValidationException("query", "must not exceed " + MAX_QUERY_LENGTH + " characters");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "query", "must not exceed " + MAX_QUERY_LENGTH + " characters");
         }
     }
 

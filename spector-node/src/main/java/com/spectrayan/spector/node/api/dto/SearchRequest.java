@@ -1,6 +1,7 @@
 package com.spectrayan.spector.node.api.dto;
 
-import com.spectrayan.spector.node.exception.ValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.query.SearchQuery;
 
 /**
@@ -43,20 +44,20 @@ public class SearchRequest {
      * @return the search query
      * @throws ValidationException if the request is invalid
      */
-    public SearchQuery toQuery() {
+    public SearchQuery toQuery() throws SpectorValidationException {
         int k = topK > 0 ? topK : 10;
         return switch (resolvedMode()) {
             case KEYWORD -> {
-                if (text == null || text.isBlank()) throw new ValidationException("text", "required for keyword search");
+                if (text == null || text.isBlank()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "text", "required for keyword search");
                 yield SearchQuery.keyword(text, k);
             }
             case VECTOR -> {
-                if (vector == null || vector.length == 0) throw new ValidationException("vector", "required for vector search");
+                if (vector == null || vector.length == 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "vector", "required for vector search");
                 yield SearchQuery.vector(vector, k);
             }
             case HYBRID -> {
-                if (text == null || text.isBlank()) throw new ValidationException("text", "required for hybrid search");
-                if (vector == null || vector.length == 0) throw new ValidationException("vector", "required for hybrid search");
+                if (text == null || text.isBlank()) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "text", "required for hybrid search");
+                if (vector == null || vector.length == 0) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "vector", "required for hybrid search");
                 yield SearchQuery.hybrid(text, vector, k);
             }
         };

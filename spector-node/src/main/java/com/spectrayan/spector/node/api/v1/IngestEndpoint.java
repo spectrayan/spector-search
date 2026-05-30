@@ -35,21 +35,21 @@ public class IngestEndpoint implements ApiModule {
     public String pathPrefix() { return ""; }
 
     @Post("/ingest")
-    public HttpResponse ingest(IngestRequest request) {
+    public HttpResponse ingest(IngestRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         ingestService.ingest(request);
         return HttpResponse.ofJson(HttpStatus.CREATED,
                 Map.of("id", request.id, "indexed", true));
     }
 
     @Post("/ingest/auto")
-    public HttpResponse autoIngest(IngestRequest request) {
+    public HttpResponse autoIngest(IngestRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         ingestService.autoIngest(request);
         return HttpResponse.ofJson(HttpStatus.CREATED,
                 Map.of("id", request.id, "indexed", true, "autoEmbedded", true));
     }
 
     @Post("/ingest/bulk")
-    public HttpResponse bulkIngest(BulkIngestRequest request) {
+    public HttpResponse bulkIngest(BulkIngestRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         int[] result = ingestService.bulkIngest(request);
         return HttpResponse.ofJson(HttpStatus.CREATED,
                 Map.of("total", result[0], "success", result[1], "failed", result[2]));

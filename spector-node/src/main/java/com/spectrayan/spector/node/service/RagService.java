@@ -11,7 +11,8 @@ import com.spectrayan.spector.commons.WordTokenizer;
 import com.spectrayan.spector.embed.EmbeddingException;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.node.api.dto.RagRequest;
-import com.spectrayan.spector.node.exception.LegacySpectorApiException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorApiException;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 import com.spectrayan.spector.rag.ContextBuilder;
@@ -46,11 +47,11 @@ public class RagService {
      * @param request the RAG request
      * @return a map suitable for JSON serialization
      */
-    public Map<String, Object> retrieveContext(RagRequest request) {
+    public Map<String, Object> retrieveContext(RagRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         request.validate();
 
         if (!engine.hasEmbeddingProvider()) {
-            throw LegacySpectorApiException.serviceUnavailable("Embedding service is unavailable");
+            throw SpectorApiException.serviceUnavailable(ErrorCode.EMBEDDING_UNAVAILABLE, "No embedding provider configured");
         }
 
         // 1. Embed query
@@ -58,7 +59,7 @@ public class RagService {
         try {
             queryVector = engine.embeddingProvider().embed(request.query).vector();
         } catch (EmbeddingException e) {
-            throw LegacySpectorApiException.serviceUnavailable("Embedding service is unavailable");
+            throw SpectorApiException.serviceUnavailable(ErrorCode.EMBEDDING_UNAVAILABLE, e.getMessage());
         }
 
         // 2. Search

@@ -10,7 +10,8 @@ import com.linecorp.armeria.server.annotation.Param;
 
 import com.spectrayan.spector.node.api.ApiModule;
 import com.spectrayan.spector.node.exception.ApiExceptionHandler;
-import com.spectrayan.spector.node.exception.LegacySpectorApiException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorApiException;
 import com.spectrayan.spector.node.service.IngestService;
 
 /**
@@ -33,10 +34,10 @@ public class DocumentEndpoint implements ApiModule {
     public String pathPrefix() { return ""; }
 
     @Delete("/documents/{id}")
-    public HttpResponse delete(@Param("id") String id) {
+    public HttpResponse delete(@Param("id") String id) throws SpectorApiException {
         boolean deleted = ingestService.delete(id);
         if (!deleted) {
-            throw LegacySpectorApiException.notFound("Document not found: " + id);
+            throw SpectorApiException.notFound(ErrorCode.API_NOT_FOUND, id);
         }
         return HttpResponse.ofJson(Map.of("id", id, "deleted", true));
     }

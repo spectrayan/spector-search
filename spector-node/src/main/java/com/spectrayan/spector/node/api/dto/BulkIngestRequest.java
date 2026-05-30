@@ -2,7 +2,8 @@ package com.spectrayan.spector.node.api.dto;
 
 import java.util.List;
 
-import com.spectrayan.spector.node.exception.ValidationException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 /**
  * Request DTO for bulk document ingestion ({@code POST /api/v1/ingest/bulk}).
@@ -17,9 +18,9 @@ public class BulkIngestRequest {
      *
      * @throws ValidationException if validation fails
      */
-    public void validate() {
+    public void validate() throws SpectorValidationException {
         if (documents == null || documents.isEmpty()) {
-            throw new ValidationException("documents", "non-empty array required");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "documents", "non-empty array required");
         }
     }
 }

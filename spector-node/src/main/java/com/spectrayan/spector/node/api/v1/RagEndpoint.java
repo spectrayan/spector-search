@@ -29,7 +29,7 @@ public class RagEndpoint implements ApiModule {
     public String pathPrefix() { return ""; }
 
     @Post("/rag")
-    public HttpResponse rag(RagRequest request) {
+    public HttpResponse rag(RagRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         return HttpResponse.ofJson(ragService.retrieveContext(request));
     }
 }

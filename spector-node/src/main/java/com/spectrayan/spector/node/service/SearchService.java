@@ -13,7 +13,8 @@ import com.spectrayan.spector.node.api.dto.SearchResponseDto;
 import com.spectrayan.spector.node.event.SpectorEventBus;
 import com.spectrayan.spector.node.event.SpectorSearchCompletedEvent;
 import com.spectrayan.spector.node.event.SpectorSearchFailedEvent;
-import com.spectrayan.spector.node.exception.LegacySpectorApiException;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorApiException;
 import com.spectrayan.spector.query.SearchQuery;
 import com.spectrayan.spector.query.SearchResponse;
 
@@ -49,8 +50,9 @@ public class SearchService {
      *
      * @param request the search request DTO
      * @return the search response DTO
+     * @throws com.spectrayan.spector.commons.error.SpectorException if the search fails
      */
-    public SearchResponseDto search(SearchRequest request) {
+    public SearchResponseDto search(SearchRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         SearchQuery query = request.toQuery();
         long startNanos = System.nanoTime();
 
@@ -70,7 +72,7 @@ public class SearchService {
                     nodeId, Instant.now(),
                     request.resolvedMode().name(), e.getMessage()));
 
-            throw LegacySpectorApiException.internal("Search failed: " + e.getMessage(), e);
+            throw SpectorApiException.internal(ErrorCode.INTERNAL_ERROR, e, "Search failed: " + e.getMessage());
         }
     }
 

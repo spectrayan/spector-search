@@ -13,7 +13,6 @@ import com.spectrayan.spector.node.event.SpectorBulkIngestCompletedEvent;
 import com.spectrayan.spector.node.event.SpectorDocumentDeletedEvent;
 import com.spectrayan.spector.node.event.SpectorDocumentIngestedEvent;
 import com.spectrayan.spector.node.event.SpectorEventBus;
-import com.spectrayan.spector.node.exception.LegacySpectorApiException;
 
 /**
  * Ingest service facade — encapsulates local vs cluster routing for document ingestion.
@@ -48,7 +47,7 @@ public class IngestService {
     /**
      * Ingests a document with a pre-computed vector.
      */
-    public void ingest(IngestRequest request) {
+    public void ingest(IngestRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         request.validateForIngest(engine.config().dimensions());
 
         if (coordinator != null) {
@@ -64,12 +63,12 @@ public class IngestService {
     /**
      * Ingests a document with automatic embedding.
      */
-    public void autoIngest(IngestRequest request) {
+    public void autoIngest(IngestRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         request.validateForAutoIngest();
 
         if (!engine.hasEmbeddingProvider()) {
-            throw LegacySpectorApiException.conflict(
-                    "Auto-embed requires an EmbeddingProvider. Configure the engine with an embedding provider.");
+            throw com.spectrayan.spector.commons.error.SpectorApiException.conflict(
+                    com.spectrayan.spector.commons.error.ErrorCode.EMBEDDING_PROVIDER_MISSING);
         }
 
         if (request.title != null && !request.title.isEmpty()) {
@@ -87,7 +86,7 @@ public class IngestService {
      *
      * @return array of [total, success, failed]
      */
-    public int[] bulkIngest(BulkIngestRequest request) {
+    public int[] bulkIngest(BulkIngestRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
         request.validate();
 
         int success = 0;
