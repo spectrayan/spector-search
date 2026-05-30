@@ -1,5 +1,6 @@
 package com.spectrayan.spector.memory;
 
+import com.spectrayan.spector.commons.valhalla.ValueCandidate;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 
 /**
@@ -8,6 +9,10 @@ import com.spectrayan.spector.memory.cortex.MemorySource;
  * <p>Contains the memory text, cognitive scoring metadata, provenance information,
  * and biological state (recall count, valence, decay factor). Designed to give
  * the LLM maximum contextual grounding for reasoning about memory reliability.</p>
+ *
+ * <p><b>Valhalla (JEP 401):</b> This is a {@code value record} — enabling the JVM
+ * to scalarize short-lived recall results and flatten arrays of cognitive results
+ * during batch memory operations.</p>
  *
  * @param id              unique memory identifier
  * @param text            the memory content text
@@ -23,7 +28,9 @@ import com.spectrayan.spector.memory.cortex.MemorySource;
  * @param ltpAdjustedDecay decay multiplier after reconsolidation adjustment
  * @param retrievalMode   how this result was retrieved (Standard, Lateral, Hyperfocus)
  */
-public record CognitiveResult(
+@ValueCandidate(reason = "Created per recall hit, short-lived, fused-scoring hot path",
+                hotPathFrequency = ValueCandidate.Frequency.HIGH)
+public value record CognitiveResult(
         String id,
         String text,
         float score,

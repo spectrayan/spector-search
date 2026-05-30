@@ -6,6 +6,7 @@ import java.lang.foreign.ValueLayout;
 import java.lang.invoke.VarHandle;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.valhalla.ValueCandidate;
 
 /**
  * Defines the memory layout for contiguous vector storage using Panama's
@@ -21,9 +22,14 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *   [vector_0: float × D] [vector_1: float × D] ... [vector_N: float × D]
  * </pre>
  *
+ * <p><b>Valhalla (JEP 401):</b> As a {@code value record} with a single {@code int} field,
+ * the JIT can scalarize this into a register — zero heap allocation for layout computations.</p>
+ *
  * @param dimensions the number of float elements per vector
  */
-public record VectorStoreLayout(int dimensions) {
+@ValueCandidate(reason = "Single-field record used in every vector read/write, ideal for scalarization",
+                hotPathFrequency = ValueCandidate.Frequency.HIGH)
+public value record VectorStoreLayout(int dimensions) {
 
     /** Size of a single float element in bytes. */
     public static final long FLOAT_BYTES = ValueLayout.JAVA_FLOAT.byteSize();

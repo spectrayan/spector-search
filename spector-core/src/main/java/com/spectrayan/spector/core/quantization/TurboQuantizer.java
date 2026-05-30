@@ -1,5 +1,6 @@
 package com.spectrayan.spector.core.quantization;
 import com.spectrayan.spector.commons.error.SpectorException;
+import com.spectrayan.spector.commons.valhalla.ValueCandidate;
 
 import java.util.Arrays;
 
@@ -425,10 +426,15 @@ public final class TurboQuantizer {
     /**
      * Encoded TurboQuant representation of a vector.
      *
+     * <p><b>Valhalla (JEP 401):</b> As a {@code value record}, TurboCode instances
+     * can be scalarized by the JIT during batch encoding/decoding operations.</p>
+     *
      * @param packed the quantized and packed bytes
      * @param norm   the original L2 norm (for inner product / cosine reconstruction)
      */
-    public record TurboCode(byte[] packed, float norm) {
+    @ValueCandidate(reason = "Inner-loop quantization output, created per vector encoding",
+                    hotPathFrequency = ValueCandidate.Frequency.CRITICAL)
+    public value record TurboCode(byte[] packed, float norm) {
         public TurboCode {
             if (packed == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "packed");
             if (Float.isNaN(norm)) throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID, "norm", "NaN");
