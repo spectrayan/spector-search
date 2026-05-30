@@ -308,6 +308,6 @@ public final class GpuBatchSimilarity implements AutoCloseable {
     }
 
     private void ensureOpen() {
-        if (closed) throw new IllegalStateException("GpuBatchSimilarity is closed");
+        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
     }
 }

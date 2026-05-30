@@ -45,7 +45,7 @@ final class TurboQuantStrategy implements QuantizationStrategy {
     @Override
     public float distance(MemorySegment segment, long offset, DistanceContext ctx) {
         if (!(ctx instanceof DistanceContext.TurboContext tc)) {
-            throw new IllegalArgumentException("Expected TurboContext, got: " + ctx.getClass().getSimpleName());
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("context", "expected TurboContext but got " + ctx.getClass().getSimpleName()));
         }
         byte[] packed = new byte[bpv];
         MemorySegment.copy(segment, ValueLayout.JAVA_BYTE, offset, packed, 0, bpv);

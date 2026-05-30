@@ -445,7 +445,7 @@ public final class CudaDotProductKernel implements SimilarityKernel, AutoCloseab
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException("CudaDotProductKernel is closed");
+            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
         }
     }
 }

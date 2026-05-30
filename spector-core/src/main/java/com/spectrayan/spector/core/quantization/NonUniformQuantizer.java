@@ -48,13 +48,13 @@ public final class NonUniformQuantizer {
     public static NonUniformQuantizer calibrate(float[][] sampleVectors,
                                                  int dimensions, int levels) {
         if (sampleVectors == null || sampleVectors.length == 0) {
-            throw new IllegalArgumentException("Sample vectors must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
         }
         if (dimensions < 1) {
-            throw new IllegalArgumentException("Dimensions must be at least 1");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.DIMENSIONS_INVALID.format(0));
         }
         if (levels < 2) {
-            throw new IllegalArgumentException("Levels must be at least 2");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE.format("levels", 2, Integer.MAX_VALUE, 0));
         }
 
         for (float[] vector : sampleVectors) {

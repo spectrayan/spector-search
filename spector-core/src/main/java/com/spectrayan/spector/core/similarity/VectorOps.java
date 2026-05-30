@@ -236,7 +236,7 @@ public final class VectorOps {
 
     private static void validateSlice(float[] arr, int offset, int length) {
         if (length < 0) {
-            throw new IllegalArgumentException("length must be non-negative: " + length);
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NEGATIVE.format("length", length));
         }
         if (offset < 0 || offset + length > arr.length) {
             throw new IllegalArgumentException(

@@ -233,7 +233,7 @@ public final class GpuVectorIndex implements AutoCloseable {
      * @return array of numVectors similarity scores
      */
     public float[] search(float[] query) {
-        if (closed) throw new IllegalStateException("GpuVectorIndex is closed");
+        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
 
         if (gpuActive) {
             try {

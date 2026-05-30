@@ -35,6 +35,10 @@
             <artifactId>spector-embed-ollama</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

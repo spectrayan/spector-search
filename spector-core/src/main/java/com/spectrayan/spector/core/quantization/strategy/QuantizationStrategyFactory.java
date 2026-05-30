@@ -62,19 +62,19 @@ public final class QuantizationStrategyFactory {
             Vasq4Encoder vasq4Encoder,
             SimilarityFunction similarityFunction) {
 
-        if (type == null) throw new IllegalArgumentException("QuantizationType must not be null");
-        if (similarityFunction == null) throw new IllegalArgumentException("SimilarityFunction must not be null");
+        if (type == null) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("QuantizationType"));
+        if (similarityFunction == null) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("SimilarityFunction"));
 
         return switch (type) {
             case SCALAR_INT8 -> {
                 if (scalarQuantizer == null) {
-                    throw new IllegalArgumentException("ScalarQuantizer is required for SCALAR_INT8");
+                    throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("ScalarQuantizer for SCALAR_INT8"));
                 }
                 yield new Int8Strategy(scalarQuantizer, similarityFunction);
             }
             case SCALAR_INT4 -> {
                 if (nonUniformQuantizer == null) {
-                    throw new IllegalArgumentException("NonUniformQuantizer is required for SCALAR_INT4");
+                    throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("NonUniformQuantizer for SCALAR_INT4"));
                 }
                 validateLevels(nonUniformQuantizer, type);
                 yield new Int4Strategy(nonUniformQuantizer, similarityFunction,
@@ -82,7 +82,7 @@ public final class QuantizationStrategyFactory {
             }
             case SCALAR_INT2 -> {
                 if (nonUniformQuantizer == null) {
-                    throw new IllegalArgumentException("NonUniformQuantizer is required for SCALAR_INT2");
+                    throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("NonUniformQuantizer for SCALAR_INT2"));
                 }
                 validateLevels(nonUniformQuantizer, type);
                 yield new Int2Strategy(nonUniformQuantizer, similarityFunction,

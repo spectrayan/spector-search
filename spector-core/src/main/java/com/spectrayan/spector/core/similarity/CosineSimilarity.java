@@ -94,7 +94,7 @@ public final class CosineSimilarity {
 
     private static void validateInputs(float[] a, int aOffset, float[] b, int bOffset, int length) {
         if (length < 0) {
-            throw new IllegalArgumentException("length must be non-negative: " + length);
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NEGATIVE.format("length", length));
         }
         if (aOffset < 0 || aOffset + length > a.length) {
             throw new IllegalArgumentException(

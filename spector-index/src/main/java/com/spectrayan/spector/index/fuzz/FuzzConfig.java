@@ -24,7 +24,7 @@ public record FuzzConfig(
             throw new IllegalArgumentException("minOperations must be at least 10,000, got " + minOperations);
         }
         if (targetIndexes == null || targetIndexes.isEmpty()) {
-            throw new IllegalArgumentException("targetIndexes must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("targetIndexes"));
         }
         if (dimensions < 2) {
             throw new IllegalArgumentException("dimensions must be at least 2, got " + dimensions);

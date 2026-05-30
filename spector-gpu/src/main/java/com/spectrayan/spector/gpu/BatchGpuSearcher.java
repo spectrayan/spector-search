@@ -85,7 +85,7 @@ public class BatchGpuSearcher implements AutoCloseable {
     public BatchGpuSearcher(SimilarityKernel kernel, GpuMemoryManager memoryManager,
                             Duration batchingWindow, int maxBatchSize) {
         if (kernel == null) {
-            throw new IllegalArgumentException("Kernel must not be null");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("Kernel"));
         }
         if (memoryManager == null) {
             throw new IllegalArgumentException("Memory manager must not be null");
@@ -452,7 +452,7 @@ public class BatchGpuSearcher implements AutoCloseable {
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException("BatchGpuSearcher is closed");
+            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
         }
     }
 }

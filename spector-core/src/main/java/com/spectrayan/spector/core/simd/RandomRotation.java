@@ -63,7 +63,7 @@ public final class RandomRotation {
      */
     public static RandomRotation generate(int dimensions, long seed) {
         if (dimensions < 1) {
-            throw new IllegalArgumentException("dimensions must be >= 1");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.DIMENSIONS_INVALID.format(0));
         }
 
         Random rng = new Random(seed);

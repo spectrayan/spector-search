@@ -61,7 +61,7 @@ public final class VasqParams {
                float[] means, float[] scales, float[] invScales,
                VasqFwht fwht, int bitWidth) {
         if (bitWidth != BIT_WIDTH_8 && bitWidth != BIT_WIDTH_4) {
-            throw new IllegalArgumentException("bitWidth must be 4 or 8, got " + bitWidth);
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.BIT_WIDTH_INVALID.format("4, 8", bitWidth));
         }
         this.originalDim = originalDim;
         this.paddedDim   = paddedDim;

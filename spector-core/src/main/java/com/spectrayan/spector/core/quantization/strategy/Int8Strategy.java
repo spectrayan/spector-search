@@ -62,7 +62,7 @@ final class Int8Strategy implements QuantizationStrategy {
     @Override
     public float distance(MemorySegment segment, long offset, DistanceContext ctx) {
         if (!(ctx instanceof DistanceContext.Int8Context ic)) {
-            throw new IllegalArgumentException("Expected Int8Context, got: " + ctx.getClass().getSimpleName());
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("context", "expected Int8Context but got " + ctx.getClass().getSimpleName()));
         }
         // Zero-copy: segment is passed directly to the kernel — no byte[] allocation
         return similarityFunction.computeQuantizedFromSegment(

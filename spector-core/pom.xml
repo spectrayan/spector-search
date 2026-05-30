@@ -14,4 +14,11 @@
     <name>Spector Core</name>
     <description>SIMD-accelerated math kernels and similarity functions via Java Vector API.</description>
 
+    <dependencies>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
+    </dependencies>
+
 </project>

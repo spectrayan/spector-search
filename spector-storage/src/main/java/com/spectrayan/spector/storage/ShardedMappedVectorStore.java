@@ -469,7 +469,7 @@ public class ShardedMappedVectorStore implements VectorStore {
     }
 
     private void ensureOpen() {
-        if (closed) throw new IllegalStateException("VectorStore is closed");
+        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
     }
 
     private void validateIndex(int index) {

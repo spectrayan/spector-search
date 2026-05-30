@@ -65,7 +65,7 @@ public final class ScalarQuantizer {
      */
     public static ScalarQuantizer calibrate(float[][] sampleVectors, int dimensions) {
         if (sampleVectors == null || sampleVectors.length == 0) {
-            throw new IllegalArgumentException("Sample vectors must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
         }
 
         float[] mins = new float[dimensions];

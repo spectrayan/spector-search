@@ -332,7 +332,7 @@ public class GpuMemoryManager implements AutoCloseable {
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException("GpuMemoryManager is closed");
+            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
         }
     }
 

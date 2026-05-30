@@ -86,7 +86,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate(List<float[]> sampleVectors,
                                         int originalDim, long seed) {
         if (sampleVectors == null || sampleVectors.isEmpty()) {
-            throw new IllegalArgumentException("sampleVectors must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
         }
         // Subsample if needed
         List<float[]> sample = subsampleList(sampleVectors, MAX_SAMPLE_SIZE, seed);
@@ -135,7 +135,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate(float[][] samples, int n,
                                         int originalDim, long seed) {
         if (samples == null || n <= 0) {
-            throw new IllegalArgumentException("samples must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("samples"));
         }
         int useN = Math.min(n, MAX_SAMPLE_SIZE);
         // Subsample if needed — Fisher-Yates partial shuffle on the indices
@@ -182,7 +182,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate(float[] flatData, int n,
                                         int originalDim, long seed) {
         if (flatData == null || n <= 0 || originalDim <= 0) {
-            throw new IllegalArgumentException("flatData must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("flatData"));
         }
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);
@@ -224,7 +224,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate4bit(List<float[]> sampleVectors,
                                             int originalDim, long seed) {
         if (sampleVectors == null || sampleVectors.isEmpty()) {
-            throw new IllegalArgumentException("sampleVectors must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
         }
         List<float[]> sample = subsampleList(sampleVectors, MAX_SAMPLE_SIZE, seed);
         int n = sample.size();
@@ -264,7 +264,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate4bit(float[][] samples, int n,
                                             int originalDim, long seed) {
         if (samples == null || n <= 0) {
-            throw new IllegalArgumentException("samples must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("samples"));
         }
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);
@@ -300,7 +300,7 @@ public final class VasqCalibrator {
     public static VasqParams calibrate4bit(float[] flatData, int n,
                                             int originalDim, long seed) {
         if (flatData == null || n <= 0 || originalDim <= 0) {
-            throw new IllegalArgumentException("flatData must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("flatData"));
         }
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);

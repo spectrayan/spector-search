@@ -153,8 +153,8 @@ public class QuantizedVectorStore implements AutoCloseable {
                                  ScalarQuantizer quantizer, NonUniformQuantizer nonUniformQuantizer,
                                  TurboQuantizer turboQuantizer, VasqEncoder vasqEncoder,
                                  SimilarityFunction similarityFunction) {
-        if (capacity <= 0) throw new IllegalArgumentException("capacity must be positive");
-        if (quantizationType == null) throw new IllegalArgumentException("quantizationType must not be null");
+        if (capacity <= 0) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.DIMENSIONS_INVALID.format(0));
+        if (quantizationType == null) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("quantizationType"));
 
         // Delegate validation + strategy creation to the Abstract Factory (with dimension checks)
         this.strategy = QuantizationStrategyFactory.createWithDimCheck(
@@ -378,7 +378,7 @@ public class QuantizedVectorStore implements AutoCloseable {
     }
 
     private void ensureOpen() {
-        if (closed) throw new IllegalStateException("QuantizedVectorStore is closed");
+        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
     }
 
     private void validateIndex(int index) {

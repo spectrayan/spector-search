@@ -106,7 +106,7 @@ public final class VasqStrategy implements QuantizationStrategy {
     @Override
     public float distance(MemorySegment segment, long offset, DistanceContext ctx) {
         if (!(ctx instanceof DistanceContext.VasqCtx vc)) {
-            throw new IllegalArgumentException("Expected VasqCtx, got: " + ctx.getClass().getSimpleName());
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("context", "expected VasqCtx but got " + ctx.getClass().getSimpleName()));
         }
         return similarityFunction.computeVasq(segment, offset, vc.paddedDim(), vc.state());
     }

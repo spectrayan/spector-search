@@ -264,7 +264,7 @@ public class MappedVectorStore implements VectorStore {
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException("VectorStore is closed");
+            throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
         }
     }
 

@@ -65,7 +65,7 @@ final class Int2Strategy implements QuantizationStrategy {
     @Override
     public float distance(MemorySegment segment, long offset, DistanceContext ctx) {
         if (!(ctx instanceof DistanceContext.PackedContext pc)) {
-            throw new IllegalArgumentException("Expected PackedContext, got: " + ctx.getClass().getSimpleName());
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("context", "expected PackedContext but got " + ctx.getClass().getSimpleName()));
         }
         // Zero-copy: segment passed directly to the kernel — no byte[] allocation
         float dot = PackedDotProduct.computeInt2(

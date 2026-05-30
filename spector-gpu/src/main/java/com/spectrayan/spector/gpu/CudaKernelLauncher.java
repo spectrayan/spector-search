@@ -174,7 +174,7 @@ public final class CudaKernelLauncher implements AutoCloseable {
      * @return array of n cosine similarity scores
      */
     public float[] batchCosine(float[] query, float[] database, int n, int dims) {
-        if (closed) throw new IllegalStateException("Launcher is closed");
+        if (closed) throw new IllegalStateException(com.spectrayan.spector.commons.error.ErrorCode.SEGMENT_CLOSED.format());
         if (n == 0) return new float[0];
 
         try (Arena local = Arena.ofConfined()) {

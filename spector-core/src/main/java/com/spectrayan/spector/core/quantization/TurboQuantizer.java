@@ -106,13 +106,13 @@ public final class TurboQuantizer {
     public static TurboQuantizer calibrate(float[][] sampleVectors, int dimensions,
                                             int bitsPerDim, long seed) {
         if (sampleVectors == null || sampleVectors.length == 0) {
-            throw new IllegalArgumentException("Sample vectors must not be empty");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.EMPTY_COLLECTION.format("sampleVectors"));
         }
         if (dimensions < 1) {
-            throw new IllegalArgumentException("dimensions must be >= 1");
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.DIMENSIONS_INVALID.format(0));
         }
         if (bitsPerDim != 2 && bitsPerDim != 4 && bitsPerDim != 8) {
-            throw new IllegalArgumentException("bitsPerDimension must be 2, 4, or 8, got: " + bitsPerDim);
+            throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.BIT_WIDTH_INVALID.format("2, 4, 8", bitsPerDim));
         }
 
         // Generate rotation
@@ -428,8 +428,8 @@ public final class TurboQuantizer {
      */
     public record TurboCode(byte[] packed, float norm) {
         public TurboCode {
-            if (packed == null) throw new IllegalArgumentException("packed must not be null");
-            if (Float.isNaN(norm)) throw new IllegalArgumentException("norm must not be NaN");
+            if (packed == null) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_NULL.format("packed"));
+            if (Float.isNaN(norm)) throw new IllegalArgumentException(com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_INVALID.format("norm", "NaN"));
         }
     }
 }
