@@ -131,6 +131,121 @@ Until then, this branch serves as:
 
 ---
 
+## JDK 27 / Valhalla Feature Roadmap
+
+This section tracks all JDK 27 and Valhalla features relevant to Spector,
+their implementation status on this branch, and expected impact.
+
+### ✅ Implemented
+
+#### Value Classes (JEP 401) — Valhalla EA
+
+| Type | Module | Status | Impact |
+|------|--------|--------|--------|
+| `ScoredResult` | spector-index | ✅ Converted | Critical — HNSW traversal hot path |
+| `BatchSearchResult` | spector-gpu | ✅ Converted | Critical — GPU batch results |
+| `TurboCode` | spector-core | ✅ Converted | Critical — quantization pipeline |
+| `CognitiveResult` | spector-memory | ✅ Converted | High — memory recall results |
+| `VectorStoreLayout` | spector-storage | ✅ Converted | High — storage layout reads |
+| `ScoredChunk` | spector-rag | ✅ Converted | High — RAG pipeline results |
+
+**What it does:** The `value` keyword eliminates object identity, enabling:
+- **Heap flattening** — arrays of value records store inline (no pointer chasing)
+- **Scalarization** — JIT decomposes value records into raw fields in registers
+- **No GC pressure** — value types on the stack never touch the garbage collector
+
+#### Lazy Constants (JEP 531, Third Preview) — JDK 27
+
+| Type | Module | Status | Pattern Replaced |
+|------|--------|--------|-----------------|
+| `GpuCapability.GPU_INFO` | spector-gpu | ✅ Converted | `volatile` + double-checked locking |
+
+**What it does:** `LazyConstant<T>` provides deferred initialization that the JIT can
+constant-fold after first access. Unlike `volatile` fields, the JIT compiler trusts that
+a `LazyConstant` value is effectively `final` after initialization, enabling aggressive
+inlining and constant propagation.
+
+```java
+// BEFORE: volatile + DCL — JIT cannot constant-fold, volatile read every call
+private static volatile GpuInfo cachedInfo;
+public static GpuInfo detect() {
+    if (cachedInfo != null) return cachedInfo;
+    synchronized (GpuCapability.class) { ... }
+}
+
+// AFTER: LazyConstant — JIT treats as true constant after init
+private static final LazyConstant<GpuInfo> GPU_INFO = LazyConstant.of(() -> doDetect());
+public static GpuInfo detect() { return GPU_INFO.get(); }
+```
+
+---
+
+### 🟢 Free Improvements (Zero Code Changes)
+
+#### Compact Object Headers (JEP 534) — Default in JDK 27
+
+Object headers shrink from **12 bytes → 8 bytes** (4 bytes saved per object).
+
+| Spector Impact | Estimated Savings |
+|---|---|
+| HNSW graph nodes (millions) | ~4 MB per million nodes |
+| All records/DTOs in result sets | 10-20% heap reduction |
+| Array headers | Better cache line utilization |
+| GPU wrapper objects | Reduced overhead for off-heap wrappers |
+
+> Already standard in JDK 25 (JEP 519) but required `-XX:+UseCompactObjectHeaders`.
+> In JDK 27, it becomes the **default** — no flags needed.
+
+#### G1 Default GC in All Environments (JEP 523) — JDK 27
+
+G1 becomes the default GC everywhere (including single-CPU containers).
+Spector already assumes G1, so this just removes the need for explicit
+`-XX:+UseG1GC` in deployment configs.
+
+---
+
+### 🟡 Future Candidates
+
+#### Null-Restricted Types — Valhalla (Future)
+
+When available, types like `ScoredResult!` guarantee non-null at the type level:
+
+```java
+ScoredResult! result;       // compile-time guarantee: never null
+ScoredResult![] results;    // fully flat array — no null slots, no indirection
+```
+
+**Spector benefit:** The off-heap `MemorySegment` storage already guarantees non-null
+layouts. Null-restricted types would let the on-heap side match, eliminating null checks
+in the HNSW neighbor traversal and RAG pipeline.
+
+**Tracked by:** All `@ValueCandidate`-annotated types are candidates for `!` when it lands.
+
+#### Vector API Finalization — Waiting for Valhalla
+
+The Vector API (JEP 537, 12th Incubator) remains in incubation specifically because
+it depends on Valhalla's value classes for its generic type shape (`Vector<Float>` needs
+to be a value type). Once Valhalla value classes reach preview in a GA JDK:
+
+1. Vector API will move to preview
+2. The `jdk.incubator.vector` module will become `java.lang.vector` (or similar)
+3. Spector's 20+ files using the Vector API will need import updates
+
+**No action needed now.** The API surface is stable; only the module name will change.
+
+#### Structured Concurrency (JEP 533, 7th Preview)
+
+Already used in 2 Spector files. Minor API refinements in each preview round.
+Will become standard when finalized.
+
+#### Primitive Types in Patterns (JEP 532, 5th Preview)
+
+Enables `switch` on primitive types and `instanceof` for primitives. Could simplify
+distance metric dispatch in `spector-core` (e.g., switching on `float` similarity
+thresholds).
+
+---
+
 ## `@ValueCandidate` Annotation
 
 All types converted (or planned for conversion) are annotated with:
@@ -152,6 +267,10 @@ branch, annotated types are actually converted to `value record`.
 ## Related
 
 - [JEP 401: Value Classes and Objects](https://openjdk.org/jeps/401)
+- [JEP 531: Lazy Constants](https://openjdk.org/jeps/531)
+- [JEP 534: Compact Object Headers](https://openjdk.org/jeps/534)
+- [JEP 537: Vector API (12th Incubator)](https://openjdk.org/jeps/537)
+- [JEP 533: Structured Concurrency](https://openjdk.org/jeps/533)
 - [Project Valhalla](https://openjdk.org/projects/valhalla/)
 - [Valhalla EA Builds](https://jdk.java.net/valhalla/)
 - [Spector JDK API Status](docs/docs/getting-started/jdk-api-status.md)

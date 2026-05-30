@@ -32,8 +32,6 @@ public final class GpuCapability {
 
     private static final Logger log = LoggerFactory.getLogger(GpuCapability.class);
 
-    private static volatile GpuInfo cachedInfo;
-
     /** Immutable GPU detection result. */
     public record GpuInfo(
             boolean available,
@@ -61,6 +59,19 @@ public final class GpuCapability {
         }
     }
 
+    /**
+     * Lazily initialized GPU detection result.
+     *
+     * <p><b>JEP 531 (Lazy Constants):</b> Using {@link LazyConstant} instead of
+     * volatile + double-checked locking. The JIT can constant-fold the GPU info
+     * after first access, eliminating per-call volatile read overhead.</p>
+     */
+    private static final LazyConstant<GpuInfo> GPU_INFO = LazyConstant.of(() -> {
+        var info = doDetect();
+        log.info(info.report());
+        return info;
+    });
+
     private GpuCapability() {}
 
     /**
@@ -69,13 +80,7 @@ public final class GpuCapability {
      * @return GPU capability info
      */
     public static GpuInfo detect() {
-        if (cachedInfo != null) return cachedInfo;
-        synchronized (GpuCapability.class) {
-            if (cachedInfo != null) return cachedInfo;
-            cachedInfo = doDetect();
-            log.info(cachedInfo.report());
-            return cachedInfo;
-        }
+        return GPU_INFO.get();
     }
 
     /** Returns true if a CUDA GPU is available. */
