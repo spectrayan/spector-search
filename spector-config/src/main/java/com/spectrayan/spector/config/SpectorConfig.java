@@ -2,6 +2,7 @@ package com.spectrayan.spector.config;
 
 import java.nio.file.Path;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
 import com.spectrayan.spector.core.quantization.QuantizationType;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
@@ -135,17 +136,17 @@ public record SpectorConfig(
     }
 
     public SpectorConfig {
-        if (dimensions <= 0) throw new IllegalArgumentException("dimensions must be positive");
-        if (capacity <= 0) throw new IllegalArgumentException("capacity must be positive");
+        if (dimensions <= 0) throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "dimensions", dimensions + " (must be positive)");
+        if (capacity <= 0) throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "capacity", capacity + " (must be positive)");
         if (persistenceMode == PersistenceMode.DISK && dataDirectory == null) {
-            throw new IllegalArgumentException("dataDirectory required for DISK persistence");
+            throw new SpectorConfigException(ErrorCode.CONFIG_REQUIRED_MISSING, "dataDirectory (required for DISK persistence)");
         }
         if (indexType == IndexType.IVF_PQ && pqSubspaces > 0 && dimensions % pqSubspaces != 0) {
-            throw new IllegalArgumentException(
-                    "dimensions (" + dimensions + ") must be divisible by pqSubspaces (" + pqSubspaces + ")");
+            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID,
+                    "pqSubspaces", pqSubspaces + " (must divide dimensions=" + dimensions + ")");
         }
         if (rerankerEnabled && (rerankerOllamaUrl == null || rerankerOllamaUrl.isBlank())) {
-            throw new IllegalArgumentException("rerankerOllamaUrl is required when reranker is enabled");
+            throw new SpectorConfigException(ErrorCode.CONFIG_REQUIRED_MISSING, "rerankerOllamaUrl (required when reranker is enabled)");
         }
         if (rerankerMaxCandidates <= 0) {
             rerankerMaxCandidates = 20;
@@ -319,8 +320,8 @@ public record SpectorConfig(
      */
     public SpectorConfig withRescore(int oversamplingFactor) {
         if (oversamplingFactor < 1) {
-            throw new IllegalArgumentException(
-                    "oversamplingFactor must be >= 1, got: " + oversamplingFactor);
+            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID,
+                    "oversamplingFactor", oversamplingFactor + " (must be >= 1)");
         }
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
                 quantization, persistenceMode, dataDirectory,

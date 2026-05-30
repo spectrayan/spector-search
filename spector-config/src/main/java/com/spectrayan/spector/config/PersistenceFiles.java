@@ -1,5 +1,7 @@
 package com.spectrayan.spector.config;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+
 import java.nio.file.Path;
 
 /**
@@ -43,15 +45,15 @@ public record PersistenceFiles(
 
     public PersistenceFiles {
         if (indexFile == null || indexFile.isBlank())
-            throw new IllegalArgumentException("indexFile must not be blank");
+            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "indexFile", "must not be blank");
         if (vectorsFile == null || vectorsFile.isBlank())
-            throw new IllegalArgumentException("vectorsFile must not be blank");
+            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "vectorsFile", "must not be blank");
         if (documentsFile == null || documentsFile.isBlank())
-            throw new IllegalArgumentException("documentsFile must not be blank");
+            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "documentsFile", "must not be blank");
         if (idMappingsFile == null || idMappingsFile.isBlank())
-            throw new IllegalArgumentException("idMappingsFile must not be blank");
+            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "idMappingsFile", "must not be blank");
         if (shardDirName == null || shardDirName.isBlank())
-            throw new IllegalArgumentException("shardDirName must not be blank");
+            throw new SpectorConfigException(ErrorCode.CONFIG_VALUE_INVALID, "shardDirName", "must not be blank");
     }
 
     /**

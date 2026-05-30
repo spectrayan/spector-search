@@ -449,7 +449,7 @@ public final class SpectorProperties {
 
         private void loadFileOrFail(CombinedConfiguration combined, Path path, String name) {
             if (!Files.isRegularFile(path)) {
-                throw new SpectorConfigException("Configuration file not found: " + path.toAbsolutePath());
+                throw new SpectorConfigException(com.spectrayan.spector.commons.error.ErrorCode.CONFIG_FILE_NOT_FOUND, path.toAbsolutePath());
             }
             loadFileIfExists(combined, path, name);
         }

@@ -15,6 +15,12 @@
     <description>Centralized configuration: properties, typed config records, and parameter types (IndexType, HnswParams, PersistenceMode).</description>
 
     <dependencies>
+        <!-- Error framework (ErrorCode, SpectorException) -->
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-commons</artifactId>
+        </dependency>
+
         <!-- Core types (SimilarityFunction, QuantizationType) -->
         <dependency>
             <groupId>com.spectrayan</groupId>
