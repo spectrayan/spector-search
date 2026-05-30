@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.memory.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when the cognitive recall pipeline or memory identification fails.

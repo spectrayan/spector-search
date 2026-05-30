@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.memory.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when a cognitive memory tier has reached its capacity limits.

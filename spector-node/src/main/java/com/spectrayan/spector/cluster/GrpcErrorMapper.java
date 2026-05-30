@@ -4,6 +4,7 @@ import com.google.protobuf.Any;
 import com.google.rpc.ErrorInfo;
 import com.google.rpc.Code;
 import com.spectrayan.spector.commons.error.*;
+import com.spectrayan.spector.cluster.error.SpectorShardUnavailableException;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;

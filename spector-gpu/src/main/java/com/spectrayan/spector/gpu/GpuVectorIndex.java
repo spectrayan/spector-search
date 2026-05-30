@@ -16,7 +16,7 @@ import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
 import com.spectrayan.spector.commons.error.SpectorServerException;
 import com.spectrayan.spector.commons.error.SpectorGpuException;
-import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.storage.error.SpectorSegmentClosedException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**

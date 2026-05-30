@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import com.spectrayan.spector.commons.error.SpectorServerException;
-import com.spectrayan.spector.commons.error.SpectorMemoryTierFullException;
+import com.spectrayan.spector.memory.error.SpectorMemoryTierFullException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**

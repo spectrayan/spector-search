@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.embed.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when the embedding provider or model is not reachable.

@@ -1,6 +1,6 @@
 package com.spectrayan.spector.index;
 
-import com.spectrayan.spector.commons.error.SpectorHnswBuildException;
+import com.spectrayan.spector.index.error.SpectorHnswBuildException;
 
 
 import com.spectrayan.spector.config.HnswParams;

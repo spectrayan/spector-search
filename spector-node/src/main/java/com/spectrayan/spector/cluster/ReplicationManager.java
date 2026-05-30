@@ -17,7 +17,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.SpectorServerException;
-import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.storage.error.SpectorSegmentClosedException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**

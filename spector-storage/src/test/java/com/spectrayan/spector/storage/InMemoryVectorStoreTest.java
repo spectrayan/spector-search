@@ -1,7 +1,7 @@
 package com.spectrayan.spector.storage;
 
 import com.spectrayan.spector.commons.error.SpectorException;
-import com.spectrayan.spector.commons.error.SpectorStoreFullException;
+import com.spectrayan.spector.storage.error.SpectorStoreFullException;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 
 import static org.assertj.core.api.Assertions.assertThat;

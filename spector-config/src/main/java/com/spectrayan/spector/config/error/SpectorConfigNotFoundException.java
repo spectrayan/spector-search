@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.config.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when a configuration file cannot be found at the specified path.

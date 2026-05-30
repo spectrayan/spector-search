@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 import com.spectrayan.spector.commons.error.SpectorServerException;
-import com.spectrayan.spector.commons.error.SpectorMemoryTierFullException;
+import com.spectrayan.spector.memory.error.SpectorMemoryTierFullException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**

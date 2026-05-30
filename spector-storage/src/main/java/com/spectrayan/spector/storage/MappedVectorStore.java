@@ -16,8 +16,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
-import com.spectrayan.spector.commons.error.SpectorStoreFullException;
-import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.storage.error.SpectorStoreFullException;
+import com.spectrayan.spector.storage.error.SpectorSegmentClosedException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**

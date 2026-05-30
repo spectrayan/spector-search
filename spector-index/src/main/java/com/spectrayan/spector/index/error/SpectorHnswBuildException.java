@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.index.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when parallel HNSW index construction fails.

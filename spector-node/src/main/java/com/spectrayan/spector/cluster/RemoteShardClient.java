@@ -2,7 +2,7 @@ package com.spectrayan.spector.cluster;
 
 import com.spectrayan.spector.commons.error.ErrorCode;
 import com.spectrayan.spector.commons.error.SpectorClusterException;
-import com.spectrayan.spector.commons.error.SpectorShardUnavailableException;
+import com.spectrayan.spector.cluster.error.SpectorShardUnavailableException;
 import com.spectrayan.spector.cluster.proto.*;
 import com.spectrayan.spector.index.ScoredResult;
 

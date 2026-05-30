@@ -22,8 +22,8 @@ import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
 import com.spectrayan.spector.core.quantization.vasq.VasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
-import com.spectrayan.spector.commons.error.SpectorStoreFullException;
-import com.spectrayan.spector.commons.error.SpectorSegmentClosedException;
+import com.spectrayan.spector.storage.error.SpectorStoreFullException;
+import com.spectrayan.spector.storage.error.SpectorSegmentClosedException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**

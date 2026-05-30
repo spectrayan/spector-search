@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.storage.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when a write-ahead log (WAL) write or replay operation fails.

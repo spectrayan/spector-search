@@ -2,7 +2,7 @@ package com.spectrayan.spector.config;
 
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
-import com.spectrayan.spector.commons.error.SpectorConfigNotFoundException;
+import com.spectrayan.spector.config.error.SpectorConfigNotFoundException;
 
 import org.apache.commons.configuration2.CombinedConfiguration;
 import org.apache.commons.configuration2.Configuration;

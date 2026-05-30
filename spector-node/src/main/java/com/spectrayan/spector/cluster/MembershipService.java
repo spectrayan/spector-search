@@ -1,6 +1,6 @@
 package com.spectrayan.spector.cluster;
 
-import com.spectrayan.spector.commons.error.SpectorMembershipException;
+import com.spectrayan.spector.cluster.error.SpectorMembershipException;
 
 import java.util.Set;
 

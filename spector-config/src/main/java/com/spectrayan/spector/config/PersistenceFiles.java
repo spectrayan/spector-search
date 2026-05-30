@@ -1,7 +1,7 @@
 package com.spectrayan.spector.config;
 
 import com.spectrayan.spector.commons.error.ErrorCode;
-import com.spectrayan.spector.commons.error.SpectorConfigValueException;
+import com.spectrayan.spector.config.error.SpectorConfigValueException;
 
 import java.nio.file.Path;
 

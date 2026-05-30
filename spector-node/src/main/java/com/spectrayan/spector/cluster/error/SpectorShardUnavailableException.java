@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.cluster.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when a target shard is not reachable or has been decommissioned.

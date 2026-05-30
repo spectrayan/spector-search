@@ -1,6 +1,6 @@
 package com.spectrayan.spector.index.fuzz;
 
-import com.spectrayan.spector.commons.error.SpectorIndexIntegrityException;
+import com.spectrayan.spector.index.error.SpectorIndexIntegrityException;
 
 import java.io.IOException;
 import java.io.PrintWriter;

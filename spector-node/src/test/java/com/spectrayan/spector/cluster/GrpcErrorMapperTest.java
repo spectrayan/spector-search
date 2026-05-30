@@ -2,6 +2,7 @@ package com.spectrayan.spector.cluster;
 
 import com.google.rpc.Code;
 import com.spectrayan.spector.commons.error.*;
+import com.spectrayan.spector.cluster.error.SpectorShardUnavailableException;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.protobuf.StatusProto;

@@ -1,7 +1,7 @@
 package com.spectrayan.spector.config;
 
 import com.spectrayan.spector.commons.error.ErrorCode;
-import com.spectrayan.spector.commons.error.SpectorConfigValueException;
+import com.spectrayan.spector.config.error.SpectorConfigValueException;
 
 /**
  * Configuration parameters for the HNSW (Hierarchical Navigable Small World) index.

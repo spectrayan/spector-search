@@ -3,7 +3,7 @@ package com.spectrayan.spector.config;
 import java.nio.file.Path;
 
 import com.spectrayan.spector.commons.error.ErrorCode;
-import com.spectrayan.spector.commons.error.SpectorConfigValueException;
+import com.spectrayan.spector.config.error.SpectorConfigValueException;
 import com.spectrayan.spector.core.quantization.QuantizationType;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 

@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.config.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when configuration parsing fails.

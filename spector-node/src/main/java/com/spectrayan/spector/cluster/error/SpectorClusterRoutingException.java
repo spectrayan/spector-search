@@ -1,4 +1,6 @@
-package com.spectrayan.spector.commons.error;
+package com.spectrayan.spector.cluster.error;
+
+import com.spectrayan.spector.commons.error.*;
 
 /**
  * Exception thrown when a request cannot be routed to the appropriate shard in the cluster.

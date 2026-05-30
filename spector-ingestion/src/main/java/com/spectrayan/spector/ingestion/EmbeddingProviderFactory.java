@@ -2,7 +2,7 @@ package com.spectrayan.spector.ingestion;
 
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.commons.error.SpectorEmbeddingException;
-import com.spectrayan.spector.commons.error.SpectorEmbeddingUnavailableException;
+import com.spectrayan.spector.embed.error.SpectorEmbeddingUnavailableException;
 import com.spectrayan.spector.commons.error.SpectorServerException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
