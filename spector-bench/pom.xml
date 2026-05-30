@@ -40,6 +40,10 @@
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-memory</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.spectrayan</groupId>
+            <artifactId>spector-embed-ollama</artifactId>
+        </dependency>
 
         <!-- JMH -->
         <dependency>
@@ -81,14 +85,18 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.5.0</version>
                 <configuration>
-                    <mainClass>${exec.mainClass}</mainClass>
-                    <arguments/>
-                    <systemProperties>
-                        <systemProperty>
-                            <key>logback.configurationFile</key>
-                            <value>logback-bench.xml</value>
-                        </systemProperty>
-                    </systemProperties>
+                    <!-- exec:exec launches a child JVM with enable-preview flag -->
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>--enable-preview</argument>
+                        <argument>--add-modules</argument>
+                        <argument>jdk.incubator.vector</argument>
+                        <argument>-Xmx28g</argument>
+                        <argument>-Dlogback.configurationFile=logback-bench.xml</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>${exec.mainClass}</argument>
+                    </arguments>
                 </configuration>
             </plugin>
         </plugins>
