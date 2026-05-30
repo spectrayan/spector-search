@@ -2,6 +2,7 @@ package com.spectrayan.spector.engine;
 
 
 import com.spectrayan.spector.config.SpectorConfig;
+import com.spectrayan.spector.config.SpectorConfigException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
@@ -30,13 +31,13 @@ class SpectorConfigRescoreTest {
     @Test
     void withRescore_rejectsZero() {
         assertThatThrownBy(() -> SpectorConfig.DEFAULT.withRescore(0))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorConfigException.class);
     }
 
     @Test
     void withRescore_rejectsNegative() {
         assertThatThrownBy(() -> SpectorConfig.DEFAULT.withRescore(-1))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(SpectorConfigException.class);
     }
 
     @Test
