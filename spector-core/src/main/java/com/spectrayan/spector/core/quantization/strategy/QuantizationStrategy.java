@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core.quantization.strategy;
 
 import java.lang.foreign.MemorySegment;
@@ -30,7 +45,7 @@ import com.spectrayan.spector.commons.error.SpectorException;
  *   <li>{@link Int4Strategy} — nibble-packed INT4 via {@code NonUniformQuantizer}</li>
  *   <li>{@link Int2Strategy} — crumb-packed INT2 via {@code NonUniformQuantizer}</li>
  *   <li>{@link TurboQuantStrategy} — turbo quantization via {@code TurboQuantizer}</li>
- *   <li>{@link VasqStrategy} — FWHT-rotated INT8 with Panama SIMD kernel</li>
+ *   <li>{@link SvasqStrategy} — FWHT-rotated INT8 with Panama SIMD kernel</li>
  * </ul>
  *
  * <h3>Thread Safety</h3>
@@ -80,7 +95,7 @@ public interface QuantizationStrategy {
      * Prepares a per-query distance context to be reused for all candidates in a
      * single search traversal.
      *
-     * <p>This is the "prepare-once, evaluate-N-times" step. For VASQ, this performs
+     * <p>This is the "prepare-once, evaluate-N-times" step. For SVASQ, this performs
      * the O(D log D) FWHT rotation and scale pre-multiplication. For INT8, it
      * captures the query vector reference. For packed strategies, it resolves the
      * global centroid table.</p>

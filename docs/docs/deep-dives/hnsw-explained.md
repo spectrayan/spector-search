@@ -244,7 +244,7 @@ Spector uses HNSW in two contexts:
 
 ### 1. Standalone HNSW Index
 
-The `QuantizedHnswIndex` is the workhorse for datasets up to ~10M vectors. It combines HNSW with scalar or VASQ quantization:
+The `QuantizedHnswIndex` is the workhorse for datasets up to ~10M vectors. It combines HNSW with scalar or SVASQ quantization:
 
 - **Asymmetric Distance Computation (ADC):** Float32 query vs. quantized stored vectors
 - **Off-heap memory:** Graph edges and quantized vectors stored in Panama `MemorySegment`
@@ -252,10 +252,10 @@ The `QuantizedHnswIndex` is the workhorse for datasets up to ~10M vectors. It co
 
 ### 2. Adaptive Shards in SpectorIndex
 
-The flagship `SpectorIndex` (IVF-HNSW-VASQ) uses HNSW graphs inside large IVF shards:
+The flagship `SpectorIndex` (IVF-HNSW-SVASQ) uses HNSW graphs inside large IVF shards:
 
 - Shards below 20,000 vectors: exact flat scan (SIMD, faster than HNSW for small N)
-- Shards above 20,000 vectors: automatically promoted to HNSW with VASQ quantization
+- Shards above 20,000 vectors: automatically promoted to HNSW with SVASQ quantization
 - This **adaptive** approach avoids HNSW's overhead for small partitions while exploiting its efficiency for large ones
 
 See [SpectorIndex Architecture](spector-index-architecture.md) for the full design.
@@ -266,5 +266,5 @@ See [SpectorIndex Architecture](spector-index-architecture.md) for the full desi
 
 - **Original Paper:** Malkov & Yashunin, ["Efficient and robust approximate nearest neighbor using Hierarchical Navigable Small World graphs"](https://arxiv.org/abs/1603.09320) (2016)
 - [ANN Search Primer](ann-search-primer.md) — Overview of all ANN algorithm families
-- [SpectorIndex Architecture](spector-index-architecture.md) — How HNSW fits into the IVF-HNSW-VASQ design
+- [SpectorIndex Architecture](spector-index-architecture.md) — How HNSW fits into the IVF-HNSW-SVASQ design
 - [Performance Tuning](../operations/performance-tuning.md) — Tuning `M`, `efConstruction`, and `efSearch` in Spector

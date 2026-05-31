@@ -1,6 +1,6 @@
-# 🌀 VASQ: Vectorized Affine Scalar Quantization
+# 🌀 SpectorQuant — SVASQ (Spector Vector-Aligned Scalar Quantization)
 
-> **How Spector achieves INT8 precision rivaling INT12–INT16 using the Fast Walsh-Hadamard Transform.** VASQ is Spector's custom quantization technique that combines mathematical rotation with affine scalar quantization to minimize information loss. This page explains the theory, implementation, and why it outperforms standard scalar quantization.
+> **How Spector achieves INT8 precision rivaling INT12–INT16 using the Fast Walsh-Hadamard Transform.** SVASQ is Spector's custom quantization technique that combines mathematical rotation with affine scalar quantization to minimize information loss. This page explains the theory, implementation, and why it outperforms standard scalar quantization.
 
 ---
 
@@ -26,9 +26,9 @@ Dimension 42 has **70× worse precision** than dimension 0. Since distance compu
 
 ---
 
-## 💡 The VASQ Insight: Rotate First, Then Quantize
+## 💡 The SVASQ Insight: Rotate First, Then Quantize
 
-VASQ solves the outlier problem with a two-step approach:
+SVASQ solves the outlier problem with a two-step approach:
 
 1. **Rotate** the vector using a mathematical transform that **spreads variance uniformly** across all dimensions
 2. **Quantize** the rotated vector using standard INT8 — now every dimension has similar precision
@@ -99,7 +99,7 @@ On a modern CPU with SIMD, this processes 128-dim vectors in under **50 nanoseco
 
 ---
 
-## 🏗️ VASQ Pipeline
+## 🏗️ SVASQ Pipeline
 
 ### Ingestion (Encoding)
 
@@ -143,9 +143,9 @@ Then the approximate L2 distance reduces to a simple dot product between the tra
 
 ---
 
-## 🧬 Residual VASQ: The IVF Superpower
+## 🧬 Residual SVASQ: The IVF Superpower
 
-When VASQ is used inside an IVF index (like SpectorIndex), vectors are quantized as **residuals** — the difference from their assigned centroid:
+When SVASQ is used inside an IVF index (like SpectorIndex), vectors are quantized as **residuals** — the difference from their assigned centroid:
 
 $$r = x - c_{\text{nearest}}$$
 
@@ -176,28 +176,28 @@ graph LR
 
 ---
 
-## 📊 VASQ vs Other Quantization
+## 📊 SVASQ vs Other Quantization
 
 | Technique | Compression | Recall@10 | Speed | Notes |
 |-----------|------------|-----------|-------|-------|
 | Float32 (baseline) | 1× | 100% | ⚡ | Reference |
 | **Scalar INT8** | 4× | 95-99% | ⚡⚡ | Simple, good baseline |
-| **VASQ INT8** | ~4× | **97-99.5%** | ⚡⚡ | FWHT rotation removes outlier impact |
-| **VASQ-4 (INT4)** | **6-8×** | **95-99%** | ⚡⚡ | Nibble-packed FWHT + 3× rescore recommended |
+| **SVASQ INT8** | ~4× | **97-99.5%** | ⚡⚡ | FWHT rotation removes outlier impact |
+| **SVASQ-4 (INT4)** | **6-8×** | **95-99%** | ⚡⚡ | Nibble-packed FWHT + 3× rescore recommended |
 | Scalar INT4 | 8× | 85-95% | ⚡⚡ | Aggressive, needs rescore |
 | Product Quantization | 32× | 80-92% | ⚡ | Complex, requires training |
 
-VASQ achieves the compression of standard INT8 with recall approaching float32 — because the FWHT rotation ensures every dimension contributes equally to the quantized distance.
+SVASQ achieves the compression of standard INT8 with recall approaching float32 — because the FWHT rotation ensures every dimension contributes equally to the quantized distance.
 
 ---
 
-## 🔢 VASQ-4: INT4 Nibble-Packed Quantization
+## 🔢 SVASQ-4: INT4 Nibble-Packed Quantization
 
-VASQ-4 extends the VASQ pipeline to 4-bit quantization, achieving **~2× additional compression** over VASQ-8 (6–8× total vs float32).
+SVASQ-4 extends the SVASQ pipeline to 4-bit quantization, achieving **~2× additional compression** over SVASQ-8 (6–8× total vs float32).
 
 ### Why It Works
 
-The FWHT rotation that makes VASQ-8 work is equally beneficial for INT4:
+The FWHT rotation that makes SVASQ-8 work is equally beneficial for INT4:
 
 - After FWHT, all dimensions contribute equally → INT4 quantization noise is **isotropic**
 - With IVF residuals, the tight range means INT4 on residuals ≈ INT6–INT7 on absolute vectors
@@ -215,7 +215,7 @@ Two 4-bit values are packed per byte using **offset encoding** (shifting [-7, 7]
 byte = (hiNibble << 4) | loNibble
 ```
 
-| Dims | Float32 | VASQ-8 | VASQ-4 | VASQ-4 Compression |
+| Dims | Float32 | SVASQ-8 | SVASQ-4 | SVASQ-4 Compression |
 |------|---------|--------|--------|-------------------|
 | 384 → 512 | 1,536 B | 516 B | 260 B | **5.9×** |
 | 768 → 1024 | 3,072 B | 1,028 B | 516 B | **6.0×** |
@@ -223,17 +223,17 @@ byte = (hiNibble << 4) | loNibble
 
 ### Calibration
 
-VASQ-4 uses **tighter clipping** than VASQ-8 (2.5σ vs 3.0σ) to optimize for 15 quantization levels:
+SVASQ-4 uses **tighter clipping** than SVASQ-8 (2.5σ vs 3.0σ) to optimize for 15 quantization levels:
 
 ```java
-VasqParams params = VasqCalibrator.calibrate4bit(corpus, dimensions, seed);
+SvasqParams params = SvasqCalibrator.calibrate4bit(corpus, dimensions, seed);
 // params.bitWidth() == 4
 // params.bytesPerVector() == 4 + paddedDim / 2
 ```
 
 ### SIMD Kernel
 
-The `Vasq4SimdKernel` extracts nibbles via shift+mask in each loop iteration, providing natural instruction-level parallelism:
+The `Svasq4SimdKernel` extracts nibbles via shift+mask in each loop iteration, providing natural instruction-level parallelism:
 
 ```java
 // Load VL packed bytes = 2×VL dimensions
@@ -258,7 +258,7 @@ The hi/lo split gives the CPU two independent FMA chains — one for even dimens
     SpectorEngine engine = SpectorEngine.builder()
         .dimensions(768)
         .capacity(500_000)
-        .vasq4()              // VASQ-4 with default 3× rescore
+        .svasq4()              // SVASQ-4 with default 3× rescore
         .build();
     ```
 
@@ -267,13 +267,13 @@ The hi/lo split gives the CPU two independent FMA chains — one for even dimens
     ```java
     SpectorConfig config = SpectorConfig.DEFAULT
         .withDimensions(768)
-        .withVasq4(5);        // 5× oversampling for higher recall
+        .withSvasq4(5);        // 5× oversampling for higher recall
     ```
 
 === "Direct Index API"
 
     ```java
-    QuantizedHnswIndex index = QuantizedHnswIndex.vasq4(
+    QuantizedHnswIndex index = QuantizedHnswIndex.svasq4(
         768, 100_000, SimilarityFunction.COSINE, HnswParams.DEFAULT, 3);
     ```
 
@@ -281,54 +281,54 @@ The hi/lo split gives the CPU two independent FMA chains — one for even dimens
 
 | Configuration | Recall@10 | Notes |
 |--------------|-----------|-------|
-| VASQ-4 (no rescore) | ~95–97% | Direct quantized distance only |
-| VASQ-4 (2× rescore) | ~96–98% | Moderate oversampling |
-| **VASQ-4 (3× rescore)** | **~97–99%** | **Recommended default** |
-| VASQ-4 (5× rescore) | ~98–99% | Higher latency, diminishing returns |
-| VASQ-8 (no rescore) | ~97–99.5% | For comparison |
+| SVASQ-4 (no rescore) | ~95–97% | Direct quantized distance only |
+| SVASQ-4 (2× rescore) | ~96–98% | Moderate oversampling |
+| **SVASQ-4 (3× rescore)** | **~97–99%** | **Recommended default** |
+| SVASQ-4 (5× rescore) | ~98–99% | Higher latency, diminishing returns |
+| SVASQ-8 (no rescore) | ~97–99.5% | For comparison |
 
 ---
 
 ## 💻 Implementation in Spector
 
-### VasqCalibrator
+### SvasqCalibrator
 
 Calibrates min/max statistics per dimension from a representative sample:
 
 ```java
-// VASQ-8 calibration
-VasqParams params8 = VasqCalibrator.calibrate(flatData, sampleSize, dimensions);
+// SVASQ-8 calibration
+SvasqParams params8 = SvasqCalibrator.calibrate(flatData, sampleSize, dimensions);
 
-// VASQ-4 calibration (tighter clipping for 15 levels)
-VasqParams params4 = VasqCalibrator.calibrate4bit(flatData, sampleSize, dimensions);
+// SVASQ-4 calibration (tighter clipping for 15 levels)
+SvasqParams params4 = SvasqCalibrator.calibrate4bit(flatData, sampleSize, dimensions);
 ```
 
-### VasqStrategy / Vasq4Strategy
+### SvasqStrategy / Svasq4Strategy
 
 Encodes vectors and computes asymmetric distances:
 
 ```java
-// VASQ-8
-VasqStrategy strategy = new VasqStrategy(params, SimilarityFunction.EUCLIDEAN);
+// SVASQ-8
+SvasqStrategy strategy = new SvasqStrategy(params, SimilarityFunction.EUCLIDEAN);
 
-// VASQ-4
-Vasq4Strategy strategy4 = new Vasq4Strategy(params4, SimilarityFunction.EUCLIDEAN);
+// SVASQ-4
+Svasq4Strategy strategy4 = new Svasq4Strategy(params4, SimilarityFunction.EUCLIDEAN);
 
 // Both implement QuantizationStrategy — same API
 byte[] encoded = strategy.encode(residualVector);
 float dist = strategy.computeDistance(segment, offset, qs);
 ```
 
-### VasqSimdKernel / Vasq4SimdKernel
+### SvasqSimdKernel / Svasq4SimdKernel
 
-The Panama SIMD kernel that computes VASQ distances directly from off-heap memory:
+The Panama SIMD kernel that computes SVASQ distances directly from off-heap memory:
 
 ```java
-// VASQ-8: Zero-copy INT8 codes from MemorySegment
-float l2Dist = VasqSimdKernel.computeL2(segment, offset, paddedDim, queryState);
+// SVASQ-8: Zero-copy INT8 codes from MemorySegment
+float l2Dist = SvasqSimdKernel.computeL2(segment, offset, paddedDim, queryState);
 
-// VASQ-4: Zero-copy nibble-packed INT4 codes from MemorySegment
-float l2Dist4 = Vasq4SimdKernel.computeL2(segment, offset, halfPaddedDim, queryState4);
+// SVASQ-4: Zero-copy nibble-packed INT4 codes from MemorySegment
+float l2Dist4 = Svasq4SimdKernel.computeL2(segment, offset, halfPaddedDim, queryState4);
 ```
 
 ---
@@ -352,8 +352,8 @@ The quantization error is now distributed uniformly across all dimensions (becau
 ## 🔗 See Also
 
 - [Large-Scale Benchmarks](real-embedding-benchmarks.md) — Empirical sweeps for real embeddings and HNSW shard promotions.
-- [Roadmap](../roadmap.md) — Future compression improvements (VASQ-PQ, padding-aware storage, norm f16)
+- [Roadmap](../roadmap.md) — Future compression improvements (SVASQ-PQ, padding-aware storage, norm f16)
 - [Understanding Quantization](understanding-quantization.md) — All quantization techniques compared
-- [SpectorIndex Architecture](spector-index-architecture.md) — How VASQ fits into the IVF-HNSW index
-- [VASQ Whitepaper](vasq-spectorindex-whitepaper.md) — Academic treatment with proofs and benchmarks
+- [SpectorIndex Architecture](spector-index-architecture.md) — How SVASQ fits into the IVF-HNSW index
+- [SVASQ Whitepaper](svasq-spectorindex-whitepaper.md) — Academic treatment with proofs and benchmarks
 - [Quantization Comparison](quantization-comparison.md) — How Spector compares to other engines' quantization

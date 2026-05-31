@@ -239,6 +239,6 @@ How long it takes to index all vectors. Matters for systems with frequent update
 ## 🔗 See Also
 
 - [HNSW Explained](hnsw-explained.md) — How the most popular ANN algorithm works, step by step
-- [SpectorIndex Architecture](spector-index-architecture.md) — Spector's IVF-HNSW-VASQ hybrid index
-- [VASQ Quantization](vasq-deep-dive.md) — How VASQ compresses vectors with near-lossless quality
+- [SpectorIndex Architecture](spector-index-architecture.md) — Spector's IVF-HNSW-SVASQ hybrid index
+- [SVASQ Quantization](svasq-deep-dive.md) — How SVASQ compresses vectors with near-lossless quality
 - [Understanding Quantization](understanding-quantization.md) — All quantization techniques compared

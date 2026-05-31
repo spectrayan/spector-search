@@ -1,10 +1,25 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.bench;
 
 import com.spectrayan.spector.core.quantization.strategy.DistanceContext;
-import com.spectrayan.spector.core.quantization.strategy.VasqStrategy;
-import com.spectrayan.spector.core.quantization.vasq.VasqCalibrator;
-import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
-import com.spectrayan.spector.core.quantization.vasq.VasqParams;
+import com.spectrayan.spector.core.quantization.strategy.SvasqStrategy;
+import com.spectrayan.spector.core.quantization.svasq.SvasqCalibrator;
+import com.spectrayan.spector.core.quantization.svasq.SvasqEncoder;
+import com.spectrayan.spector.core.quantization.svasq.SvasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import org.openjdk.jmh.annotations.*;
@@ -28,7 +43,7 @@ import java.util.concurrent.TimeUnit;
  * <p>Benchmarks:</p>
  * <ul>
  *   <li><b>float32 flat scan</b> — exhaustive exact similarity over raw float residuals</li>
- *   <li><b>VASQ flat scan</b> — exhaustive scan using the VASQ distance kernel over encoded
+ *   <li><b>SVASQ flat scan</b> — exhaustive scan using the SVASQ distance kernel over encoded
  *       off-heap residuals. Simulates what the shard would do post-calibration in a fully
  *       quantized shard (not yet promoted to HNSW).</li>
  * </ul>
@@ -64,7 +79,7 @@ public class FlatScanBenchmark {
     private float[][] floatResiduals;   // float32 exact residuals (flat mode)
     private MemorySegment encodedSegment;
     private Arena arena;
-    private VasqStrategy vasqStrategy;
+    private SvasqStrategy svasqStrategy;
     private int bpv;
     private SimilarityFunction fn = SimilarityFunction.COSINE;
 
@@ -72,15 +87,15 @@ public class FlatScanBenchmark {
     public void setup() {
         Random rng = new Random(42L);
 
-        // Build calibrated VASQ strategy
+        // Build calibrated SVASQ strategy
         List<float[]> sample = new ArrayList<>(Math.min(shardSize, 2000));
         for (int i = 0; i < sample.size(); i++) sample.add(gaussianUnit(rng, dims));
         // Ensure we have enough for calibration
         while (sample.size() < 200) sample.add(gaussianUnit(rng, dims));
-        VasqParams params = VasqCalibrator.calibrate(sample, dims);
-        VasqEncoder encoder = new VasqEncoder(params);
-        vasqStrategy = new VasqStrategy(params, fn);
-        bpv = vasqStrategy.bytesPerVector();
+        SvasqParams params = SvasqCalibrator.calibrate(sample, dims);
+        SvasqEncoder encoder = new SvasqEncoder(params);
+        svasqStrategy = new SvasqStrategy(params, fn);
+        bpv = svasqStrategy.bytesPerVector();
 
         // Query residual
         queryResidual = gaussianUnit(rng, dims);
@@ -89,7 +104,7 @@ public class FlatScanBenchmark {
         floatResiduals = new float[shardSize][dims];
         for (int i = 0; i < shardSize; i++) floatResiduals[i] = gaussianUnit(rng, dims);
 
-        // VASQ-encoded residuals (off-heap)
+        // SVASQ-encoded residuals (off-heap)
         arena = Arena.ofShared();
         encodedSegment = arena.allocate((long) shardSize * bpv, 8L);
         for (int i = 0; i < shardSize; i++) {
@@ -126,21 +141,21 @@ public class FlatScanBenchmark {
         bh.consume(heap);
     }
 
-    // ── VASQ quantized flat scan (hypothetical fully-quantized shard mode) ───
+    // ── SVASQ quantized flat scan (hypothetical fully-quantized shard mode) ───
 
     /**
-     * Exhaustive VASQ distance scan over off-heap encoded residuals.
-     * Demonstrates the throughput possible if the flat-scan path also used VASQ
+     * Exhaustive SVASQ distance scan over off-heap encoded residuals.
+     * Demonstrates the throughput possible if the flat-scan path also used SVASQ
      * instead of float32 (useful for very large pre-promotion shards).
      */
     @Benchmark
-    public void flatScan_vasq_encoded(Blackhole bh) {
-        DistanceContext ctx = vasqStrategy.prepareQueryContext(queryResidual);
+    public void flatScan_svasq_encoded(Blackhole bh) {
+        DistanceContext ctx = svasqStrategy.prepareQueryContext(queryResidual);
         PriorityQueue<float[]> heap = new PriorityQueue<>(topK,
                 (a, b) -> Float.compare(a[0], b[0]));
 
         for (int i = 0; i < shardSize; i++) {
-            float score = vasqStrategy.distance(encodedSegment, (long) i * bpv, ctx);
+            float score = svasqStrategy.distance(encodedSegment, (long) i * bpv, ctx);
             if (heap.size() < topK) {
                 heap.offer(new float[]{score, i});
             } else if (score > heap.peek()[0]) {

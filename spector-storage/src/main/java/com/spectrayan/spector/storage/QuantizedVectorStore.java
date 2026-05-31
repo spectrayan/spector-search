@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.storage;
 
 import java.lang.foreign.Arena;
@@ -18,8 +33,8 @@ import com.spectrayan.spector.core.quantization.TurboQuantizer;
 import com.spectrayan.spector.core.quantization.strategy.DistanceContext;
 import com.spectrayan.spector.core.quantization.strategy.QuantizationStrategy;
 import com.spectrayan.spector.core.quantization.strategy.QuantizationStrategyFactory;
-import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
-import com.spectrayan.spector.core.quantization.vasq.VasqParams;
+import com.spectrayan.spector.core.quantization.svasq.SvasqEncoder;
+import com.spectrayan.spector.core.quantization.svasq.SvasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.storage.error.SpectorStoreFullException;
@@ -34,7 +49,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *   <li><b>INT8</b> — one byte per dimension, using linear {@link ScalarQuantizer}</li>
  *   <li><b>INT4</b> — nibble-packed (2 values/byte), using {@link NonUniformQuantizer}</li>
  *   <li><b>INT2</b> — crumb-packed (4 values/byte), using {@link NonUniformQuantizer}</li>
- *   <li><b>VASQ</b> — FWHT-rotated affine INT8 with exact-norm header, using {@link VasqEncoder}</li>
+ *   <li><b>SVASQ</b> — FWHT-rotated affine INT8 with exact-norm header, using {@link SvasqEncoder}</li>
  * </ul>
  *
  * <h3>Design</h3>
@@ -47,7 +62,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *   INT8:      [byte × dimensions]
  *   INT4:      [byte × ceil(dimensions/2)]
  *   INT2:      [byte × ceil(dimensions/4)]
- *   VASQ:      [float32 exactNormSq (4 bytes)] [INT8 × paddedDim]
+ *   SVASQ:      [float32 exactNormSq (4 bytes)] [INT8 × paddedDim]
  * </pre>
  *
  * <h3>Thread Safety</h3>
@@ -68,11 +83,11 @@ public class QuantizedVectorStore implements AutoCloseable {
     /** Strategy encapsulating all quantization-type-specific encode/decode/distance logic. */
     private final QuantizationStrategy strategy;
 
-    // Retained for backward-compat accessors and for VASQ zero-copy access from index layer
+    // Retained for backward-compat accessors and for SVASQ zero-copy access from index layer
     private final ScalarQuantizer quantizer;
     private final NonUniformQuantizer nonUniformQuantizer;
     private final TurboQuantizer turboQuantizer;
-    private final VasqEncoder vasqEncoder;
+    private final SvasqEncoder svasqEncoder;
 
     private final Arena arena;
     private final MemorySegment segment;
@@ -108,17 +123,17 @@ public class QuantizedVectorStore implements AutoCloseable {
     }
 
     /**
-     * Creates a VASQ-mode vector store.
+     * Creates a SVASQ-mode vector store.
      *
      * <p>Vectors are stored as: {@code [4b float32 exactNormSq][paddedDim × signed INT8]}.</p>
      *
      * @param dimensions  vector dimensionality
      * @param capacity    max number of vectors
-     * @param vasqParams  calibrated VASQ parameters
+     * @param svasqParams  calibrated SVASQ parameters
      */
-    public QuantizedVectorStore(int dimensions, int capacity, VasqParams vasqParams) {
-        this(dimensions, capacity, QuantizationType.VASQ, null, null, null,
-                new VasqEncoder(vasqParams), SimilarityFunction.COSINE);
+    public QuantizedVectorStore(int dimensions, int capacity, SvasqParams svasqParams) {
+        this(dimensions, capacity, QuantizationType.SVASQ, null, null, null,
+                new SvasqEncoder(svasqParams), SimilarityFunction.COSINE);
     }
 
     /**
@@ -141,7 +156,7 @@ public class QuantizedVectorStore implements AutoCloseable {
      *
      * <p>For INT8, a {@link ScalarQuantizer} is required. For INT4 and INT2, a
      * {@link NonUniformQuantizer} is required. For TURBO_QUANT, a {@link TurboQuantizer}
-     * is required. For VASQ, a {@link VasqEncoder} is required.</p>
+     * is required. For SVASQ, a {@link SvasqEncoder} is required.</p>
      *
      * @param dimensions          vector dimensionality
      * @param capacity            max number of vectors
@@ -149,13 +164,13 @@ public class QuantizedVectorStore implements AutoCloseable {
      * @param quantizer           the scalar quantizer for INT8 (may be null if not INT8)
      * @param nonUniformQuantizer the non-uniform quantizer for INT4/INT2 (may be null if not INT4/INT2)
      * @param turboQuantizer      the TurboQuantizer (may be null if not TURBO_QUANT)
-     * @param vasqEncoder         the VASQ encoder (may be null if not VASQ)
+     * @param svasqEncoder         the SVASQ encoder (may be null if not SVASQ)
      * @param similarityFunction  the similarity function used for distance context preparation
      * @throws SpectorValidationException if capacity is not positive, or if required quantizer is missing
      */
     public QuantizedVectorStore(int dimensions, int capacity, QuantizationType quantizationType,
                                  ScalarQuantizer quantizer, NonUniformQuantizer nonUniformQuantizer,
-                                 TurboQuantizer turboQuantizer, VasqEncoder vasqEncoder,
+                                 TurboQuantizer turboQuantizer, SvasqEncoder svasqEncoder,
                                  SimilarityFunction similarityFunction) {
         if (capacity <= 0) throw new SpectorValidationException(ErrorCode.DIMENSIONS_INVALID, 0);
         if (quantizationType == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "quantizationType");
@@ -163,7 +178,7 @@ public class QuantizedVectorStore implements AutoCloseable {
         // Delegate validation + strategy creation to the Abstract Factory (with dimension checks)
         this.strategy = QuantizationStrategyFactory.createWithDimCheck(
                 quantizationType, dimensions, quantizer, nonUniformQuantizer, turboQuantizer,
-                vasqEncoder, similarityFunction);
+                svasqEncoder, similarityFunction);
 
         this.dimensions = dimensions;
         this.capacity = capacity;
@@ -171,7 +186,7 @@ public class QuantizedVectorStore implements AutoCloseable {
         this.quantizer = quantizer;
         this.nonUniformQuantizer = nonUniformQuantizer;
         this.turboQuantizer = turboQuantizer;
-        this.vasqEncoder = vasqEncoder;
+        this.svasqEncoder = svasqEncoder;
 
         this.bytesPerVector = strategy.bytesPerVector();
         this.arena = Arena.ofShared();
@@ -195,9 +210,9 @@ public class QuantizedVectorStore implements AutoCloseable {
     @Deprecated
     public QuantizedVectorStore(int dimensions, int capacity, QuantizationType quantizationType,
                                  ScalarQuantizer quantizer, NonUniformQuantizer nonUniformQuantizer,
-                                 TurboQuantizer turboQuantizer, VasqEncoder vasqEncoder) {
+                                 TurboQuantizer turboQuantizer, SvasqEncoder svasqEncoder) {
         this(dimensions, capacity, quantizationType, quantizer, nonUniformQuantizer,
-                turboQuantizer, vasqEncoder, SimilarityFunction.COSINE);
+                turboQuantizer, svasqEncoder, SimilarityFunction.COSINE);
     }
 
     // ─────────────── Write ───────────────
@@ -342,14 +357,14 @@ public class QuantizedVectorStore implements AutoCloseable {
     /** Returns the TurboQuantizer (TURBO_QUANT path), or null if not TurboQuant. */
     public TurboQuantizer turboQuantizer() { return turboQuantizer; }
 
-    /** Returns the VASQ encoder, or null if not VASQ mode. */
-    public VasqEncoder vasqEncoder() { return vasqEncoder; }
+    /** Returns the SVASQ encoder, or null if not SVASQ mode. */
+    public SvasqEncoder svasqEncoder() { return svasqEncoder; }
 
     /**
      * Returns the underlying off-heap {@link MemorySegment}.
      *
      * <p>Used by the HNSW index layer to pass the segment directly to
-     * {@link com.spectrayan.spector.core.quantization.vasq.VasqSimdKernel} without
+     * {@link com.spectrayan.spector.core.quantization.svasq.SvasqSimdKernel} without
      * copying — zero extra allocations in the hot path.</p>
      *
      * @return the off-heap segment

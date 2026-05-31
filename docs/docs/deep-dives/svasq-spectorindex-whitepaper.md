@@ -1,4 +1,4 @@
-# VASQ + SpectorIndex: A Technical Whitepaper
+# SVASQ + SpectorIndex: A Technical Whitepaper
 
 > **Vectorized Affine Scalar Quantization with Adaptive IVF-HNSW Indexing for High-Performance Approximate Nearest Neighbor Search**
 
@@ -8,7 +8,7 @@
 
 ## Abstract
 
-We present **VASQ** (Vectorized Affine Scalar Quantization), a novel vector compression technique that applies the Fast Walsh-Hadamard Transform (FWHT) to spread dimensional variance before INT8 affine quantization, achieving near-lossless recall with 4× compression. We integrate VASQ into **SpectorIndex**, an adaptive hybrid index combining Inverted File (IVF) coarse partitioning with per-partition Hierarchical Navigable Small World (HNSW) graphs that automatically promote from exact flat scans to quantized graph search as partitions grow. The system achieves 100K–250K vector ingestions per second (28–160× faster than standalone HNSW), sub-millisecond search latency, and perfect recall at full probe depth, implemented entirely on the JVM using Java 21's Vector API (Project Panama) for SIMD acceleration and off-heap memory for zero-GC search paths.
+We present **SVASQ** (Vectorized Affine Scalar Quantization), a novel vector compression technique that applies the Fast Walsh-Hadamard Transform (FWHT) to spread dimensional variance before INT8 affine quantization, achieving near-lossless recall with 4× compression. We integrate SVASQ into **SpectorIndex**, an adaptive hybrid index combining Inverted File (IVF) coarse partitioning with per-partition Hierarchical Navigable Small World (HNSW) graphs that automatically promote from exact flat scans to quantized graph search as partitions grow. The system achieves 100K–250K vector ingestions per second (28–160× faster than standalone HNSW), sub-millisecond search latency, and perfect recall at full probe depth, implemented entirely on the JVM using Java 21's Vector API (Project Panama) for SIMD acceleration and off-heap memory for zero-GC search paths.
 
 ---
 
@@ -21,11 +21,11 @@ The fundamental tension in ANN search is the **recall–speed–memory triangle*
 - **IVF** [[2]](#references) enables fast ingestion and cache-friendly search through spatial partitioning, but standalone flat IVF has limited recall at low probe depths.
 - **Product Quantization** [[3]](#references) provides aggressive compression (32–96×) but requires expensive codebook training, complex lookup-table-based distance computation, and suffers from significant recall degradation.
 
-SpectorIndex addresses all three limitations simultaneously by combining the strengths of IVF, HNSW, and a novel quantization approach (VASQ) that achieves the simplicity and speed of scalar quantization with recall approaching float32 exact search.
+SpectorIndex addresses all three limitations simultaneously by combining the strengths of IVF, HNSW, and a novel quantization approach (SVASQ) that achieves the simplicity and speed of scalar quantization with recall approaching float32 exact search.
 
 ---
 
-## 2. VASQ: Vectorized Affine Scalar Quantization
+## 2. SVASQ: Vectorized Affine Scalar Quantization
 
 ### 2.1 The Outlier Problem in Scalar Quantization
 
@@ -37,7 +37,7 @@ The quantization error per dimension is bounded by $\epsilon_i \leq \frac{\text{
 
 ### 2.2 Variance Equalization via FWHT
 
-VASQ resolves the outlier problem by applying an orthogonal rotation before quantization. We use the **Fast Walsh-Hadamard Transform** (FWHT), which multiplies the vector by the normalized Hadamard matrix $H_n$:
+SVASQ resolves the outlier problem by applying an orthogonal rotation before quantization. We use the **Fast Walsh-Hadamard Transform** (FWHT), which multiplies the vector by the normalized Hadamard matrix $H_n$:
 
 $$\hat{x} = \frac{1}{\sqrt{n}} H_n \cdot x$$
 
@@ -49,7 +49,7 @@ $$\hat{x} = \frac{1}{\sqrt{n}} H_n \cdot x$$
 
 *Intuition:* Each output dimension of the Hadamard transform is a sum/difference of all input dimensions with alternating signs. A single outlier dimension's variance is distributed across all output dimensions.
 
-### 2.3 VASQ Encoding Pipeline
+### 2.3 SVASQ Encoding Pipeline
 
 Given a vector $x \in \mathbb{R}^D$:
 
@@ -89,7 +89,7 @@ SpectorIndex organizes vectors in a two-level hierarchy:
 | Mode | Condition | Search | Memory |
 |------|-----------|--------|--------|
 | **Flat** | size < $T$ | Exact SIMD scan over float32 residuals | Float32 buffer |
-| **HNSW** | size ≥ $T$ | VASQ-quantized graph traversal | VASQ codes + graph edges |
+| **HNSW** | size ≥ $T$ | SVASQ-quantized graph traversal | SVASQ codes + graph edges |
 
 Where $T$ is the `shardThreshold` (default: 20,000).
 
@@ -106,8 +106,8 @@ For partitions of $N < 20{,}000$ vectors, the flat scan completes in $N / 1000 \
 
 When a shard's flat buffer reaches `shardThreshold`, it automatically promotes to HNSW mode:
 
-1. **Calibrate VASQ** from the flat buffer (in-place, single pass)
-2. **Build HNSW graph** with pre-calibrated VASQ strategy (bulk insertion)
+1. **Calibrate SVASQ** from the flat buffer (in-place, single pass)
+2. **Build HNSW graph** with pre-calibrated SVASQ strategy (bulk insertion)
 3. **Null flat buffer** to reclaim heap memory
 4. **Volatile publication** — a `volatile` write to the `promoted` flag establishes a happens-before edge, guaranteeing the HNSW index is visible to all concurrent search threads
 
@@ -134,7 +134,7 @@ The centroid $c$ cancels algebraically, so the residual L2 distance equals the o
 When promoting a shard, the HNSW graph must be wired correctly. For each new node, the algorithm finds its nearest existing neighbors. We use **Asymmetric Distance Computation (ADC)**:
 
 - **Incoming vector:** exact float32 residual (treated as a "query")
-- **Existing nodes:** already VASQ-quantized
+- **Existing nodes:** already SVASQ-quantized
 
 The ADC distance between an exact float32 vector and a quantized vector is more accurate than the Symmetric Distance (SDC) between two quantized vectors, producing a higher-quality graph with better recall.
 
@@ -157,7 +157,7 @@ The JIT compiler maps these to AVX2/AVX-512 instructions, achieving 8–16 float
 
 ### 4.2 Off-Heap Memory
 
-VASQ-quantized vectors and HNSW graph edges are stored in Panama `MemorySegment` (off-heap), avoiding GC pressure during search. The `VasqSimdKernel` reads INT8 codes directly from off-heap memory without any intermediate `byte[]` allocation.
+SVASQ-quantized vectors and HNSW graph edges are stored in Panama `MemorySegment` (off-heap), avoiding GC pressure during search. The `SvasqSimdKernel` reads INT8 codes directly from off-heap memory without any intermediate `byte[]` allocation.
 
 ### 4.3 Zero-GC Flat Scan
 
@@ -244,7 +244,7 @@ Recall at practical nProbe values is lower with random Gaussian vectors than wit
 
 SpectorIndex's architecture suggests the following scaling behavior:
 
-- **Memory:** O(D × N) with ~4× compression via VASQ
+- **Memory:** O(D × N) with ~4× compression via SVASQ
 - **Ingestion:** O(D × N) — dominated by residual computation and flat buffer appends
 - **Search:** O(D × N/C × nProbe) — linear in partition size, controlled by nProbe
 - **Optimal centroid count:** C ≈ √N minimizes the search cost × recall product
@@ -259,16 +259,16 @@ SpectorIndex's architecture suggests the following scaling behavior:
 
 ## 7. Related Work
 
-- **FAISS IndexIVFFlat** [[2]](#references): IVF with flat scan per partition. SpectorIndex adds adaptive HNSW promotion and VASQ quantization.
-- **SPANN** [[5]](#references): Space-Partitioned ANN by Microsoft. Similar IVF + local graph concept; SpectorIndex adds VASQ and adaptive flat/HNSW shard modes.
-- **ScaNN** [[6]](#references): Google's ANN library using anisotropic quantization. VASQ achieves similar variance equalization via FWHT instead of learned rotations.
+- **FAISS IndexIVFFlat** [[2]](#references): IVF with flat scan per partition. SpectorIndex adds adaptive HNSW promotion and SVASQ quantization.
+- **SPANN** [[5]](#references): Space-Partitioned ANN by Microsoft. Similar IVF + local graph concept; SpectorIndex adds SVASQ and adaptive flat/HNSW shard modes.
+- **ScaNN** [[6]](#references): Google's ANN library using anisotropic quantization. SVASQ achieves similar variance equalization via FWHT instead of learned rotations.
 - **DiskANN** [[7]](#references): SSD-optimized graph index. SpectorIndex is RAM-optimized with off-heap Panama memory.
 
 ---
 
 ## 8. Conclusion
 
-VASQ + SpectorIndex demonstrates that combining three orthogonal techniques — IVF partitioning, adaptive HNSW graphs, and FWHT-rotated scalar quantization — produces a vector index with:
+SVASQ + SpectorIndex demonstrates that combining three orthogonal techniques — IVF partitioning, adaptive HNSW graphs, and FWHT-rotated scalar quantization — produces a vector index with:
 
 - **Ingestion speed** rivaling flat arrays (100K+ docs/s)
 - **Search recall** approaching exact brute-force (with sufficient nProbe)

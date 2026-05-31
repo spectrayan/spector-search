@@ -1,8 +1,23 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core;
 
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 
-import com.spectrayan.spector.core.quantization.vasq.*;
+import com.spectrayan.spector.core.quantization.svasq.*;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -16,12 +31,12 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for VASQ-4 (INT4 nibble-packed) pipeline: calibration → encode → prepare → distance.
+ * Tests for SVASQ-4 (INT4 nibble-packed) pipeline: calibration → encode → prepare → distance.
  *
- * <p>Mirrors {@link VasqKernelTest} but with 4-bit quantization. Expected accuracy is
- * lower than VASQ-8 (15 levels vs 255) but still usable with oversampling rescore.</p>
+ * <p>Mirrors {@link SvasqKernelTest} but with 4-bit quantization. Expected accuracy is
+ * lower than SVASQ-8 (15 levels vs 255) but still usable with oversampling rescore.</p>
  */
-class Vasq4KernelTest {
+class Svasq4KernelTest {
 
     private static final long   SEED       = 42L;
     private static final int    DIM        = 128;
@@ -30,9 +45,9 @@ class Vasq4KernelTest {
     private static final float  L2_REL_TOL = 0.15f;  // ≤ 15% average relative L2 error
     private static final float  DOT_TOL    = 0.15f;  // ≤ 15% average norm-normalized dot error
 
-    private static VasqParams     params;
-    private static Vasq4Encoder   encoder;
-    private static Vasq4QueryPrep queryPrep;
+    private static SvasqParams     params;
+    private static Svasq4Encoder   encoder;
+    private static Svasq4QueryPrep queryPrep;
     private static List<float[]>  corpus;
 
     @BeforeAll
@@ -44,16 +59,16 @@ class Vasq4KernelTest {
             for (int d = 0; d < DIM; d++) v[d] = (float) rng.nextGaussian();
             corpus.add(v);
         }
-        params    = VasqCalibrator.calibrate4bit(corpus, DIM, SEED);
-        encoder   = new Vasq4Encoder(params);
-        queryPrep = new Vasq4QueryPrep(params);
+        params    = SvasqCalibrator.calibrate4bit(corpus, DIM, SEED);
+        encoder   = new Svasq4Encoder(params);
+        queryPrep = new Svasq4QueryPrep(params);
     }
 
     // ── Params validation ─────────────────────────────────────────────────────
 
     @Test
     void params_bitWidth_is_4() {
-        assertEquals(VasqParams.BIT_WIDTH_4, params.bitWidth());
+        assertEquals(SvasqParams.BIT_WIDTH_4, params.bitWidth());
     }
 
     @Test
@@ -123,8 +138,8 @@ class Vasq4KernelTest {
                 float[] doc    = corpus.get(docIdx);
 
                 float exactL2 = exactL2Sq(query, doc);
-                Vasq4QueryState qs = queryPrep.prepare(query);
-                float approxL2 = Vasq4SimdKernel.computeL2(segment, (long) docIdx * bpv, halfDim, qs);
+                Svasq4QueryState qs = queryPrep.prepare(query);
+                float approxL2 = Svasq4SimdKernel.computeL2(segment, (long) docIdx * bpv, halfDim, qs);
 
                 // L2 distances should be non-negative
                 assertTrue(approxL2 >= -0.5f,
@@ -151,8 +166,8 @@ class Vasq4KernelTest {
             MemorySegment seg = arena.allocate(bpv, 8);
             encoder.encode(q, seg, 0L);
 
-            Vasq4QueryState qs = queryPrep.prepare(q);
-            float l2 = Vasq4SimdKernel.computeL2(seg, 0L, params.paddedDim() / 2, qs);
+            Svasq4QueryState qs = queryPrep.prepare(q);
+            float l2 = Svasq4SimdKernel.computeL2(seg, 0L, params.paddedDim() / 2, qs);
 
             float normSq = exactNormSq(q);
             // INT4 is rougher — allow 25% of ‖q‖²
@@ -185,8 +200,8 @@ class Vasq4KernelTest {
                 float[] doc    = corpus.get(docIdx);
 
                 float exactDot  = exactDot(query, doc);
-                Vasq4QueryState qs = queryPrep.prepare(query);
-                float approxDot = Vasq4SimdKernel.computeDot(segment, (long) docIdx * bpv, halfDim, qs);
+                Svasq4QueryState qs = queryPrep.prepare(query);
+                float approxDot = Svasq4SimdKernel.computeDot(segment, (long) docIdx * bpv, halfDim, qs);
 
                 float normProd = (float) Math.sqrt(exactNormSq(query) * exactNormSq(doc)) + 1e-9f;
                 totalAbsError += Math.abs(approxDot - exactDot);
@@ -203,7 +218,7 @@ class Vasq4KernelTest {
 
     @Test
     void l2_ranking_partially_preserved() {
-        // Top-5 exact should partially overlap with top-15 VASQ-4 (less strict than VASQ-8)
+        // Top-5 exact should partially overlap with top-15 SVASQ-4 (less strict than SVASQ-8)
         float[] query = corpus.get(0);
         int halfDim = params.paddedDim() / 2;
         int bpv = encoder.bytesPerVector();
@@ -219,20 +234,20 @@ class Vasq4KernelTest {
             for (int i = 0; i < N_SAMPLES; i++) exactL2[i] = exactL2Sq(query, corpus.get(i));
             int[] exactTop5 = topK(exactL2, 6, true, 0);
 
-            // VASQ-4 top-15 (wider window due to lower precision)
-            Vasq4QueryState qs = queryPrep.prepare(query);
-            float[] vasqL2 = new float[N_SAMPLES];
+            // SVASQ-4 top-15 (wider window due to lower precision)
+            Svasq4QueryState qs = queryPrep.prepare(query);
+            float[] svasqL2 = new float[N_SAMPLES];
             for (int i = 0; i < N_SAMPLES; i++) {
-                vasqL2[i] = Vasq4SimdKernel.computeL2(segment, (long) i * bpv, halfDim, qs);
+                svasqL2[i] = Svasq4SimdKernel.computeL2(segment, (long) i * bpv, halfDim, qs);
             }
-            int[] vasqTop15 = topK(vasqL2, 16, true, 0);
+            int[] svasqTop15 = topK(svasqL2, 16, true, 0);
 
             int overlap = 0;
             for (int e : exactTop5) {
-                for (int v : vasqTop15) if (e == v) { overlap++; break; }
+                for (int v : svasqTop15) if (e == v) { overlap++; break; }
             }
             assertTrue(overlap >= 2,
-                    "Expected ≥ 2 of top-5 exact to appear in VASQ-4 top-15; overlap=" + overlap);
+                    "Expected ≥ 2 of top-5 exact to appear in SVASQ-4 top-15; overlap=" + overlap);
         }
     }
 
@@ -245,15 +260,15 @@ class Vasq4KernelTest {
 
     @Test
     void encoder_rejectsWrongBitWidth() {
-        // VASQ-8 params should be rejected by Vasq4Encoder
-        VasqParams int8Params = VasqCalibrator.calibrate(corpus, DIM, SEED);
-        assertThrows(SpectorValidationException.class, () -> new Vasq4Encoder(int8Params));
+        // SVASQ-8 params should be rejected by Svasq4Encoder
+        SvasqParams int8Params = SvasqCalibrator.calibrate(corpus, DIM, SEED);
+        assertThrows(SpectorValidationException.class, () -> new Svasq4Encoder(int8Params));
     }
 
     @Test
     void queryPrep_rejectsWrongBitWidth() {
-        VasqParams int8Params = VasqCalibrator.calibrate(corpus, DIM, SEED);
-        assertThrows(SpectorValidationException.class, () -> new Vasq4QueryPrep(int8Params));
+        SvasqParams int8Params = SvasqCalibrator.calibrate(corpus, DIM, SEED);
+        assertThrows(SpectorValidationException.class, () -> new Svasq4QueryPrep(int8Params));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

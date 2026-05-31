@@ -1,6 +1,21 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.bench;
 
-import com.spectrayan.spector.core.quantization.vasq.VasqFwht;
+import com.spectrayan.spector.core.quantization.svasq.SvasqFwht;
 
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
@@ -9,11 +24,11 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JMH benchmarks for {@link VasqFwht} — the FWHT rotation step in the VASQ pipeline.
+ * JMH benchmarks for {@link SvasqFwht} — the FWHT rotation step in the SVASQ pipeline.
  *
  * <p>FWHT is applied once per query preparation ({@code O(N log N)} additions, zero multiplications)
  * and once per indexed vector during encode. This benchmark isolates the rotation cost so it
- * can be tracked separately from the VASQ quantization overhead.</p>
+ * can be tracked separately from the SVASQ quantization overhead.</p>
  *
  * <p>Run via:</p>
  * <pre>
@@ -36,13 +51,13 @@ public class FwhtBenchmark {
     @Param({"128", "768", "1024"})
     int dims;
 
-    private VasqFwht fwht;
+    private SvasqFwht fwht;
     private float[] inputVector;
     private float[] outputBuffer;
 
     @Setup(Level.Trial)
     public void setup() {
-        fwht = new VasqFwht(dims, 42L);
+        fwht = new SvasqFwht(dims, 42L);
         int paddedDim = fwht.paddedDim();
         Random rng = new Random(1L);
         inputVector = new float[dims];
@@ -78,7 +93,7 @@ public class FwhtBenchmark {
     @Benchmark
     public void rawFwht_butterfly(Blackhole bh) {
         System.arraycopy(inputVector, 0, outputBuffer, 0, dims);
-        VasqFwht.applyFwht(outputBuffer);
+        SvasqFwht.applyFwht(outputBuffer);
         bh.consume(outputBuffer);
     }
 }

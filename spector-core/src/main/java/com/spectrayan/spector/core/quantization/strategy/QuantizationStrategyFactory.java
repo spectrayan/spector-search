@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core.quantization.strategy;
 import com.spectrayan.spector.commons.error.SpectorException;
 
@@ -5,9 +20,9 @@ import com.spectrayan.spector.core.quantization.NonUniformQuantizer;
 import com.spectrayan.spector.core.quantization.QuantizationType;
 import com.spectrayan.spector.core.quantization.ScalarQuantizer;
 import com.spectrayan.spector.core.quantization.TurboQuantizer;
-import com.spectrayan.spector.core.quantization.vasq.Vasq4Encoder;
-import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
-import com.spectrayan.spector.core.quantization.vasq.VasqParams;
+import com.spectrayan.spector.core.quantization.svasq.Svasq4Encoder;
+import com.spectrayan.spector.core.quantization.svasq.SvasqEncoder;
+import com.spectrayan.spector.core.quantization.svasq.SvasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
@@ -23,9 +38,9 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * <h3>Usage</h3>
  * <pre>{@code
  *   QuantizationStrategy strategy = QuantizationStrategyFactory.create(
- *       QuantizationType.VASQ,
+ *       QuantizationType.SVASQ,
  *       null, null, null,
- *       vasqEncoder,
+ *       svasqEncoder,
  *       similarityFunction
  *   );
  *   strategy.encode(vector, segment, offset);
@@ -50,8 +65,8 @@ public final class QuantizationStrategyFactory {
      * @param scalarQuantizer    required for SCALAR_INT8 (may be null for others)
      * @param nonUniformQuantizer required for SCALAR_INT4 / SCALAR_INT2 (may be null for others)
      * @param turboQuantizer     required for TURBO_QUANT (may be null for others)
-     * @param vasqEncoder        required for VASQ (may be null for others)
-     * @param vasq4Encoder       required for VASQ_4 (may be null for others)
+     * @param svasqEncoder        required for SVASQ (may be null for others)
+     * @param svasq4Encoder       required for SVASQ_4 (may be null for others)
      * @param similarityFunction the distance metric (must not be null)
      * @return a fully initialized {@link QuantizationStrategy}
      * @throws SpectorValidationException if a required sub-quantizer is missing or dimensions mismatch
@@ -61,8 +76,8 @@ public final class QuantizationStrategyFactory {
             ScalarQuantizer scalarQuantizer,
             NonUniformQuantizer nonUniformQuantizer,
             TurboQuantizer turboQuantizer,
-            VasqEncoder vasqEncoder,
-            Vasq4Encoder vasq4Encoder,
+            SvasqEncoder svasqEncoder,
+            Svasq4Encoder svasq4Encoder,
             SimilarityFunction similarityFunction) {
 
         if (type == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "QuantizationType");
@@ -97,36 +112,36 @@ public final class QuantizationStrategyFactory {
                 }
                 yield new TurboQuantStrategy(turboQuantizer, similarityFunction);
             }
-            case VASQ -> {
-                if (vasqEncoder == null) {
-                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "VasqEncoder for VASQ");
+            case SVASQ -> {
+                if (svasqEncoder == null) {
+                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "SvasqEncoder for SVASQ");
                 }
-                yield new VasqStrategy(vasqEncoder, similarityFunction);
+                yield new SvasqStrategy(svasqEncoder, similarityFunction);
             }
-            case VASQ_4 -> {
-                if (vasq4Encoder == null) {
-                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Vasq4Encoder for VASQ_4");
+            case SVASQ_4 -> {
+                if (svasq4Encoder == null) {
+                    throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "Svasq4Encoder for SVASQ_4");
                 }
-                yield new Vasq4Strategy(vasq4Encoder, similarityFunction);
+                yield new Svasq4Strategy(svasq4Encoder, similarityFunction);
             }
             case NONE -> throw new SpectorValidationException(ErrorCode.QUANTIZATION_TYPE_INVALID, "NONE");
         };
     }
 
     /**
-     * Backward-compatible overload without Vasq4Encoder parameter.
+     * Backward-compatible overload without Svasq4Encoder parameter.
      *
-     * <p>Delegates to the full overload with {@code vasq4Encoder = null}.</p>
+     * <p>Delegates to the full overload with {@code svasq4Encoder = null}.</p>
      */
     public static QuantizationStrategy create(
             QuantizationType type,
             ScalarQuantizer scalarQuantizer,
             NonUniformQuantizer nonUniformQuantizer,
             TurboQuantizer turboQuantizer,
-            VasqEncoder vasqEncoder,
+            SvasqEncoder svasqEncoder,
             SimilarityFunction similarityFunction) {
         return create(type, scalarQuantizer, nonUniformQuantizer, turboQuantizer,
-                vasqEncoder, null, similarityFunction);
+                svasqEncoder, null, similarityFunction);
     }
 
     /**
@@ -142,8 +157,8 @@ public final class QuantizationStrategyFactory {
      * @param scalarQuantizer    required for SCALAR_INT8
      * @param nonUniformQuantizer required for SCALAR_INT4 / SCALAR_INT2
      * @param turboQuantizer     required for TURBO_QUANT
-     * @param vasqEncoder        required for VASQ
-     * @param vasq4Encoder       required for VASQ_4
+     * @param svasqEncoder        required for SVASQ
+     * @param svasq4Encoder       required for SVASQ_4
      * @param similarityFunction the distance metric
      * @return a fully initialized {@link QuantizationStrategy}
      * @throws SpectorValidationException if required quantizer missing or dimension mismatch detected
@@ -154,8 +169,8 @@ public final class QuantizationStrategyFactory {
             ScalarQuantizer scalarQuantizer,
             NonUniformQuantizer nonUniformQuantizer,
             TurboQuantizer turboQuantizer,
-            VasqEncoder vasqEncoder,
-            Vasq4Encoder vasq4Encoder,
+            SvasqEncoder svasqEncoder,
+            Svasq4Encoder svasq4Encoder,
             SimilarityFunction similarityFunction) {
 
         // Dimension consistency checks (mirrors original QuantizedVectorStore validation)
@@ -172,21 +187,21 @@ public final class QuantizationStrategyFactory {
                 && turboQuantizer.dimensions() != dimensions) {
             throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, turboQuantizer.dimensions(), dimensions);
         }
-        if (type == QuantizationType.VASQ && vasqEncoder != null
-                && vasqEncoder.params().originalDim() != dimensions) {
-            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, vasqEncoder.params().originalDim(), dimensions);
+        if (type == QuantizationType.SVASQ && svasqEncoder != null
+                && svasqEncoder.params().originalDim() != dimensions) {
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, svasqEncoder.params().originalDim(), dimensions);
         }
-        if (type == QuantizationType.VASQ_4 && vasq4Encoder != null
-                && vasq4Encoder.params().originalDim() != dimensions) {
-            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, vasq4Encoder.params().originalDim(), dimensions);
+        if (type == QuantizationType.SVASQ_4 && svasq4Encoder != null
+                && svasq4Encoder.params().originalDim() != dimensions) {
+            throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, svasq4Encoder.params().originalDim(), dimensions);
         }
 
         return create(type, scalarQuantizer, nonUniformQuantizer, turboQuantizer,
-                vasqEncoder, vasq4Encoder, similarityFunction);
+                svasqEncoder, svasq4Encoder, similarityFunction);
     }
 
     /**
-     * Backward-compatible overload without Vasq4Encoder parameter.
+     * Backward-compatible overload without Svasq4Encoder parameter.
      */
     public static QuantizationStrategy createWithDimCheck(
             QuantizationType type,
@@ -194,34 +209,34 @@ public final class QuantizationStrategyFactory {
             ScalarQuantizer scalarQuantizer,
             NonUniformQuantizer nonUniformQuantizer,
             TurboQuantizer turboQuantizer,
-            VasqEncoder vasqEncoder,
+            SvasqEncoder svasqEncoder,
             SimilarityFunction similarityFunction) {
         return createWithDimCheck(type, dimensions, scalarQuantizer, nonUniformQuantizer,
-                turboQuantizer, vasqEncoder, null, similarityFunction);
+                turboQuantizer, svasqEncoder, null, similarityFunction);
     }
 
     /**
-     * Creates a VASQ strategy directly from {@link VasqParams} (convenience overload).
+     * Creates a SVASQ strategy directly from {@link SvasqParams} (convenience overload).
      *
-     * @param params             calibrated VASQ parameters
+     * @param params             calibrated SVASQ parameters
      * @param similarityFunction distance metric
-     * @return a fully initialized VASQ {@link QuantizationStrategy}
+     * @return a fully initialized SVASQ {@link QuantizationStrategy}
      */
-    public static QuantizationStrategy createVasq(VasqParams params,
+    public static QuantizationStrategy createSvasq(SvasqParams params,
                                                    SimilarityFunction similarityFunction) {
-        return new VasqStrategy(params, similarityFunction);
+        return new SvasqStrategy(params, similarityFunction);
     }
 
     /**
-     * Creates a VASQ-4 strategy directly from {@link VasqParams} (convenience overload).
+     * Creates a SVASQ-4 strategy directly from {@link SvasqParams} (convenience overload).
      *
-     * @param params             calibrated VASQ-4 parameters (bitWidth must be 4)
+     * @param params             calibrated SVASQ-4 parameters (bitWidth must be 4)
      * @param similarityFunction distance metric
-     * @return a fully initialized VASQ-4 {@link QuantizationStrategy}
+     * @return a fully initialized SVASQ-4 {@link QuantizationStrategy}
      */
-    public static QuantizationStrategy createVasq4(VasqParams params,
+    public static QuantizationStrategy createSvasq4(SvasqParams params,
                                                     SimilarityFunction similarityFunction) {
-        return new Vasq4Strategy(params, similarityFunction);
+        return new Svasq4Strategy(params, similarityFunction);
     }
 
     // ─────────────── Internals ───────────────

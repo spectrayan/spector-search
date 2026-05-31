@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.config;
 
 import java.nio.file.Path;
@@ -263,49 +278,49 @@ public record SpectorConfig(
     }
 
     /**
-     * Builder-style to enable VASQ (FWHT-rotated INT8) quantization.
+     * Builder-style to enable SVASQ (FWHT-rotated INT8) quantization.
      *
-     * <p>VASQ applies a random Walsh-Hadamard Transform before INT8 quantization to
+     * <p>SVASQ applies a random Walsh-Hadamard Transform before INT8 quantization to
      * isotropize the per-dimension variance distribution, reducing quantization error.
      * The oversampling factor controls how many extra candidates are retrieved before
      * exact-float rescoring (3 is a good default for ≥ 90% recall@10).</p>
      *
      * @param oversamplingFactor rescore oversampling factor (≥ 1; 3 recommended)
      */
-    public SpectorConfig withVasq(int oversamplingFactor) {
+    public SpectorConfig withSvasq(int oversamplingFactor) {
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
-                QuantizationType.VASQ, persistenceMode, dataDirectory,
+                QuantizationType.SVASQ, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
                 Math.max(1, oversamplingFactor),
                 spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
-    /** Builder-style to enable VASQ with the default oversampling factor (3). */
-    public SpectorConfig withVasq() {
-        return withVasq(3);
+    /** Builder-style to enable SVASQ with the default oversampling factor (3). */
+    public SpectorConfig withSvasq() {
+        return withSvasq(3);
     }
 
     /**
-     * Builder-style to enable VASQ-4 (FWHT-rotated INT4, nibble-packed) quantization.
+     * Builder-style to enable SVASQ-4 (FWHT-rotated INT4, nibble-packed) quantization.
      *
-     * <p>VASQ-4 provides ~2× additional compression over VASQ-8 at the cost of slightly
+     * <p>SVASQ-4 provides ~2× additional compression over SVASQ-8 at the cost of slightly
      * lower fidelity. With oversampling rescore, recall@10 is typically 97–99%.</p>
      *
      * @param oversamplingFactor rescore oversampling factor (≥ 1; 3 recommended)
      */
-    public SpectorConfig withVasq4(int oversamplingFactor) {
+    public SpectorConfig withSvasq4(int oversamplingFactor) {
         return new SpectorConfig(dimensions, capacity, similarityFunction, hnswParams,
-                QuantizationType.VASQ_4, persistenceMode, dataDirectory,
+                QuantizationType.SVASQ_4, persistenceMode, dataDirectory,
                 indexType, ivfNlist, ivfNprobe, pqSubspaces,
                 gpuEnabled, rerankerEnabled, rerankerOllamaUrl, rerankerModel, rerankerMaxCandidates,
                 Math.max(1, oversamplingFactor),
                 spectrumNCentroids, spectrumNProbe, spectrumShardThreshold);
     }
 
-    /** Builder-style to enable VASQ-4 with the default oversampling factor (3). */
-    public SpectorConfig withVasq4() {
-        return withVasq4(3);
+    /** Builder-style to enable SVASQ-4 with the default oversampling factor (3). */
+    public SpectorConfig withSvasq4() {
+        return withSvasq4(3);
     }
 
     /**
@@ -333,7 +348,7 @@ public record SpectorConfig(
      * Builder-style to switch to SPECTRUM index.
      *
      * <p>Spectrum combines IVF coarse routing, adaptive flat→HNSW per-shard search,
-     * and VASQ residual INT8 quantization. Parameters control the IVF structure and
+     * and SVASQ residual INT8 quantization. Parameters control the IVF structure and
      * the promotion threshold for flat→HNSW transition.</p>
      *
      * @param nCentroids     number of IVF centroids (0 = auto: 4×√capacity)
@@ -357,13 +372,13 @@ public record SpectorConfig(
      * Returns the effective oversampling factor, applying defaults based on quantization type
      * when no explicit value has been set.
      *
-     * <p>Defaults: INT4 → 3, INT2 → 5, VASQ → 3 (FWHT rotation improves recall enough
+     * <p>Defaults: INT4 → 3, INT2 → 5, SVASQ → 3 (FWHT rotation improves recall enough
      * that moderate oversampling achieves ≥ 90% recall@10), all others → 1 (no oversampling).</p>
      */
     public int effectiveOversamplingFactor() {
         if (oversamplingFactor > 0) return oversamplingFactor;
         return switch (quantization) {
-            case SCALAR_INT4, TURBO_QUANT, VASQ, VASQ_4 -> 3;
+            case SCALAR_INT4, TURBO_QUANT, SVASQ, SVASQ_4 -> 3;
             case SCALAR_INT2 -> 5;
             default -> 1;
         };

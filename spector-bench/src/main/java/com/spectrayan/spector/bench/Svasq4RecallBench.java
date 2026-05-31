@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.bench;
 
 import com.spectrayan.spector.core.quantization.QuantizationType;
@@ -18,10 +33,10 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * VASQ-8 vs VASQ-4 recall and latency benchmark using real Ollama embeddings.
+ * SVASQ-8 vs SVASQ-4 recall and latency benchmark using real Ollama embeddings.
  *
  * <p>Generates diverse sentences, embeds them via Ollama (qwen3-embedding, 4096-dim),
- * builds VASQ-8 and VASQ-4 HNSW indices, and measures:
+ * builds SVASQ-8 and SVASQ-4 HNSW indices, and measures:
  * <ul>
  *   <li><b>Recall@10</b> against exact brute-force ground truth</li>
  *   <li><b>Query latency</b> (avg, p50, p99, QPS)</li>
@@ -33,10 +48,10 @@ import java.util.concurrent.*;
  *   mvn compile -pl spector-bench -q
  *   java --add-modules jdk.incubator.vector -Xmx8g \
  *        -cp spector-bench/target/classes:$(mvn -pl spector-bench dependency:build-classpath -q -DincludeScope=runtime -Dmdep.outputFile=/dev/stdout) \
- *        com.spectrayan.spector.bench.Vasq4RecallBench [size]
+ *        com.spectrayan.spector.bench.Svasq4RecallBench [size]
  * </pre>
  */
-public class Vasq4RecallBench {
+public class Svasq4RecallBench {
 
     // ── Configuration ───────────────────────────────────────────────────────
     private static int    DATASET_SIZE      = 5_000;
@@ -88,7 +103,7 @@ public class Vasq4RecallBench {
         }
 
         System.out.println("╔══════════════════════════════════════════════════════════════╗");
-        System.out.printf( "║  VASQ-8 vs VASQ-4 Recall Benchmark  (%,d vectors, %s)  ║%n",
+        System.out.printf( "║  SVASQ-8 vs SVASQ-4 Recall Benchmark  (%,d vectors, %s)  ║%n",
                 DATASET_SIZE, MODEL);
         System.out.println("╚══════════════════════════════════════════════════════════════╝");
         System.out.println();
@@ -138,17 +153,17 @@ public class Vasq4RecallBench {
 
         Config[] configs = {
             // No rescore
-            new Config("VASQ-8 (no rescore)",       QuantizationType.VASQ,   1),
-            new Config("VASQ-4 (no rescore)",       QuantizationType.VASQ_4, 1),
+            new Config("SVASQ-8 (no rescore)",       QuantizationType.SVASQ,   1),
+            new Config("SVASQ-4 (no rescore)",       QuantizationType.SVASQ_4, 1),
             // 2× oversampling rescore
-            new Config("VASQ-8 (2× rescore)",       QuantizationType.VASQ,   2),
-            new Config("VASQ-4 (2× rescore)",       QuantizationType.VASQ_4, 2),
+            new Config("SVASQ-8 (2× rescore)",       QuantizationType.SVASQ,   2),
+            new Config("SVASQ-4 (2× rescore)",       QuantizationType.SVASQ_4, 2),
             // 3× oversampling rescore (recommended)
-            new Config("VASQ-8 (3× rescore)",       QuantizationType.VASQ,   3),
-            new Config("VASQ-4 (3× rescore)",       QuantizationType.VASQ_4, 3),
+            new Config("SVASQ-8 (3× rescore)",       QuantizationType.SVASQ,   3),
+            new Config("SVASQ-4 (3× rescore)",       QuantizationType.SVASQ_4, 3),
             // 5× oversampling rescore
-            new Config("VASQ-8 (5× rescore)",       QuantizationType.VASQ,   5),
-            new Config("VASQ-4 (5× rescore)",       QuantizationType.VASQ_4, 5),
+            new Config("SVASQ-8 (5× rescore)",       QuantizationType.SVASQ,   5),
+            new Config("SVASQ-4 (5× rescore)",       QuantizationType.SVASQ_4, 5),
         };
 
         // Header
@@ -179,10 +194,10 @@ public class Vasq4RecallBench {
 
         // Build index
         QuantizedHnswIndex index;
-        if (qt == QuantizationType.VASQ) {
-            index = QuantizedHnswIndex.vasq(dims, n, SimilarityFunction.COSINE, hnswParams, oversampling);
+        if (qt == QuantizationType.SVASQ) {
+            index = QuantizedHnswIndex.svasq(dims, n, SimilarityFunction.COSINE, hnswParams, oversampling);
         } else {
-            index = QuantizedHnswIndex.vasq4(dims, n, SimilarityFunction.COSINE, hnswParams, oversampling);
+            index = QuantizedHnswIndex.svasq4(dims, n, SimilarityFunction.COSINE, hnswParams, oversampling);
         }
 
         // Ingest

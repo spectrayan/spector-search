@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.index.spectrum;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
@@ -25,10 +40,10 @@ import static org.assertj.core.api.Assertions.*;
  *
  * <h3>What this tests</h3>
  * <ol>
- *   <li>Real embedding → SpectorIndex pipeline: ensures the quantization (VASQ) and IVF routing
+ *   <li>Real embedding → SpectorIndex pipeline: ensures the quantization (SVASQ) and IVF routing
  *       work correctly with 768-dim real-valued vectors, not just random synthetic data.</li>
  *   <li>Semantic relevance: given a query, the top result must contain expected keywords
- *       (e.g. searching "FWHT rotation quantization" returns a chunk from VASQ_whitepaper.txt).</li>
+ *       (e.g. searching "FWHT rotation quantization" returns a chunk from SVASQ_whitepaper.txt).</li>
  *   <li>Quantization recall: the SpectorIndex recall vs brute-force is ≥ 80% on real embeddings.</li>
  * </ol>
  *
@@ -143,25 +158,25 @@ class SemanticMarkdownSearchTest {
     // ── Semantic relevance tests ───────────────────────────────────────────────
 
     /**
-     * Searching for VASQ/FWHT concepts should surface the whitepaper.
+     * Searching for SVASQ/FWHT concepts should surface the whitepaper.
      */
     @Test
-    void query_vasqQuantization_returnsWhitepaperChunk() {
-        float[] query = embedder.embed("FWHT rotation quantization INT8 VASQ").vector();
+    void query_svasqQuantization_returnsWhitepaperChunk() {
+        float[] query = embedder.embed("FWHT rotation quantization INT8 SVASQ").vector();
         ScoredResult[] results = index.search(query, 5);
 
         assertThat(results).isNotEmpty();
 
-        // At least one top-5 result should come from the VASQ whitepaper
+        // At least one top-5 result should come from the SVASQ whitepaper
         boolean foundWhitepaper = false;
         for (ScoredResult r : results) {
-            if (r.id().toLowerCase().contains("vasq")) {
+            if (r.id().toLowerCase().contains("svasq")) {
                 foundWhitepaper = true;
                 break;
             }
         }
         assertThat(foundWhitepaper)
-                .as("Top-5 results for VASQ query should include VASQ_whitepaper chunk. " +
+                .as("Top-5 results for SVASQ query should include SVASQ_whitepaper chunk. " +
                     "Got: " + java.util.Arrays.toString(java.util.Arrays.stream(results)
                         .map(ScoredResult::id).toArray()))
                 .isTrue();

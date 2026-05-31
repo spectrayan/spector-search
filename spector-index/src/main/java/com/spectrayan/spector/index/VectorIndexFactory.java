@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.index;
 
 import com.spectrayan.spector.config.HnswParams;
@@ -22,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>{@link IndexType#HNSW} — Standard or quantized HNSW graph index</li>
  *   <li>{@link IndexType#IVF_PQ} — Inverted file with product quantization</li>
- *   <li>{@link IndexType#SPECTRUM} — Adaptive IVF + VASQ-HNSW hybrid index</li>
+ *   <li>{@link IndexType#SPECTRUM} — Adaptive IVF + SVASQ-HNSW hybrid index</li>
  * </ul>
  */
 public class VectorIndexFactory {
@@ -99,20 +114,20 @@ public class VectorIndexFactory {
     private VectorIndex createHnsw(SpectorConfig config, VectorStore vectorStore) {
         QuantizationType qt = config.quantization();
 
-        if (qt == QuantizationType.VASQ) {
+        if (qt == QuantizationType.SVASQ) {
             int oversampling = config.effectiveOversamplingFactor();
-            log.info("Creating QuantizedHnswIndex (VASQ): dims={}, capacity={}, oversampling={}",
+            log.info("Creating QuantizedHnswIndex (SVASQ): dims={}, capacity={}, oversampling={}",
                     config.dimensions(), config.capacity(), oversampling);
-            return QuantizedHnswIndex.vasq(
+            return QuantizedHnswIndex.svasq(
                     config.dimensions(), config.capacity(),
                     config.similarityFunction(), config.hnswParams(), oversampling);
         }
 
-        if (qt == QuantizationType.VASQ_4) {
+        if (qt == QuantizationType.SVASQ_4) {
             int oversampling = config.effectiveOversamplingFactor();
-            log.info("Creating QuantizedHnswIndex (VASQ-4): dims={}, capacity={}, oversampling={}",
+            log.info("Creating QuantizedHnswIndex (SVASQ-4): dims={}, capacity={}, oversampling={}",
                     config.dimensions(), config.capacity(), oversampling);
-            return QuantizedHnswIndex.vasq4(
+            return QuantizedHnswIndex.svasq4(
                     config.dimensions(), config.capacity(),
                     config.similarityFunction(), config.hnswParams(), oversampling);
         }
@@ -167,7 +182,7 @@ public class VectorIndexFactory {
     /**
      * Creates a Spectrum index (untrained — training happens during ingestion).
      *
-     * <p>Spectrum is the adaptive IVF + VASQ-HNSW hybrid. It requires a training step
+     * <p>Spectrum is the adaptive IVF + SVASQ-HNSW hybrid. It requires a training step
      * with representative vectors before use (like IVF-PQ). The engine's ingestion
      * pipeline should call {@link SpectorIndex#train(float[][])} before adding vectors.</p>
      */

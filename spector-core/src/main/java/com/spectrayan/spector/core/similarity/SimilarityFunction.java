@@ -1,10 +1,25 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core.similarity;
 import com.spectrayan.spector.commons.error.SpectorException;
 
-import com.spectrayan.spector.core.quantization.vasq.Vasq4QueryState;
-import com.spectrayan.spector.core.quantization.vasq.Vasq4SimdKernel;
-import com.spectrayan.spector.core.quantization.vasq.VasqQueryState;
-import com.spectrayan.spector.core.quantization.vasq.VasqSimdKernel;
+import com.spectrayan.spector.core.quantization.svasq.Svasq4QueryState;
+import com.spectrayan.spector.core.quantization.svasq.Svasq4SimdKernel;
+import com.spectrayan.spector.core.quantization.svasq.SvasqQueryState;
+import com.spectrayan.spector.core.quantization.svasq.SvasqSimdKernel;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -22,7 +37,7 @@ import java.lang.foreign.ValueLayout;
  * memory without any intermediate {@code byte[]} allocation:</p>
  * <ul>
  *   <li>{@link #computeQuantizedFromSegment} — INT8 scalar quantization, zero-copy</li>
- *   <li>{@link #computeVasq} — VASQ FWHT Panama kernel, zero-copy (always was)</li>
+ *   <li>{@link #computeSvasq} — SVASQ FWHT Panama kernel, zero-copy (always was)</li>
  * </ul>
  * <p>The legacy {@link #computeQuantized(float[], byte[], float[], float[], int)} overloads
  * are deprecated and delegate to the segment-based kernels via
@@ -245,11 +260,11 @@ public enum SimilarityFunction {
                                             float[] mins, float[] scales, int length);
 
     /**
-     * Computes VASQ-quantized distance using a pre-prepared query context and an
+     * Computes SVASQ-quantized distance using a pre-prepared query context and an
      * off-heap {@link MemorySegment} storing the encoded vector database.
      *
      * <p><b>Zero-copy:</b> reads directly from off-heap memory, zero JVM GC allocations.
-     * This is the primary hot path for VASQ HNSW graph traversal via the Panama SIMD kernel.</p>
+     * This is the primary hot path for SVASQ HNSW graph traversal via the Panama SIMD kernel.</p>
      *
      * <ul>
      *   <li>{@code EUCLIDEAN}: approximate squared L2 distance (lower = more similar)</li>
@@ -261,38 +276,38 @@ public enum SimilarityFunction {
      * @param segment   off-heap memory segment containing the encoded vector database
      * @param offset    byte offset of the target vector's 4-byte norm header
      * @param paddedDim FWHT-padded dimension (power-of-two)
-     * @param qs        pre-prepared query state (from {@link com.spectrayan.spector.core.quantization.vasq.VasqQueryPrep})
+     * @param qs        pre-prepared query state (from {@link com.spectrayan.spector.core.quantization.svasq.SvasqQueryPrep})
      * @return distance or similarity score appropriate for this function
      */
-    public float computeVasq(MemorySegment segment, long offset,
-                              int paddedDim, VasqQueryState qs) {
+    public float computeSvasq(MemorySegment segment, long offset,
+                              int paddedDim, SvasqQueryState qs) {
         return switch (this) {
-            case EUCLIDEAN   -> VasqSimdKernel.computeL2(segment, offset, paddedDim, qs);
-            case DOT_PRODUCT -> VasqSimdKernel.computeDot(segment, offset, paddedDim, qs);
+            case EUCLIDEAN   -> SvasqSimdKernel.computeL2(segment, offset, paddedDim, qs);
+            case DOT_PRODUCT -> SvasqSimdKernel.computeDot(segment, offset, paddedDim, qs);
             // For cosine, inner product in FWHT-rotated space. Equals cosine for unit vectors.
-            case COSINE      -> VasqSimdKernel.computeDot(segment, offset, paddedDim, qs);
+            case COSINE      -> SvasqSimdKernel.computeDot(segment, offset, paddedDim, qs);
         };
     }
 
     /**
-     * Computes VASQ-4 quantized distance using a pre-prepared VASQ-4 query context and
+     * Computes SVASQ-4 quantized distance using a pre-prepared SVASQ-4 query context and
      * an off-heap {@link MemorySegment} storing nibble-packed INT4 encoded vectors.
      *
      * <p><b>Zero-copy:</b> reads directly from off-heap memory with zero JVM GC allocations.
-     * This is the hot path for VASQ-4 HNSW graph traversal.</p>
+     * This is the hot path for SVASQ-4 HNSW graph traversal.</p>
      *
      * @param segment  off-heap memory segment containing the encoded vector database
      * @param offset   byte offset of the target vector's 4-byte norm header
      * @param halfDim  half of paddedDim (number of nibble-packed code bytes to process)
-     * @param qs       pre-prepared VASQ-4 query state (from {@link com.spectrayan.spector.core.quantization.vasq.Vasq4QueryPrep})
+     * @param qs       pre-prepared SVASQ-4 query state (from {@link com.spectrayan.spector.core.quantization.svasq.Svasq4QueryPrep})
      * @return distance or similarity score appropriate for this function
      */
-    public float computeVasq4(MemorySegment segment, long offset,
-                               int halfDim, Vasq4QueryState qs) {
+    public float computeSvasq4(MemorySegment segment, long offset,
+                               int halfDim, Svasq4QueryState qs) {
         return switch (this) {
-            case EUCLIDEAN   -> Vasq4SimdKernel.computeL2(segment, offset, halfDim, qs);
-            case DOT_PRODUCT -> Vasq4SimdKernel.computeDot(segment, offset, halfDim, qs);
-            case COSINE      -> Vasq4SimdKernel.computeDot(segment, offset, halfDim, qs);
+            case EUCLIDEAN   -> Svasq4SimdKernel.computeL2(segment, offset, halfDim, qs);
+            case DOT_PRODUCT -> Svasq4SimdKernel.computeDot(segment, offset, halfDim, qs);
+            case COSINE      -> Svasq4SimdKernel.computeDot(segment, offset, halfDim, qs);
         };
     }
 

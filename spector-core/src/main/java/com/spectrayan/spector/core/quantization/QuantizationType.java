@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core.quantization;
 import com.spectrayan.spector.commons.error.SpectorException;
 
@@ -56,7 +71,7 @@ public enum QuantizationType {
     TURBO_QUANT,
 
     /**
-     * VASQ — Vectorized Affine Scalar Quantization with FWHT rotation.
+     * SVASQ — Vectorized Affine Scalar Quantization with FWHT rotation.
      *
      * <p>Combines Fast Walsh-Hadamard Transform (FWHT) rotation with random sign
      * flips to isotropize the vector distribution, then applies per-dimension
@@ -77,19 +92,19 @@ public enum QuantizationType {
      *   <li>Zero-padding to power-of-2 guarantees no SIMD tail loop.</li>
      * </ul>
      *
-     * <p><strong>Note:</strong> {@link #bytesPerVector(int)} is not supported for VASQ
+     * <p><strong>Note:</strong> {@link #bytesPerVector(int)} is not supported for SVASQ
      * because storage size depends on {@code paddedDim = nextPow2(dimensions)}, not
-     * {@code dimensions} alone. Use {@code VasqParams.bytesPerVector()} or
-     * {@code VasqEncoder.bytesPerVector()} instead.</p>
+     * {@code dimensions} alone. Use {@code SvasqParams.bytesPerVector()} or
+     * {@code SvasqEncoder.bytesPerVector()} instead.</p>
      */
-    VASQ,
+    SVASQ,
 
     /**
-     * VASQ-4 — Vectorized Affine Scalar Quantization at INT4 bit width.
+     * SVASQ-4 — Vectorized Affine Scalar Quantization at INT4 bit width.
      *
-     * <p>Same FWHT rotation pipeline as {@link #VASQ} but quantizes to offset-encoded
+     * <p>Same FWHT rotation pipeline as {@link #SVASQ} but quantizes to offset-encoded
      * INT4 [0, 14] and nibble-packs two values per byte, achieving <b>2× additional
-     * compression</b> over VASQ-8 (approximately 6–8× vs float32).</p>
+     * compression</b> over SVASQ-8 (approximately 6–8× vs float32).</p>
      *
      * <h3>Memory Layout (per vector)</h3>
      * <pre>
@@ -104,10 +119,10 @@ public enum QuantizationType {
      *   <li>With 3× oversampling rescore: ~97–99% recall@10.</li>
      * </ul>
      *
-     * <p><strong>Note:</strong> {@link #bytesPerVector(int)} is not supported for VASQ_4.
-     * Use {@code VasqParams.bytesPerVector()} or {@code Vasq4Encoder.bytesPerVector()} instead.</p>
+     * <p><strong>Note:</strong> {@link #bytesPerVector(int)} is not supported for SVASQ_4.
+     * Use {@code SvasqParams.bytesPerVector()} or {@code Svasq4Encoder.bytesPerVector()} instead.</p>
      */
-    VASQ_4;
+    SVASQ_4;
 
     /**
      * Returns the number of bits used to represent each vector dimension.
@@ -120,10 +135,10 @@ public enum QuantizationType {
             case SCALAR_INT8 -> 8;
             case SCALAR_INT4, TURBO_QUANT -> 4;
             case SCALAR_INT2 -> 2;
-            // VASQ uses 8 bits per padded dimension; paddedDim ≥ dimensions
-            case VASQ        -> 8;
-            // VASQ_4 uses 4 bits per padded dimension, nibble-packed
-            case VASQ_4      -> 4;
+            // SVASQ uses 8 bits per padded dimension; paddedDim ≥ dimensions
+            case SVASQ        -> 8;
+            // SVASQ_4 uses 4 bits per padded dimension, nibble-packed
+            case SVASQ_4      -> 4;
         };
     }
 
@@ -159,12 +174,12 @@ public enum QuantizationType {
             case SCALAR_INT8 -> dimensions;
             case SCALAR_INT4, TURBO_QUANT -> (dimensions + 1) / 2;
             case SCALAR_INT2 -> (dimensions + 3) / 4;
-            // VASQ storage size = 4 + nextPow2(dimensions), not a simple function of dimensions.
-            // Use VasqParams.bytesPerVector() or VasqEncoder.bytesPerVector() instead.
-            case VASQ -> throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID,
-                            "bytesPerVector", "VASQ depends on paddedDim. Use VasqEncoder.bytesPerVector()");
-            case VASQ_4 -> throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID,
-                            "bytesPerVector", "VASQ_4 depends on paddedDim. Use Vasq4Encoder.bytesPerVector()");
+            // SVASQ storage size = 4 + nextPow2(dimensions), not a simple function of dimensions.
+            // Use SvasqParams.bytesPerVector() or SvasqEncoder.bytesPerVector() instead.
+            case SVASQ -> throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID,
+                            "bytesPerVector", "SVASQ depends on paddedDim. Use SvasqEncoder.bytesPerVector()");
+            case SVASQ_4 -> throw new SpectorValidationException(ErrorCode.ARGUMENT_INVALID,
+                            "bytesPerVector", "SVASQ_4 depends on paddedDim. Use Svasq4Encoder.bytesPerVector()");
         };
     }
 }

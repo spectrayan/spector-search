@@ -1,13 +1,28 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 
 /**
- * Precomputed query context for VASQ-4 (INT4) asymmetric distance computation.
+ * Precomputed query context for SVASQ-4 (INT4) asymmetric distance computation.
  *
- * <p>Created once per query by {@link Vasq4QueryPrep#prepare} and reused for every
+ * <p>Created once per query by {@link Svasq4QueryPrep#prepare} and reused for every
  * candidate distance evaluation in the HNSW/IVF traversal loop.</p>
  *
  * <h3>Deinterleaved layout for SIMD efficiency</h3>
- * <p>VASQ-4 nibble-packed bytes contain two values per byte: the high nibble holds
+ * <p>SVASQ-4 nibble-packed bytes contain two values per byte: the high nibble holds
  * even-indexed FWHT dimensions, the low nibble holds odd-indexed dimensions. To
  * enable straight-through SIMD processing, the query's pre-scaled coefficients are
  * deinterleaved into two contiguous arrays:</p>
@@ -29,10 +44,10 @@ package com.spectrayan.spector.core.quantization.vasq;
  *
  * <p>Instances are immutable-by-contract and safe for concurrent use.</p>
  *
- * @see Vasq4QueryPrep
- * @see Vasq4SimdKernel
+ * @see Svasq4QueryPrep
+ * @see Svasq4SimdKernel
  */
-public final class Vasq4QueryState {
+public final class Svasq4QueryState {
 
     private final float[] qTildeHi;   // pre-scaled query, even dims [halfDim]
     private final float[] qTildeLo;   // pre-scaled query, odd dims  [halfDim]
@@ -40,7 +55,7 @@ public final class Vasq4QueryState {
     private final float dotOffset;    // C(q) − nibbleBias (for dot product reconstruction)
     private final float qNormSq;      // ‖q‖² (stored for diagnostics)
 
-    Vasq4QueryState(float[] qTildeHi, float[] qTildeLo,
+    Svasq4QueryState(float[] qTildeHi, float[] qTildeLo,
                     float constL2Q, float dotOffset, float qNormSq) {
         this.qTildeHi = qTildeHi;
         this.qTildeLo = qTildeLo;

@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.engine;
 
 import com.spectrayan.spector.commons.error.SpectorException;
@@ -179,43 +194,43 @@ class SpectorEngineTest {
         assertThat(config.effectivePqSubspaces()).isGreaterThanOrEqualTo(4);
     }
 
-    // ─────────────── VASQ Engine Integration ───────────────
+    // ─────────────── SVASQ Engine Integration ───────────────
 
     @Test
-    void vasq_configBuilder_setsCorrectQuantization() {
+    void svasq_configBuilder_setsCorrectQuantization() {
         var config = SpectorConfig.DEFAULT
                 .withDimensions(128)
                 .withCapacity(1000)
-                .withVasq();
+                .withSvasq();
 
         assertThat(config.quantization())
-                .isEqualTo(com.spectrayan.spector.core.quantization.QuantizationType.VASQ);
-        // Default oversampling for VASQ is 3
+                .isEqualTo(com.spectrayan.spector.core.quantization.QuantizationType.SVASQ);
+        // Default oversampling for SVASQ is 3
         assertThat(config.effectiveOversamplingFactor()).isEqualTo(3);
     }
 
     @Test
-    void vasq_engineBuilder_fluentApi() {
+    void svasq_engineBuilder_fluentApi() {
         var config = SpectorEngine.builder()
                 .dimensions(64)
                 .capacity(500)
                 .similarity(SimilarityFunction.COSINE)
-                .vasq(3)
+                .svasq(3)
                 .config();  // inspect the config without building the engine
 
         assertThat(config.quantization())
-                .isEqualTo(com.spectrayan.spector.core.quantization.QuantizationType.VASQ);
+                .isEqualTo(com.spectrayan.spector.core.quantization.QuantizationType.SVASQ);
         assertThat(config.effectiveOversamplingFactor()).isEqualTo(3);
     }
 
     @Test
-    void vasq_ingestAndVectorSearch_returnsResults() {
-        // Use capacity = numDocs to trigger VASQ auto-calibration immediately
+    void svasq_ingestAndVectorSearch_returnsResults() {
+        // Use capacity = numDocs to trigger SVASQ auto-calibration immediately
         int numDocs = 150;
         var config = SpectorConfig.DEFAULT
                 .withDimensions(DIM)
                 .withCapacity(numDocs)
-                .withVasq();
+                .withSvasq();
 
         try (var engine = new DefaultSpectorEngine(config)) {
             Random rng = new Random(42);
@@ -231,12 +246,12 @@ class SpectorEngineTest {
     }
 
     @Test
-    void vasq_hybridSearch_returnsBothKeywordAndVector() {
+    void svasq_hybridSearch_returnsBothKeywordAndVector() {
         int numDocs = 150;
         var config = SpectorConfig.DEFAULT
                 .withDimensions(DIM)
                 .withCapacity(numDocs)
-                .withVasq();
+                .withSvasq();
 
         try (var engine = new DefaultSpectorEngine(config)) {
             Random rng = new Random(10);
@@ -259,17 +274,17 @@ class SpectorEngineTest {
     }
 
     @Test
-    void vasq_withExplicitOversampling_configuredCorrectly() {
+    void svasq_withExplicitOversampling_configuredCorrectly() {
         var config = SpectorConfig.DEFAULT
                 .withDimensions(64)
                 .withCapacity(500)
-                .withVasq(5);
+                .withSvasq(5);
 
         assertThat(config.effectiveOversamplingFactor()).isEqualTo(5);
     }
 
     @Test
-    void vasq_diskPersistence_savesAndLoads(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tempDir) throws java.io.IOException {
+    void svasq_diskPersistence_savesAndLoads(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tempDir) throws java.io.IOException {
         int numDocs = 50;
         var config = SpectorConfig.DEFAULT
                 .withDimensions(DIM)

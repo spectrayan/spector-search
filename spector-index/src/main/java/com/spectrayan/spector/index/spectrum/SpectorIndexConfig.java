@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.index.spectrum;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
@@ -14,19 +29,19 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *   <li><b>Flat mode</b> (size &lt; {@code shardThreshold}): exhaustive SIMD scan over
  *       float32 residuals. For small shards, contiguous memory access outperforms HNSW
  *       pointer-chasing by 5–10×.</li>
- *   <li><b>HNSW mode</b> (size ≥ {@code shardThreshold}): a local VASQ-quantized HNSW
+ *   <li><b>HNSW mode</b> (size ≥ {@code shardThreshold}): a local SVASQ-quantized HNSW
  *       graph is built from the accumulated residuals. Flat float32 storage is released.</li>
  * </ul>
  *
  * <h3>Residual Quantization</h3>
- * <p>Vectors are stored as residuals ({@code r = x − centroid}) and quantized with VASQ.
+ * <p>Vectors are stored as residuals ({@code r = x − centroid}) and quantized with SVASQ.
  * Residuals are much tighter than absolute coordinates, giving INT8 residual quantization
  * the spatial precision of INT12–INT16 absolute quantization.</p>
  *
  * @param nCentroids         number of IVF Voronoi cells (clusters)
  * @param nProbe             number of closest cells to probe at query time (≥ 16 for 95%+ recall)
  * @param shardThreshold     shard size at which flat scan promotes to HNSW (default: 20 000)
- * @param oversamplingFactor HNSW oversampling for VASQ re-ranking (default: 3)
+ * @param oversamplingFactor HNSW oversampling for SVASQ re-ranking (default: 3)
  * @param kMeansIterations   K-Means++ iterations for centroid training (default: 25)
  * @param similarityFunction distance metric to use throughout
  * @param hnswParams         HNSW construction/search params for promoted shards
@@ -43,7 +58,7 @@ public record SpectorIndexConfig(
 
     /**
      * Default configuration: 256 centroids, nprobe=16, flat→HNSW at 20K vectors,
-     * 3× VASQ oversampling, 25 K-Means iterations, cosine similarity, standard HNSW params.
+     * 3× SVASQ oversampling, 25 K-Means iterations, cosine similarity, standard HNSW params.
      */
     public static final SpectorIndexConfig DEFAULT = new SpectorIndexConfig(
             256, 16, 20_000, 3, 25,

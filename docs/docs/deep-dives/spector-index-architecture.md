@@ -1,6 +1,6 @@
-# 🏛️ SpectorIndex: IVF-HNSW-VASQ Architecture
+# 🏛️ SpectorIndex: IVF-HNSW-SVASQ Architecture
 
-> **The flagship adaptive vector index of the Spector search engine.** SpectorIndex combines Inverted File partitioning, Hierarchical Navigable Small World graphs, and VASQ residual quantization into a single index that scales from 10K to millions of vectors with excellent recall, fast ingestion, and minimal memory.
+> **The flagship adaptive vector index of the Spector search engine.** SpectorIndex combines Inverted File partitioning, Hierarchical Navigable Small World graphs, and SVASQ residual quantization into a single index that scales from 10K to millions of vectors with excellent recall, fast ingestion, and minimal memory.
 
 ---
 
@@ -11,9 +11,9 @@ SpectorIndex was designed to solve the fundamental limitations of standalone HNS
 | Problem with HNSW | SpectorIndex Solution |
 |-------------------|-----------------------|
 | Slow ingestion (O(n log n)) | IVF partitioning + flat buffer → **100K+ docs/s** |
-| High memory (graph edges) | VASQ INT8 residuals → **4× compression** |
+| High memory (graph edges) | SVASQ INT8 residuals → **4× compression** |
 | Doesn't scale past ~10M | IVF coarse search → only probe relevant partitions |
-| No compression | VASQ with FWHT → near-lossless INT8 |
+| No compression | SVASQ with FWHT → near-lossless INT8 |
 
 ---
 
@@ -32,11 +32,11 @@ graph TD
     
     subgraph "Layer 2: Adaptive Shards"
         S1 --> F1["< 20K vectors:\nExact Flat Scan\n(SIMD, zero GC)"]
-        S2 --> H1["≥ 20K vectors:\nLocal HNSW Graph\n(VASQ-quantized)"]
+        S2 --> H1["≥ 20K vectors:\nLocal HNSW Graph\n(SVASQ-quantized)"]
         S3 --> F2["< 20K vectors:\nExact Flat Scan"]
     end
     
-    subgraph "Layer 3: VASQ Residual Quantization"
+    subgraph "Layer 3: SVASQ Residual Quantization"
         H1 --> V1["Residual: r = x - centroid\nFWHT rotation → INT8\n4× compression"]
     end
     
@@ -55,11 +55,11 @@ K-Means clustering partitions the vector space into `nCentroids` Voronoi cells. 
 Each Voronoi cell contains a **SpectorShard** — an adaptive data structure that operates in one of two modes:
 
 - **Flat mode** (size < `shardThreshold`): Stores float32 residuals in a contiguous buffer. Search is an exact SIMD scan — faster than HNSW for small partitions because there's no pointer-chasing overhead.
-- **HNSW mode** (size ≥ `shardThreshold`): A local VASQ-quantized HNSW graph. The flat buffer is consumed during promotion and released to free heap memory.
+- **HNSW mode** (size ≥ `shardThreshold`): A local SVASQ-quantized HNSW graph. The flat buffer is consumed during promotion and released to free heap memory.
 
-### Layer 3: VASQ Residual Quantization
+### Layer 3: SVASQ Residual Quantization
 
-Vectors are stored as **residuals** (`r = x − centroid`), then compressed with VASQ:
+Vectors are stored as **residuals** (`r = x − centroid`), then compressed with SVASQ:
 1. Apply FWHT (Fast Walsh-Hadamard Transform) to spread variance
 2. Quantize to INT8 with calibrated min/max per dimension
 3. Store: `[4-byte L2 norm | D bytes of INT8 codes]`
@@ -170,9 +170,9 @@ SpectorIndex's ingestion is **28-160× faster** than standalone HNSW because:
 > [!TIP]
 > With real embeddings, even `nProbe=4` at 128 centroids gives **perfect recall** while searching only 3.1% of the data. Real embeddings have natural cluster structure that IVF exploits beautifully.
 
-### Memory: 4× Compression with VASQ
+### Memory: 4× Compression with SVASQ
 
-After shard promotion, VASQ quantization compresses stored residuals to ~(D + 4) bytes per vector — approximately 4× compression versus float32.
+After shard promotion, SVASQ quantization compresses stored residuals to ~(D + 4) bytes per vector — approximately 4× compression versus float32.
 
 ---
 
@@ -226,7 +226,7 @@ After HNSW promotion, the number of candidates retrieved per shard is `k × over
 
 The adaptive shard design is inspired by the observation from the [original research](../../../new-index-research.md):
 
-> *"Scanning a flat, contiguous MemorySegment of VASQ vectors using an unrolled 256-bit FMA loop utilizes aggressive CPU pre-fetchers. Panama can evaluate roughly 1,000 vectors in < 1 microsecond."*
+> *"Scanning a flat, contiguous MemorySegment of SVASQ vectors using an unrolled 256-bit FMA loop utilizes aggressive CPU pre-fetchers. Panama can evaluate roughly 1,000 vectors in < 1 microsecond."*
 
 For small partitions (< 20K vectors), a flat SIMD scan over contiguous memory is **5-10× faster** than HNSW pointer-chasing. Only when partitions grow large enough for the O(log n) advantage to kick in does HNSW become worthwhile.
 
@@ -235,7 +235,7 @@ graph LR
     Add["add(vector)"] --> Check{"size ≥ threshold?"}
     Check -->|No| Flat["Append to\nflat buffer"]
     Check -->|Yes| Promote["🔄 Promote"]
-    Promote --> Cal["Calibrate VASQ\nfrom flat buffer"]
+    Promote --> Cal["Calibrate SVASQ\nfrom flat buffer"]
     Cal --> Build["Build HNSW\n(bulk insert)"]
     Build --> Free["Free flat buffer\n(reclaim heap)"]
 ```
@@ -265,7 +265,7 @@ When combining FWHT with IVF, the order matters:
 1. Find nProbe closest centroids
 2. For each centroid `c`: compute `q_res = q - c`
 3. Apply FWHT to `q_res`
-4. Pre-multiply scale/offset (VASQ query pushdown)
+4. Pre-multiply scale/offset (SVASQ query pushdown)
 5. Scan the shard
 
 ---
@@ -273,8 +273,8 @@ When combining FWHT with IVF, the order matters:
 ## 🔗 See Also
 
 - [Large-Scale Benchmarks](real-embedding-benchmarks.md) — Empirical sweeps for real embeddings and HNSW shard promotions.
-- [VASQ Deep Dive](vasq-deep-dive.md) — How VASQ quantization works in detail
+- [SVASQ Deep Dive](svasq-deep-dive.md) — How SVASQ quantization works in detail
 - [HNSW Explained](hnsw-explained.md) — How the graph search algorithm works
 - [ANN Search Primer](ann-search-primer.md) — Overview of all ANN algorithm families
-- [VASQ + SpectorIndex Whitepaper](vasq-spectorindex-whitepaper.md) — Academic treatment
+- [SVASQ + SpectorIndex Whitepaper](svasq-spectorindex-whitepaper.md) — Academic treatment
 - [Performance Tuning](../operations/performance-tuning.md) — Practical tuning advice

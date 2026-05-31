@@ -1,4 +1,19 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Arrays;
@@ -8,11 +23,11 @@ import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Calibrates VASQ quantization parameters from a representative sample corpus.
+ * Calibrates SVASQ quantization parameters from a representative sample corpus.
  *
  * <h3>Algorithm</h3>
  * <ol>
- *   <li>Rotate all sample vectors using {@link VasqFwht} (sign-flip + FWHT + normalize).</li>
+ *   <li>Rotate all sample vectors using {@link SvasqFwht} (sign-flip + FWHT + normalize).</li>
  *   <li>For each rotated dimension {@code j}:
  *     <ul>
  *       <li>Compute the {@code clip_percentile}-th and {@code (1-clip_percentile)}-th
@@ -24,7 +39,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *   </li>
  * </ol>
  *
- * <p>This calibration is equivalent to the whitepaper's Algorithm 1 (VASQ-Calibrate)
+ * <p>This calibration is equivalent to the whitepaper's Algorithm 1 (SVASQ-Calibrate)
  * with two key differences: (a) calibration is done in the <em>rotated</em> space
  * (fixing the quant.md bug), and (b) the scale is derived from the clipped std dev
  * rather than raw min/max (giving better accuracy for Gaussian/sub-Gaussian embeddings).</p>
@@ -41,7 +56,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * <h3>Thread Safety</h3>
  * <p>Stateless — all methods are static and safe for concurrent use.</p>
  */
-public final class VasqCalibrator {
+public final class SvasqCalibrator {
 
     /** Percentile clipping boundary: clip at 0.1th and 99.9th percentiles. */
     static final float CLIP_PERCENTILE = 0.001f;
@@ -53,7 +68,7 @@ public final class VasqCalibrator {
     static final float CLIP_SIGMAS = 3.0f;
 
     /**
-     * Tighter clipping for VASQ-4 (INT4, 15 levels).
+     * Tighter clipping for SVASQ-4 (INT4, 15 levels).
      * {@code 2.5} reduces outlier exposure when only 15 quantization levels are available.
      */
     static final float CLIP_SIGMAS_4BIT = 2.5f;
@@ -70,12 +85,12 @@ public final class VasqCalibrator {
     /** Minimum allowed std dev to prevent division by zero on zero-variance dims. */
     private static final float MIN_STD = 1e-6f;
 
-    private VasqCalibrator() {}
+    private SvasqCalibrator() {}
 
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
-     * Calibrates VASQ parameters from a list of sample vectors.
+     * Calibrates SVASQ parameters from a list of sample vectors.
      *
      * <p>The sample is capped at {@link #MAX_SAMPLE_SIZE} vectors. If the list is larger,
      * vectors are drawn uniformly at random (seeded for reproducibility).</p>
@@ -83,10 +98,10 @@ public final class VasqCalibrator {
      * @param sampleVectors representative sample (at least 100 vectors recommended)
      * @param originalDim   vector dimensionality
      * @param seed          FWHT sign-flip seed; must match the seed used at encode time
-     * @return calibrated {@link VasqParams}
+     * @return calibrated {@link SvasqParams}
      * @throws SpectorValidationException if sampleVectors is empty or dimensions don't match
      */
-    public static VasqParams calibrate(List<float[]> sampleVectors,
+    public static SvasqParams calibrate(List<float[]> sampleVectors,
                                         int originalDim, long seed) {
         if (sampleVectors == null || sampleVectors.isEmpty()) {
             throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "sampleVectors");
@@ -99,7 +114,7 @@ public final class VasqCalibrator {
                 throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, v.length);
             }
         }
-        VasqFwht fwht = new VasqFwht(originalDim, seed);
+        SvasqFwht fwht = new SvasqFwht(originalDim, seed);
         int paddedDim  = fwht.paddedDim();
 
         // Rotate all samples — one float[] per vector (unavoidable for column-wise stats)
@@ -114,27 +129,27 @@ public final class VasqCalibrator {
     }
 
     /**
-     * Convenience overload using {@link VasqParams#DEFAULT_SEED}.
+     * Convenience overload using {@link SvasqParams#DEFAULT_SEED}.
      */
-    public static VasqParams calibrate(List<float[]> sampleVectors, int originalDim) {
-        return calibrate(sampleVectors, originalDim, VasqParams.DEFAULT_SEED);
+    public static SvasqParams calibrate(List<float[]> sampleVectors, int originalDim) {
+        return calibrate(sampleVectors, originalDim, SvasqParams.DEFAULT_SEED);
     }
 
     /**
-     * Calibrates VASQ parameters from a {@code float[][]} array, using only the
+     * Calibrates SVASQ parameters from a {@code float[][]} array, using only the
      * first {@code n} rows. Avoids the {@code Arrays.copyOf} + {@code List} wrapper
      * required by the List overload.
      *
-     * <p>Used by {@link com.spectrayan.spector.index.QuantizedHnswIndex#calibrateVasq()}
+     * <p>Used by {@link com.spectrayan.spector.index.QuantizedHnswIndex#calibrateSvasq()}
      * to pass its {@code calibrationBuffer[0..calibrationCount-1]} directly.</p>
      *
      * @param samples     array of sample vectors (only indices [0, n) are used)
      * @param n           number of valid vectors in {@code samples}
      * @param originalDim vector dimensionality
      * @param seed        FWHT sign-flip seed
-     * @return calibrated {@link VasqParams}
+     * @return calibrated {@link SvasqParams}
      */
-    public static VasqParams calibrate(float[][] samples, int n,
+    public static SvasqParams calibrate(float[][] samples, int n,
                                         int originalDim, long seed) {
         if (samples == null || n <= 0) {
             throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "samples");
@@ -143,7 +158,7 @@ public final class VasqCalibrator {
         // Subsample if needed — Fisher-Yates partial shuffle on the indices
         int[] indices = subsampleIndices(n, useN, seed);
 
-        VasqFwht fwht = new VasqFwht(originalDim, seed);
+        SvasqFwht fwht = new SvasqFwht(originalDim, seed);
         int paddedDim  = fwht.paddedDim();
 
         float[][] rotated = new float[useN][paddedDim];
@@ -160,14 +175,14 @@ public final class VasqCalibrator {
     }
 
     /**
-     * Convenience overload using {@link VasqParams#DEFAULT_SEED}.
+     * Convenience overload using {@link SvasqParams#DEFAULT_SEED}.
      */
-    public static VasqParams calibrate(float[][] samples, int n, int originalDim) {
-        return calibrate(samples, n, originalDim, VasqParams.DEFAULT_SEED);
+    public static SvasqParams calibrate(float[][] samples, int n, int originalDim) {
+        return calibrate(samples, n, originalDim, SvasqParams.DEFAULT_SEED);
     }
 
     /**
-     * Calibrates VASQ parameters from a <em>flat</em> contiguous float buffer.
+     * Calibrates SVASQ parameters from a <em>flat</em> contiguous float buffer.
      *
      * <p>The buffer stores vectors consecutively: vector {@code i} occupies
      * {@code flatData[i × originalDim .. (i+1) × originalDim - 1]}. This is the
@@ -178,9 +193,9 @@ public final class VasqCalibrator {
      * @param n           number of vectors stored in {@code flatData}
      * @param originalDim per-vector dimensionality
      * @param seed        FWHT sign-flip seed
-     * @return calibrated {@link VasqParams}
+     * @return calibrated {@link SvasqParams}
      */
-    public static VasqParams calibrate(float[] flatData, int n,
+    public static SvasqParams calibrate(float[] flatData, int n,
                                         int originalDim, long seed) {
         if (flatData == null || n <= 0 || originalDim <= 0) {
             throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "flatData");
@@ -188,7 +203,7 @@ public final class VasqCalibrator {
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);
 
-        VasqFwht fwht = new VasqFwht(originalDim, seed);
+        SvasqFwht fwht = new SvasqFwht(originalDim, seed);
         int paddedDim  = fwht.paddedDim();
 
         float[][] rotated = new float[useN][paddedDim];
@@ -202,27 +217,27 @@ public final class VasqCalibrator {
     }
 
     /**
-     * Convenience overload using {@link VasqParams#DEFAULT_SEED}.
+     * Convenience overload using {@link SvasqParams#DEFAULT_SEED}.
      */
-    public static VasqParams calibrate(float[] flatData, int n, int originalDim) {
-        return calibrate(flatData, n, originalDim, VasqParams.DEFAULT_SEED);
+    public static SvasqParams calibrate(float[] flatData, int n, int originalDim) {
+        return calibrate(flatData, n, originalDim, SvasqParams.DEFAULT_SEED);
     }
 
-    // ── VASQ-4 (INT4) calibration API ────────────────────────────────────────
+    // ── SVASQ-4 (INT4) calibration API ────────────────────────────────────────
 
     /**
-     * Calibrates VASQ-4 (INT4) parameters from a list of sample vectors.
+     * Calibrates SVASQ-4 (INT4) parameters from a list of sample vectors.
      *
-     * <p>Produces {@link VasqParams} with {@link VasqParams#BIT_WIDTH_4}.
+     * <p>Produces {@link SvasqParams} with {@link SvasqParams#BIT_WIDTH_4}.
      * Scales are computed for signed range [-7, 7] with tighter clipping
      * ({@link #CLIP_SIGMAS_4BIT}) to maximize use of the 15 available levels.</p>
      *
      * @param sampleVectors representative sample
      * @param originalDim   vector dimensionality
      * @param seed          FWHT sign-flip seed
-     * @return calibrated {@link VasqParams} with bitWidth=4
+     * @return calibrated {@link SvasqParams} with bitWidth=4
      */
-    public static VasqParams calibrate4bit(List<float[]> sampleVectors,
+    public static SvasqParams calibrate4bit(List<float[]> sampleVectors,
                                             int originalDim, long seed) {
         if (sampleVectors == null || sampleVectors.isEmpty()) {
             throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "sampleVectors");
@@ -234,7 +249,7 @@ public final class VasqCalibrator {
                 throw new SpectorValidationException(ErrorCode.DIMENSIONS_MISMATCH, originalDim, v.length);
             }
         }
-        VasqFwht fwht  = new VasqFwht(originalDim, seed);
+        SvasqFwht fwht  = new SvasqFwht(originalDim, seed);
         int paddedDim  = fwht.paddedDim();
 
         float[][] rotated = new float[n][paddedDim];
@@ -244,24 +259,24 @@ public final class VasqCalibrator {
             fwht.rotate(tempVec, rotated[i]);
         }
         return computeParams(rotated, n, paddedDim, originalDim, fwht,
-                MAX_LEVEL_INT4, CLIP_SIGMAS_4BIT, VasqParams.BIT_WIDTH_4);
+                MAX_LEVEL_INT4, CLIP_SIGMAS_4BIT, SvasqParams.BIT_WIDTH_4);
     }
 
-    /** Convenience overload using {@link VasqParams#DEFAULT_SEED}. */
-    public static VasqParams calibrate4bit(List<float[]> sampleVectors, int originalDim) {
-        return calibrate4bit(sampleVectors, originalDim, VasqParams.DEFAULT_SEED);
+    /** Convenience overload using {@link SvasqParams#DEFAULT_SEED}. */
+    public static SvasqParams calibrate4bit(List<float[]> sampleVectors, int originalDim) {
+        return calibrate4bit(sampleVectors, originalDim, SvasqParams.DEFAULT_SEED);
     }
 
     /**
-     * Calibrates VASQ-4 (INT4) parameters from a {@code float[][]} array.
+     * Calibrates SVASQ-4 (INT4) parameters from a {@code float[][]} array.
      *
      * @param samples     array of sample vectors (only indices [0, n) are used)
      * @param n           number of valid vectors
      * @param originalDim vector dimensionality
      * @param seed        FWHT sign-flip seed
-     * @return calibrated {@link VasqParams} with bitWidth=4
+     * @return calibrated {@link SvasqParams} with bitWidth=4
      */
-    public static VasqParams calibrate4bit(float[][] samples, int n,
+    public static SvasqParams calibrate4bit(float[][] samples, int n,
                                             int originalDim, long seed) {
         if (samples == null || n <= 0) {
             throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "samples");
@@ -269,7 +284,7 @@ public final class VasqCalibrator {
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);
 
-        VasqFwht fwht  = new VasqFwht(originalDim, seed);
+        SvasqFwht fwht  = new SvasqFwht(originalDim, seed);
         int paddedDim  = fwht.paddedDim();
 
         float[][] rotated = new float[useN][paddedDim];
@@ -283,20 +298,20 @@ public final class VasqCalibrator {
             fwht.rotate(tempVec, rotated[i]);
         }
         return computeParams(rotated, useN, paddedDim, originalDim, fwht,
-                MAX_LEVEL_INT4, CLIP_SIGMAS_4BIT, VasqParams.BIT_WIDTH_4);
+                MAX_LEVEL_INT4, CLIP_SIGMAS_4BIT, SvasqParams.BIT_WIDTH_4);
     }
 
-    /** Convenience overload using {@link VasqParams#DEFAULT_SEED}. */
-    public static VasqParams calibrate4bit(float[][] samples, int n, int originalDim) {
-        return calibrate4bit(samples, n, originalDim, VasqParams.DEFAULT_SEED);
+    /** Convenience overload using {@link SvasqParams#DEFAULT_SEED}. */
+    public static SvasqParams calibrate4bit(float[][] samples, int n, int originalDim) {
+        return calibrate4bit(samples, n, originalDim, SvasqParams.DEFAULT_SEED);
     }
 
     /**
-     * Calibrates VASQ-4 parameters from a flat contiguous float buffer.
+     * Calibrates SVASQ-4 parameters from a flat contiguous float buffer.
      *
      * @see #calibrate(float[], int, int, long)
      */
-    public static VasqParams calibrate4bit(float[] flatData, int n,
+    public static SvasqParams calibrate4bit(float[] flatData, int n,
                                             int originalDim, long seed) {
         if (flatData == null || n <= 0 || originalDim <= 0) {
             throw new SpectorValidationException(ErrorCode.EMPTY_COLLECTION, "flatData");
@@ -304,7 +319,7 @@ public final class VasqCalibrator {
         int useN    = Math.min(n, MAX_SAMPLE_SIZE);
         int[] idxs  = subsampleIndices(n, useN, seed);
 
-        VasqFwht fwht  = new VasqFwht(originalDim, seed);
+        SvasqFwht fwht  = new SvasqFwht(originalDim, seed);
         int paddedDim  = fwht.paddedDim();
 
         float[][] rotated = new float[useN][paddedDim];
@@ -315,26 +330,26 @@ public final class VasqCalibrator {
             fwht.rotate(tempVec, rotated[i]);
         }
         return computeParams(rotated, useN, paddedDim, originalDim, fwht,
-                MAX_LEVEL_INT4, CLIP_SIGMAS_4BIT, VasqParams.BIT_WIDTH_4);
+                MAX_LEVEL_INT4, CLIP_SIGMAS_4BIT, SvasqParams.BIT_WIDTH_4);
     }
 
-    /** Convenience overload using {@link VasqParams#DEFAULT_SEED}. */
-    public static VasqParams calibrate4bit(float[] flatData, int n, int originalDim) {
-        return calibrate4bit(flatData, n, originalDim, VasqParams.DEFAULT_SEED);
+    /** Convenience overload using {@link SvasqParams#DEFAULT_SEED}. */
+    public static SvasqParams calibrate4bit(float[] flatData, int n, int originalDim) {
+        return calibrate4bit(flatData, n, originalDim, SvasqParams.DEFAULT_SEED);
     }
 
     // ── Core computation (shared by all overloads) ────────────────────────────
 
     /**
      * Computes per-dimension percentile-clipped mean + std from pre-rotated samples,
-     * then derives VASQ scale parameters.
+     * then derives SVASQ scale parameters.
      *
      * <p>Delegates to the parameterized overload with INT8 defaults (maxLevel=127, clipSigmas=3.0).</p>
      */
-    private static VasqParams computeParams(float[][] rotated, int n, int paddedDim,
-                                             int originalDim, VasqFwht fwht) {
+    private static SvasqParams computeParams(float[][] rotated, int n, int paddedDim,
+                                             int originalDim, SvasqFwht fwht) {
         return computeParams(rotated, n, paddedDim, originalDim, fwht,
-                MAX_LEVEL_INT8, CLIP_SIGMAS, VasqParams.BIT_WIDTH_8);
+                MAX_LEVEL_INT8, CLIP_SIGMAS, SvasqParams.BIT_WIDTH_8);
     }
 
     /**
@@ -342,10 +357,10 @@ public final class VasqCalibrator {
      *
      * @param maxLevel   maximum absolute quantization level (127 for INT8, 7 for INT4)
      * @param clipSigmas number of standard deviations the range covers
-     * @param bitWidth   {@link VasqParams#BIT_WIDTH_8} or {@link VasqParams#BIT_WIDTH_4}
+     * @param bitWidth   {@link SvasqParams#BIT_WIDTH_8} or {@link SvasqParams#BIT_WIDTH_4}
      */
-    private static VasqParams computeParams(float[][] rotated, int n, int paddedDim,
-                                             int originalDim, VasqFwht fwht,
+    private static SvasqParams computeParams(float[][] rotated, int n, int paddedDim,
+                                             int originalDim, SvasqFwht fwht,
                                              int maxLevel, float clipSigmas, int bitWidth) {
         float[] means     = new float[paddedDim];
         float[] scales    = new float[paddedDim];
@@ -392,7 +407,7 @@ public final class VasqCalibrator {
             invScales[j] = maxLevel / (clipSigmas * std);
         }
 
-        return new VasqParams(originalDim, paddedDim, means, scales, invScales, fwht, bitWidth);
+        return new SvasqParams(originalDim, paddedDim, means, scales, invScales, fwht, bitWidth);
     }
 
     // ── Sampling helpers ──────────────────────────────────────────────────────

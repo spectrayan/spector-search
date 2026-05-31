@@ -10,7 +10,7 @@
 
 1. **Off-Heap Storage (`MemorySegmentStore`):** Stores uncompressed float32 vectors directly in contiguous off-heap virtual memory segments.
 2. **Memory-Mapped Persistence (`MmapStore`):** Uses OS-level page cache via `mmap` to persist vector segments directly to disk, allowing files to survive JVM restarts and load instantaneously.
-3. **Quantized Vector Store (`QuantizedVectorStore`):** Compresses vectors using low-level layouts. Integrates directly with VASQ (INT8, INT4, INT2) formats, storing compressed coordinates and scaling metadata in space-efficient off-heap bit-packed segments.
+3. **Quantized Vector Store (`QuantizedVectorStore`):** Compresses vectors using low-level layouts. Integrates directly with SVASQ (INT8, INT4, INT2) formats, storing compressed coordinates and scaling metadata in space-efficient off-heap bit-packed segments.
 
 ---
 

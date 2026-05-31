@@ -1,4 +1,19 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.lang.foreign.MemorySegment;
@@ -7,7 +22,7 @@ import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * VASQ-4 encoder — FWHT rotation + offset-encoded INT4 quantization with nibble packing.
+ * SVASQ-4 encoder — FWHT rotation + offset-encoded INT4 quantization with nibble packing.
  *
  * <h3>Encoding pipeline</h3>
  * <ol>
@@ -30,15 +45,15 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * via {@link ThreadLocal}, making concurrent encoding safe with zero heap allocation
  * on the hot path.</p>
  *
- * @see VasqEncoder
- * @see Vasq4SimdKernel
+ * @see SvasqEncoder
+ * @see Svasq4SimdKernel
  */
-public final class Vasq4Encoder {
+public final class Svasq4Encoder {
 
     /** Offset applied to signed quantized values [-7, 7] → unsigned [0, 14]. */
     static final int OFFSET = 7;
 
-    private final VasqParams params;
+    private final SvasqParams params;
     private final int paddedDim;
     private final int bytesPerVector;
 
@@ -49,14 +64,14 @@ public final class Vasq4Encoder {
     private final ThreadLocal<float[]> rotScratch;
 
     /**
-     * Creates a VASQ-4 encoder from pre-calibrated 4-bit parameters.
+     * Creates a SVASQ-4 encoder from pre-calibrated 4-bit parameters.
      *
-     * @param params calibrated {@link VasqParams} with {@link VasqParams#BIT_WIDTH_4}
+     * @param params calibrated {@link SvasqParams} with {@link SvasqParams#BIT_WIDTH_4}
      * @throws SpectorValidationException if params.bitWidth() is not 4
      */
-    public Vasq4Encoder(VasqParams params) {
+    public Svasq4Encoder(SvasqParams params) {
         if (params == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "params");
-        if (params.bitWidth() != VasqParams.BIT_WIDTH_4) {
+        if (params.bitWidth() != SvasqParams.BIT_WIDTH_4) {
             throw new SpectorValidationException(ErrorCode.BIT_WIDTH_INVALID, "4", params.bitWidth());
         }
         this.params = params;
@@ -159,9 +174,9 @@ public final class Vasq4Encoder {
     /**
      * Returns the calibration parameters backing this encoder.
      *
-     * @return VASQ-4 params (bitWidth=4)
+     * @return SVASQ-4 params (bitWidth=4)
      */
-    public VasqParams params() { return params; }
+    public SvasqParams params() { return params; }
 
     /**
      * Returns the number of bytes per encoded vector (4-byte header + paddedDim/2 code bytes).
