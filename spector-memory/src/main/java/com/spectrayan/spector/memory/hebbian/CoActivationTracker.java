@@ -12,23 +12,18 @@
  */
 package com.spectrayan.spector.memory.hebbian;
 
-import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,27 +44,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * (anti-causal), the B→A synapse is <b>weakened</b> (Long-Term Depression).
  * This produces directed, predictive associations — "tag A predicts tag B."</p>
  *
- * <h3>Off-Heap Architecture</h3>
+ * <h3>Architecture</h3>
+ * <p>This class coordinates two independent off-heap hash tables:</p>
  * <ul>
- *   <li><b>Co-activations</b>: off-heap open-addressing hash table (32B per slot)</li>
- *   <li><b>STDP edges</b>: off-heap open-addressing hash table (40B per slot)</li>
- *   <li><b>Tag names</b>: on-heap {@link ConcurrentHashMap} for hash↔name resolution</li>
- *   <li>Persistence via {@link #save(Path)} / {@link #load(Path, int, int)}</li>
+ *   <li>{@link OffHeapPairTable} — undirected co-activation pairs (32B/slot)</li>
+ *   <li>{@link OffHeapEdgeTable} — directed STDP edges (40B/slot)</li>
  * </ul>
+ * <p>Each table has its own {@code ReentrantLock}, so pair writes never
+ * block edge writes and vice versa.</p>
  *
- * <h3>Thread Safety</h3>
- * <p>Write-side methods use {@code synchronized} blocks. Read-side methods
- * are lock-free and may see slightly stale data — acceptable for soft-scoring.</p>
- *
+ * @see OffHeapPairTable
+ * @see OffHeapEdgeTable
  * @see HebbianCoActivationListener
  */
 public final class CoActivationTracker implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(CoActivationTracker.class);
 
-    // ══════════════════════════════════════════════════════════════
-    // STDP Constants
-    // ══════════════════════════════════════════════════════════════
+    // ── STDP Constants ──
 
     /** A+ (LTP amplitude): maximum weight increase for causal pairings. */
     private static final float A_PLUS = 0.1f;
@@ -84,53 +76,12 @@ public final class CoActivationTracker implements AutoCloseable {
     private static final float TAU_MINUS = 30_000f;  // 30 seconds
 
     /** Minimum weight (prevent complete erasure). */
-    private static final float MIN_WEIGHT = 0.0f;
+    static final float MIN_WEIGHT = 0.0f;
 
     /** Maximum weight (prevent runaway potentiation). */
-    private static final float MAX_WEIGHT = 1.0f;
+    static final float MAX_WEIGHT = 1.0f;
 
-    // ══════════════════════════════════════════════════════════════
-    // Off-Heap Layout: Co-Activation Pair Table
-    // ══════════════════════════════════════════════════════════════
-
-    /**
-     * Slot layout (32 bytes, 8-byte aligned):
-     * <pre>
-     *   [hashA:8B][hashB:8B][count:4B][flags:4B][pad:8B]
-     * </pre>
-     */
-    private static final int PAIR_SLOT_BYTES = 32;
-    private static final long PAIR_OFF_HASH_A = 0;
-    private static final long PAIR_OFF_HASH_B = 8;
-    private static final long PAIR_OFF_COUNT = 16;
-    private static final long PAIR_OFF_FLAGS = 20;
-    // pad: 8B to reach 32B total
-
-    // ══════════════════════════════════════════════════════════════
-    // Off-Heap Layout: STDP Directed Edge Table
-    // ══════════════════════════════════════════════════════════════
-
-    /**
-     * Slot layout (40 bytes, 8-byte aligned):
-     * <pre>
-     *   [srcHash:8B][tgtHash:8B][weight:4B][pad:4B][lastActivatedMs:8B][activationCount:4B][flags:4B]
-     * </pre>
-     */
-    private static final int EDGE_SLOT_BYTES = 40;
-    private static final long EDGE_OFF_SRC = 0;
-    private static final long EDGE_OFF_TGT = 8;
-    private static final long EDGE_OFF_WEIGHT = 16;
-    // pad: 4B at offset 20 for alignment
-    private static final long EDGE_OFF_LAST_MS = 24;
-    private static final long EDGE_OFF_ACT_COUNT = 32;
-    private static final long EDGE_OFF_FLAGS = 36;
-
-    /** Flag: slot is occupied. */
-    private static final int FLAG_OCCUPIED = 1;
-
-    // ══════════════════════════════════════════════════════════════
-    // Persistence
-    // ══════════════════════════════════════════════════════════════
+    // ── Persistence ──
 
     /** File magic: "COAX" in ASCII. */
     private static final int FILE_MAGIC = 0x434F4158;
@@ -138,24 +89,16 @@ public final class CoActivationTracker implements AutoCloseable {
     /** Header: magic(4) + version(4) + pairCap(4) + edgeCap(4) + pairCount(4) + edgeCount(4) = 24B. */
     private static final int FILE_HEADER_BYTES = 24;
 
-    // ══════════════════════════════════════════════════════════════
-    // State
-    // ══════════════════════════════════════════════════════════════
+    // ── State ──
 
     private final Arena arena;
-    private final MemorySegment pairSegment;
-    private final MemorySegment edgeSegment;
-    private final int pairCapacity;   // number of hash table slots (power of 2)
-    private final int edgeCapacity;
-    private volatile int pairCount;
-    private volatile int edgeCount;
+    private final OffHeapPairTable pairTable;
+    private final OffHeapEdgeTable edgeTable;
 
     /** On-heap name↔hash resolution (small — only unique tag strings). */
     private final ConcurrentHashMap<Long, String> hashToTag = new ConcurrentHashMap<>();
 
-    // ══════════════════════════════════════════════════════════════
-    // STDP Records (kept for API compatibility)
-    // ══════════════════════════════════════════════════════════════
+    // ── Records ──
 
     /**
      * A directed edge between two synaptic tags.
@@ -209,32 +152,24 @@ public final class CoActivationTracker implements AutoCloseable {
      * @param maxEdges maximum tracked STDP directed edges
      */
     public CoActivationTracker(int maxPairs, int maxEdges) {
-        this.pairCapacity = nextPowerOf2(Math.max(64, maxPairs * 2)); // ~50% load factor
-        this.edgeCapacity = nextPowerOf2(Math.max(64, maxEdges * 2));
+        int pairCap = nextPowerOf2(Math.max(64, maxPairs * 2));
+        int edgeCap = nextPowerOf2(Math.max(64, maxEdges * 2));
         this.arena = Arena.ofShared();
-        this.pairSegment = arena.allocate((long) PAIR_SLOT_BYTES * pairCapacity);
-        this.edgeSegment = arena.allocate((long) EDGE_SLOT_BYTES * edgeCapacity);
-        pairSegment.fill((byte) 0);
-        edgeSegment.fill((byte) 0);
-        this.pairCount = 0;
-        this.edgeCount = 0;
+        this.pairTable = new OffHeapPairTable(pairCap, arena);
+        this.edgeTable = new OffHeapEdgeTable(edgeCap, arena);
 
         log.info("CoActivationTracker initialized (off-heap): pairSlots={}, edgeSlots={}, memory={}KB",
-                pairCapacity, edgeCapacity,
-                ((long) PAIR_SLOT_BYTES * pairCapacity + (long) EDGE_SLOT_BYTES * edgeCapacity) / 1024);
+                pairCap, edgeCap,
+                ((long) OffHeapPairTable.SLOT_BYTES * pairCap
+                        + (long) OffHeapEdgeTable.SLOT_BYTES * edgeCap) / 1024);
     }
 
-    /** Private constructor for loading from pre-existing segments. */
-    private CoActivationTracker(int pairCapacity, int edgeCapacity, int pairCount, int edgeCount,
-                                 Arena arena, MemorySegment pairSegment, MemorySegment edgeSegment,
+    /** Private constructor for loading from pre-existing tables. */
+    private CoActivationTracker(Arena arena, OffHeapPairTable pairTable, OffHeapEdgeTable edgeTable,
                                  ConcurrentHashMap<Long, String> hashToTag) {
-        this.pairCapacity = pairCapacity;
-        this.edgeCapacity = edgeCapacity;
-        this.pairCount = pairCount;
-        this.edgeCount = edgeCount;
         this.arena = arena;
-        this.pairSegment = pairSegment;
-        this.edgeSegment = edgeSegment;
+        this.pairTable = pairTable;
+        this.edgeTable = edgeTable;
         this.hashToTag.putAll(hashToTag);
     }
 
@@ -261,9 +196,7 @@ public final class CoActivationTracker implements AutoCloseable {
                 long keyA = Math.min(hashA, hashB);
                 long keyB = Math.max(hashA, hashB);
 
-                synchronized (this) {
-                    incrementPair(keyA, keyB);
-                }
+                pairTable.increment(keyA, keyB);
             }
         }
     }
@@ -280,12 +213,7 @@ public final class CoActivationTracker implements AutoCloseable {
         long hashB = hashTag(tagB);
         long keyA = Math.min(hashA, hashB);
         long keyB = Math.max(hashA, hashB);
-
-        int slot = findPairSlot(keyA, keyB);
-        if (slot < 0) return 0;
-
-        long offset = (long) slot * PAIR_SLOT_BYTES;
-        return pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_COUNT);
+        return pairTable.get(keyA, keyB);
     }
 
     /**
@@ -298,29 +226,14 @@ public final class CoActivationTracker implements AutoCloseable {
     public List<String> getAssociatedTags(String tag, int topN) {
         long tagHash = hashTag(tag);
 
-        // Scan all pair slots for matches containing this tag's hash
         record TagCount(String name, int count) {}
-        List<TagCount> matches = new ArrayList<>();
 
-        for (int i = 0; i < pairCapacity; i++) {
-            long offset = (long) i * PAIR_SLOT_BYTES;
-            int flags = pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_FLAGS);
-            if ((flags & FLAG_OCCUPIED) == 0) continue;
-
-            long hA = pairSegment.get(ValueLayout.JAVA_LONG, offset + PAIR_OFF_HASH_A);
-            long hB = pairSegment.get(ValueLayout.JAVA_LONG, offset + PAIR_OFF_HASH_B);
-
-            if (hA == tagHash || hB == tagHash) {
-                long otherHash = (hA == tagHash) ? hB : hA;
-                String otherName = hashToTag.get(otherHash);
-                if (otherName != null) {
-                    int count = pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_COUNT);
-                    matches.add(new TagCount(otherName, count));
-                }
-            }
-        }
-
-        return matches.stream()
+        return pairTable.findAssociations(tagHash).stream()
+                .map(arr -> {
+                    String name = hashToTag.get(arr[0]);
+                    return name != null ? new TagCount(name, (int) arr[1]) : null;
+                })
+                .filter(tc -> tc != null)
                 .sorted((a, b) -> Integer.compare(b.count(), a.count()))
                 .limit(topN)
                 .map(TagCount::name)
@@ -352,15 +265,11 @@ public final class CoActivationTracker implements AutoCloseable {
 
         // Causal: A→B (strengthen)
         float dW_causal = A_PLUS * (float) Math.exp(-dt / TAU_PLUS);
-        synchronized (this) {
-            updateEdge(hashBefore, hashAfter, dW_causal, timeAfter);
-        }
+        edgeTable.update(hashBefore, hashAfter, dW_causal, timeAfter);
 
         // Anti-causal: B→A (weaken)
         float dW_anti = -A_MINUS * (float) Math.exp(-dt / TAU_MINUS);
-        synchronized (this) {
-            updateEdge(hashAfter, hashBefore, dW_anti, timeAfter);
-        }
+        edgeTable.update(hashAfter, hashBefore, dW_anti, timeAfter);
 
         log.trace("STDP: {}→{} Δt={}ms, causal ΔW={}, anti-causal ΔW={}",
                 tagBefore, tagAfter, dt,
@@ -401,12 +310,8 @@ public final class CoActivationTracker implements AutoCloseable {
             long srcHash = hashTag(qTag);
             for (String rTag : resultTags) {
                 long tgtHash = hashTag(rTag);
-                int slot = findEdgeSlot(srcHash, tgtHash);
-                if (slot >= 0) {
-                    long offset = (long) slot * EDGE_SLOT_BYTES;
-                    float weight = edgeSegment.get(ValueLayout.JAVA_FLOAT, offset + EDGE_OFF_WEIGHT);
-                    if (weight > maxStrength) maxStrength = weight;
-                }
+                float weight = edgeTable.getWeight(srcHash, tgtHash);
+                if (weight > maxStrength) maxStrength = weight;
             }
         }
         return maxStrength;
@@ -425,23 +330,19 @@ public final class CoActivationTracker implements AutoCloseable {
         }
 
         float sum = 0.0f;
-        int count = 0;
+        int matchCount = 0;
         for (String qTag : queryTags) {
             long srcHash = hashTag(qTag);
             for (String rTag : resultTags) {
                 long tgtHash = hashTag(rTag);
-                int slot = findEdgeSlot(srcHash, tgtHash);
-                if (slot >= 0) {
-                    long offset = (long) slot * EDGE_SLOT_BYTES;
-                    float weight = edgeSegment.get(ValueLayout.JAVA_FLOAT, offset + EDGE_OFF_WEIGHT);
-                    if (weight > 0) {
-                        sum += weight;
-                        count++;
-                    }
+                float weight = edgeTable.getWeight(srcHash, tgtHash);
+                if (weight > 0) {
+                    sum += weight;
+                    matchCount++;
                 }
             }
         }
-        return count > 0 ? sum / count : 0.0f;
+        return matchCount > 0 ? sum / matchCount : 0.0f;
     }
 
     /**
@@ -454,49 +355,34 @@ public final class CoActivationTracker implements AutoCloseable {
     public EdgeWeight getEdge(String sourceTag, String targetTag) {
         long srcHash = hashTag(sourceTag);
         long tgtHash = hashTag(targetTag);
-        int slot = findEdgeSlot(srcHash, tgtHash);
-        if (slot < 0) return null;
-
-        long offset = (long) slot * EDGE_SLOT_BYTES;
-        float weight = edgeSegment.get(ValueLayout.JAVA_FLOAT, offset + EDGE_OFF_WEIGHT);
-        long lastMs = edgeSegment.get(ValueLayout.JAVA_LONG, offset + EDGE_OFF_LAST_MS);
-        int actCount = edgeSegment.get(ValueLayout.JAVA_INT, offset + EDGE_OFF_ACT_COUNT);
-        return new EdgeWeight(weight, lastMs, actCount);
+        return edgeTable.getEdge(srcHash, tgtHash);
     }
 
-    /**
-     * Returns the number of STDP directed edges.
-     */
-    public int edgeCount() {
-        return edgeCount;
-    }
+    // ══════════════════════════════════════════════════════════════
+    // Counts / Reset / Close
+    // ══════════════════════════════════════════════════════════════
 
-    /**
-     * Returns the number of tracked undirected tag pairs.
-     */
-    public int pairCount() {
-        return pairCount;
-    }
+    /** Returns the number of STDP directed edges. */
+    public int edgeCount() { return edgeTable.count(); }
 
-    /**
-     * Resets all co-activation and STDP data.
-     */
-    public synchronized void reset() {
-        pairSegment.fill((byte) 0);
-        edgeSegment.fill((byte) 0);
+    /** Returns the number of tracked undirected tag pairs. */
+    public int pairCount() { return pairTable.count(); }
+
+    /** Resets all co-activation and STDP data. */
+    public void reset() {
+        pairTable.reset();
+        edgeTable.reset();
         hashToTag.clear();
-        pairCount = 0;
-        edgeCount = 0;
     }
 
     @Override
     public void close() {
-        log.info("CoActivationTracker closing (pairs={}, edges={})", pairCount, edgeCount);
+        log.info("CoActivationTracker closing (pairs={}, edges={})", pairCount(), edgeCount());
         arena.close();
     }
 
     // ══════════════════════════════════════════════════════════════
-    // Hash Table Internals
+    // Tag Hashing
     // ══════════════════════════════════════════════════════════════
 
     /**
@@ -513,202 +399,6 @@ public final class CoActivationTracker implements AutoCloseable {
 
     private void registerTag(String tag, long hash) {
         hashToTag.putIfAbsent(hash, tag);
-    }
-
-    /**
-     * Finds a co-activation pair slot by hash keys.
-     *
-     * @return slot index if found, or negative value if not found
-     */
-    private int findPairSlot(long hashA, long hashB) {
-        int mask = pairCapacity - 1;
-        int idx = (int) ((hashA * 0x9E3779B97F4A7C15L + hashB) & mask);
-
-        for (int probe = 0; probe < pairCapacity; probe++) {
-            int slot = (idx + probe) & mask;
-            long offset = (long) slot * PAIR_SLOT_BYTES;
-            int flags = pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_FLAGS);
-
-            if ((flags & FLAG_OCCUPIED) == 0) return ~slot; // empty = not found, return insertion point
-            long a = pairSegment.get(ValueLayout.JAVA_LONG, offset + PAIR_OFF_HASH_A);
-            long b = pairSegment.get(ValueLayout.JAVA_LONG, offset + PAIR_OFF_HASH_B);
-            if (a == hashA && b == hashB) return slot; // found
-        }
-        return -1; // table full
-    }
-
-    /**
-     * Increments (or inserts) a co-activation pair. MUST be called under synchronized.
-     */
-    private void incrementPair(long hashA, long hashB) {
-        int slot = findPairSlot(hashA, hashB);
-
-        if (slot >= 0) {
-            // Exists — increment count
-            long offset = (long) slot * PAIR_SLOT_BYTES;
-            int count = pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_COUNT);
-            pairSegment.set(ValueLayout.JAVA_INT, offset + PAIR_OFF_COUNT, count + 1);
-        } else {
-            // Not found — insert at insertion point
-            int insertSlot = ~slot;
-            if (insertSlot < 0 || pairCount >= pairCapacity / 2) {
-                // Too full — prune weakest 10%
-                pruneWeakestPairs();
-                // Retry
-                slot = findPairSlot(hashA, hashB);
-                insertSlot = slot >= 0 ? slot : ~slot;
-                if (insertSlot < 0) return; // still full, give up
-            }
-
-            long offset = (long) insertSlot * PAIR_SLOT_BYTES;
-            pairSegment.set(ValueLayout.JAVA_LONG, offset + PAIR_OFF_HASH_A, hashA);
-            pairSegment.set(ValueLayout.JAVA_LONG, offset + PAIR_OFF_HASH_B, hashB);
-            pairSegment.set(ValueLayout.JAVA_INT, offset + PAIR_OFF_COUNT, 1);
-            pairSegment.set(ValueLayout.JAVA_INT, offset + PAIR_OFF_FLAGS, FLAG_OCCUPIED);
-            pairCount++;
-        }
-    }
-
-    /**
-     * Finds a STDP edge slot by source and target hashes.
-     */
-    private int findEdgeSlot(long srcHash, long tgtHash) {
-        int mask = edgeCapacity - 1;
-        int idx = (int) ((srcHash * 0x517CC1B727220A95L + tgtHash) & mask);
-
-        for (int probe = 0; probe < edgeCapacity; probe++) {
-            int slot = (idx + probe) & mask;
-            long offset = (long) slot * EDGE_SLOT_BYTES;
-            int flags = edgeSegment.get(ValueLayout.JAVA_INT, offset + EDGE_OFF_FLAGS);
-
-            if ((flags & FLAG_OCCUPIED) == 0) return ~slot;
-            long s = edgeSegment.get(ValueLayout.JAVA_LONG, offset + EDGE_OFF_SRC);
-            long t = edgeSegment.get(ValueLayout.JAVA_LONG, offset + EDGE_OFF_TGT);
-            if (s == srcHash && t == tgtHash) return slot;
-        }
-        return -1;
-    }
-
-    /**
-     * Updates or inserts a STDP edge. MUST be called under synchronized.
-     */
-    private void updateEdge(long srcHash, long tgtHash, float deltaWeight, long nowMs) {
-        int slot = findEdgeSlot(srcHash, tgtHash);
-
-        if (slot >= 0) {
-            // Exists — update
-            long offset = (long) slot * EDGE_SLOT_BYTES;
-            float weight = edgeSegment.get(ValueLayout.JAVA_FLOAT, offset + EDGE_OFF_WEIGHT);
-            float newWeight = Math.clamp(weight + deltaWeight, MIN_WEIGHT, MAX_WEIGHT);
-            int actCount = edgeSegment.get(ValueLayout.JAVA_INT, offset + EDGE_OFF_ACT_COUNT);
-
-            edgeSegment.set(ValueLayout.JAVA_FLOAT, offset + EDGE_OFF_WEIGHT, newWeight);
-            edgeSegment.set(ValueLayout.JAVA_LONG, offset + EDGE_OFF_LAST_MS, nowMs);
-            edgeSegment.set(ValueLayout.JAVA_INT, offset + EDGE_OFF_ACT_COUNT, actCount + 1);
-        } else {
-            // Insert
-            int insertSlot = ~slot;
-            if (insertSlot < 0 || edgeCount >= edgeCapacity / 2) {
-                pruneWeakestEdges();
-                slot = findEdgeSlot(srcHash, tgtHash);
-                insertSlot = slot >= 0 ? slot : ~slot;
-                if (insertSlot < 0) return;
-            }
-
-            long offset = (long) insertSlot * EDGE_SLOT_BYTES;
-            float initialWeight = Math.max(MIN_WEIGHT, deltaWeight);
-            edgeSegment.set(ValueLayout.JAVA_LONG, offset + EDGE_OFF_SRC, srcHash);
-            edgeSegment.set(ValueLayout.JAVA_LONG, offset + EDGE_OFF_TGT, tgtHash);
-            edgeSegment.set(ValueLayout.JAVA_FLOAT, offset + EDGE_OFF_WEIGHT, initialWeight);
-            edgeSegment.set(ValueLayout.JAVA_LONG, offset + EDGE_OFF_LAST_MS, nowMs);
-            edgeSegment.set(ValueLayout.JAVA_INT, offset + EDGE_OFF_ACT_COUNT, 1);
-            edgeSegment.set(ValueLayout.JAVA_INT, offset + EDGE_OFF_FLAGS, FLAG_OCCUPIED);
-            edgeCount++;
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    // Pruning
-    // ══════════════════════════════════════════════════════════════
-
-    /**
-     * Prunes the weakest 10% of co-activation pairs (by count).
-     */
-    private void pruneWeakestPairs() {
-        if (pairCount == 0) return;
-        int toPrune = Math.max(1, pairCount / 10);
-
-        // Find the threshold count: collect all counts, sort, take toPrune-th value
-        int[] counts = new int[pairCount];
-        int idx = 0;
-        for (int i = 0; i < pairCapacity && idx < pairCount; i++) {
-            long offset = (long) i * PAIR_SLOT_BYTES;
-            int flags = pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_FLAGS);
-            if ((flags & FLAG_OCCUPIED) != 0) {
-                counts[idx++] = pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_COUNT);
-            }
-        }
-        java.util.Arrays.sort(counts, 0, idx);
-        int threshold = idx > toPrune ? counts[toPrune] : counts[0];
-
-        // Remove entries at or below threshold
-        int removed = 0;
-        for (int i = 0; i < pairCapacity && removed < toPrune; i++) {
-            long offset = (long) i * PAIR_SLOT_BYTES;
-            int flags = pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_FLAGS);
-            if ((flags & FLAG_OCCUPIED) != 0) {
-                int count = pairSegment.get(ValueLayout.JAVA_INT, offset + PAIR_OFF_COUNT);
-                if (count <= threshold) {
-                    pairSegment.set(ValueLayout.JAVA_INT, offset + PAIR_OFF_FLAGS, 0);
-                    pairSegment.set(ValueLayout.JAVA_LONG, offset + PAIR_OFF_HASH_A, 0L);
-                    pairSegment.set(ValueLayout.JAVA_LONG, offset + PAIR_OFF_HASH_B, 0L);
-                    pairSegment.set(ValueLayout.JAVA_INT, offset + PAIR_OFF_COUNT, 0);
-                    removed++;
-                    pairCount--;
-                }
-            }
-        }
-
-        log.debug("Pruned {} weak co-activation pairs (remaining={})", removed, pairCount);
-    }
-
-    /**
-     * Prunes the weakest 10% of STDP directed edges (by weight).
-     */
-    private void pruneWeakestEdges() {
-        if (edgeCount == 0) return;
-        int toPrune = Math.max(1, edgeCount / 10);
-
-        float[] weights = new float[edgeCount];
-        int idx = 0;
-        for (int i = 0; i < edgeCapacity && idx < edgeCount; i++) {
-            long offset = (long) i * EDGE_SLOT_BYTES;
-            int flags = edgeSegment.get(ValueLayout.JAVA_INT, offset + EDGE_OFF_FLAGS);
-            if ((flags & FLAG_OCCUPIED) != 0) {
-                weights[idx++] = edgeSegment.get(ValueLayout.JAVA_FLOAT, offset + EDGE_OFF_WEIGHT);
-            }
-        }
-        java.util.Arrays.sort(weights, 0, idx);
-        float threshold = idx > toPrune ? weights[toPrune] : weights[0];
-
-        int removed = 0;
-        for (int i = 0; i < edgeCapacity && removed < toPrune; i++) {
-            long offset = (long) i * EDGE_SLOT_BYTES;
-            int flags = edgeSegment.get(ValueLayout.JAVA_INT, offset + EDGE_OFF_FLAGS);
-            if ((flags & FLAG_OCCUPIED) != 0) {
-                float weight = edgeSegment.get(ValueLayout.JAVA_FLOAT, offset + EDGE_OFF_WEIGHT);
-                if (weight <= threshold) {
-                    // Zero-out the slot
-                    for (int b = 0; b < EDGE_SLOT_BYTES; b += 4) {
-                        edgeSegment.set(ValueLayout.JAVA_INT, offset + b, 0);
-                    }
-                    removed++;
-                    edgeCount--;
-                }
-            }
-        }
-
-        log.debug("Pruned {} weak STDP edges (remaining={})", removed, edgeCount);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -738,38 +428,23 @@ public final class CoActivationTracker implements AutoCloseable {
             ByteBuffer header = ByteBuffer.allocate(FILE_HEADER_BYTES);
             header.putInt(FILE_MAGIC);
             header.putInt(FILE_VERSION);
-            header.putInt(pairCapacity);
-            header.putInt(edgeCapacity);
-            header.putInt(pairCount);
-            header.putInt(edgeCount);
+            header.putInt(pairTable.capacity());
+            header.putInt(edgeTable.capacity());
+            header.putInt(pairTable.count());
+            header.putInt(edgeTable.count());
             header.flip();
             ch.write(header);
 
-            // Pair segment
-            writeSegment(ch, pairSegment, (long) PAIR_SLOT_BYTES * pairCapacity);
+            // Delegate segment I/O to tables
+            pairTable.writeTo(ch);
+            edgeTable.writeTo(ch);
 
-            // Edge segment
-            writeSegment(ch, edgeSegment, (long) EDGE_SLOT_BYTES * edgeCapacity);
-
-            // Tag name index (on-heap → serialized)
-            ByteBuffer countBuf = ByteBuffer.allocate(4);
-            countBuf.putInt(hashToTag.size());
-            countBuf.flip();
-            ch.write(countBuf);
-
-            for (Map.Entry<Long, String> entry : hashToTag.entrySet()) {
-                byte[] nameBytes = entry.getValue().getBytes(StandardCharsets.UTF_8);
-                ByteBuffer entryBuf = ByteBuffer.allocate(8 + 4 + nameBytes.length);
-                entryBuf.putLong(entry.getKey());
-                entryBuf.putInt(nameBytes.length);
-                entryBuf.put(nameBytes);
-                entryBuf.flip();
-                ch.write(entryBuf);
-            }
+            // Tag name index
+            writeTagIndex(ch);
 
             ch.force(true);
             log.info("CoActivationTracker saved: pairs={}, edges={}, tags={} → {}",
-                    pairCount, edgeCount, hashToTag.size(), filePath);
+                    pairCount(), edgeCount(), hashToTag.size(), filePath);
 
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to save CoActivationTracker: " + filePath, e);
@@ -814,44 +489,14 @@ public final class CoActivationTracker implements AutoCloseable {
 
             Arena arena = Arena.ofShared();
 
-            // Read pair segment
-            long pairBytes = (long) PAIR_SLOT_BYTES * pairCap;
-            MemorySegment pairSeg = arena.allocate(pairBytes);
-            readSegment(ch, pairSeg, pairBytes);
+            // Delegate segment I/O to tables
+            OffHeapPairTable pairTable = OffHeapPairTable.readFrom(ch, pairCap, pairs, arena);
+            OffHeapEdgeTable edgeTable = OffHeapEdgeTable.readFrom(ch, edgeCap, edges, arena);
 
-            // Read edge segment
-            long edgeBytes = (long) EDGE_SLOT_BYTES * edgeCap;
-            MemorySegment edgeSeg = arena.allocate(edgeBytes);
-            readSegment(ch, edgeSeg, edgeBytes);
+            // Tag name index
+            ConcurrentHashMap<Long, String> names = readTagIndex(ch);
 
-            // Read tag name index
-            ConcurrentHashMap<Long, String> names = new ConcurrentHashMap<>();
-            ByteBuffer countBuf = ByteBuffer.allocate(4);
-            ch.read(countBuf);
-            countBuf.flip();
-            int nameCount = countBuf.getInt();
-
-            for (int i = 0; i < nameCount; i++) {
-                ByteBuffer hashBuf = ByteBuffer.allocate(8);
-                ch.read(hashBuf);
-                hashBuf.flip();
-                long hash = hashBuf.getLong();
-
-                ByteBuffer lenBuf = ByteBuffer.allocate(4);
-                ch.read(lenBuf);
-                lenBuf.flip();
-                int len = lenBuf.getInt();
-
-                ByteBuffer nameBuf = ByteBuffer.allocate(len);
-                ch.read(nameBuf);
-                nameBuf.flip();
-                String name = new String(nameBuf.array(), 0, len, StandardCharsets.UTF_8);
-
-                names.put(hash, name);
-            }
-
-            CoActivationTracker tracker = new CoActivationTracker(
-                    pairCap, edgeCap, pairs, edges, arena, pairSeg, edgeSeg, names);
+            CoActivationTracker tracker = new CoActivationTracker(arena, pairTable, edgeTable, names);
             log.info("CoActivationTracker loaded: pairs={}, edges={}, tags={} from {}",
                     pairs, edges, names.size(), filePath);
             return tracker;
@@ -862,39 +507,60 @@ public final class CoActivationTracker implements AutoCloseable {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════
-    // Utility
-    // ══════════════════════════════════════════════════════════════
+    // ── Tag Index I/O ──
+
+    private void writeTagIndex(FileChannel ch) throws IOException {
+        ByteBuffer countBuf = ByteBuffer.allocate(4);
+        countBuf.putInt(hashToTag.size());
+        countBuf.flip();
+        ch.write(countBuf);
+
+        for (Map.Entry<Long, String> entry : hashToTag.entrySet()) {
+            byte[] nameBytes = entry.getValue().getBytes(StandardCharsets.UTF_8);
+            ByteBuffer entryBuf = ByteBuffer.allocate(8 + 4 + nameBytes.length);
+            entryBuf.putLong(entry.getKey());
+            entryBuf.putInt(nameBytes.length);
+            entryBuf.put(nameBytes);
+            entryBuf.flip();
+            ch.write(entryBuf);
+        }
+    }
+
+    private static ConcurrentHashMap<Long, String> readTagIndex(FileChannel ch) throws IOException {
+        ConcurrentHashMap<Long, String> names = new ConcurrentHashMap<>();
+
+        ByteBuffer countBuf = ByteBuffer.allocate(4);
+        ch.read(countBuf);
+        countBuf.flip();
+        int nameCount = countBuf.getInt();
+
+        for (int i = 0; i < nameCount; i++) {
+            ByteBuffer hashBuf = ByteBuffer.allocate(8);
+            ch.read(hashBuf);
+            hashBuf.flip();
+            long hash = hashBuf.getLong();
+
+            ByteBuffer lenBuf = ByteBuffer.allocate(4);
+            ch.read(lenBuf);
+            lenBuf.flip();
+            int len = lenBuf.getInt();
+
+            ByteBuffer nameBuf = ByteBuffer.allocate(len);
+            ch.read(nameBuf);
+            nameBuf.flip();
+            String name = new String(nameBuf.array(), 0, len, StandardCharsets.UTF_8);
+
+            names.put(hash, name);
+        }
+
+        return names;
+    }
+
+    // ── Utility ──
 
     private static int nextPowerOf2(int n) {
         int p = 1;
         while (p < n) p <<= 1;
         return p;
-    }
-
-    private static void writeSegment(FileChannel ch, MemorySegment seg, long totalBytes)
-            throws IOException {
-        long written = 0;
-        int chunkSize = 64 * 1024;
-        while (written < totalBytes) {
-            int toWrite = (int) Math.min(chunkSize, totalBytes - written);
-            ByteBuffer buf = seg.asSlice(written, toWrite).asByteBuffer().asReadOnlyBuffer();
-            ch.write(buf);
-            written += toWrite;
-        }
-    }
-
-    private static void readSegment(FileChannel ch, MemorySegment seg, long totalBytes)
-            throws IOException {
-        long read = 0;
-        int chunkSize = 64 * 1024;
-        while (read < totalBytes) {
-            int toRead = (int) Math.min(chunkSize, totalBytes - read);
-            ByteBuffer buf = ByteBuffer.allocate(toRead);
-            ch.read(buf);
-            buf.flip();
-            MemorySegment.copy(MemorySegment.ofBuffer(buf), 0, seg, read, toRead);
-            read += toRead;
-        }
     }
 }
