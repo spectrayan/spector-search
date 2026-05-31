@@ -1,0 +1,33 @@
+Extract named entities and their relationships from the following text.
+
+For each entity, output a line in this exact format:
+ENTITY: <name> | <type>
+
+Valid entity types:
+  People & Org:     PERSON, ORGANIZATION, TEAM, ROLE
+  Projects:         PROJECT, PRODUCT, TASK
+  Knowledge:        CONCEPT, TOPIC, SKILL, DECISION
+  Technology:       TECHNOLOGY, TOOL, API, ARTIFACT
+  World:            EVENT, LOCATION, DATE_TIME
+  Process & Data:   PROCESS, METRIC, DOCUMENT
+  Fallback:         OTHER
+
+For each relationship between entities, output a line in this exact format:
+RELATION: <source entity name> | <relation type> | <target entity name>
+
+Valid relation types:
+  People:       MANAGES, REPORTS_TO, KNOWS, ASSIGNED_TO, AUTHORED
+  Work:         WORKS_ON, CREATED_BY, OWNS, IMPLEMENTS
+  Structure:    PART_OF, CONTAINS, DEPENDS_ON, USES
+  Causality:    CAUSES, BLOCKS, SUPERSEDES, PRECEDES, FOLLOWS
+  Location:     LOCATED_AT
+  General:      RELATED_TO, OTHER
+
+Rules:
+- Output ONLY ENTITY and RELATION lines, nothing else.
+- Entity names should be concise but unambiguous.
+- Use the most specific type available; use OTHER only as a last resort.
+- Maximum %d entities and %d relations.
+
+Text:
+%s

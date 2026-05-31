@@ -12,6 +12,7 @@
  */
 package com.spectrayan.spector.memory.graph;
 
+import com.spectrayan.spector.commons.ResourceUtils;
 import com.spectrayan.spector.embed.TextGenerationProvider;
 
 import org.slf4j.Logger;
@@ -28,8 +29,10 @@ import java.util.regex.Pattern;
  *
  * <h3>How It Works</h3>
  * <p>Sends a structured prompt to the LLM asking it to identify entities
- * and their relationships from the text. The LLM returns a simple
- * line-based format which is parsed into {@link ExtractedEntity} records.</p>
+ * and their relationships from the text. The prompt is loaded from the
+ * classpath resource {@code prompts/entity-extraction.txt} and cached
+ * by {@link ResourceUtils}. The LLM returns a simple line-based format
+ * which is parsed into {@link ExtractedEntity} records.</p>
  *
  * <h3>Output Format Expected from LLM</h3>
  * <pre>
@@ -48,10 +51,14 @@ import java.util.regex.Pattern;
  *
  * @see EntityExtractor
  * @see TextGenerationProvider
+ * @see ResourceUtils
  */
 public final class LlmEntityExtractor implements EntityExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(LlmEntityExtractor.class);
+
+    /** Classpath path to the entity extraction prompt template. */
+    private static final String PROMPT_RESOURCE = "prompts/entity-extraction.txt";
 
     private static final int MAX_CONTENT_FOR_PROMPT = 1500;
     private static final int DEFAULT_MAX_ENTITIES = 10;
@@ -61,27 +68,6 @@ public final class LlmEntityExtractor implements EntityExtractor {
             "^ENTITY:\\s*(.+?)\\s*\\|\\s*(\\w+)\\s*$", Pattern.MULTILINE);
     private static final Pattern RELATION_PATTERN = Pattern.compile(
             "^RELATION:\\s*(.+?)\\s*\\|\\s*(\\w+)\\s*\\|\\s*(.+?)\\s*$", Pattern.MULTILINE);
-
-    private static final String PROMPT_TEMPLATE = """
-            Extract named entities and their relationships from the following text.
-            
-            For each entity, output a line in this exact format:
-            ENTITY: <name> | <type>
-            
-            Valid types: PERSON, ORGANIZATION, PROJECT, CONCEPT, EVENT, LOCATION, TOOL, OTHER
-            
-            For each relationship between entities, output a line in this exact format:
-            RELATION: <source entity name> | <relation type> | <target entity name>
-            
-            Valid relation types: MANAGES, AUTHORED, ATTENDED, PART_OF, RELATED_TO, CAUSES, \
-            DEPENDS_ON, USES, CREATED, MENTIONS, WORKS_ON, LOCATED_IN, OTHER
-            
-            Output ONLY ENTITY and RELATION lines, nothing else.
-            Maximum %d entities and %d relations.
-            
-            Text:
-            %s
-            """;
 
     private final TextGenerationProvider generator;
     private final int maxEntities;
@@ -120,7 +106,9 @@ public final class LlmEntityExtractor implements EntityExtractor {
             String content = text != null && text.length() > MAX_CONTENT_FOR_PROMPT
                     ? text.substring(0, MAX_CONTENT_FOR_PROMPT) : text;
 
-            String prompt = String.format(PROMPT_TEMPLATE,
+            // Load prompt template from classpath (cached by ResourceUtils)
+            String promptTemplate = ResourceUtils.loadResource(PROMPT_RESOURCE);
+            String prompt = String.format(promptTemplate,
                     maxEntities, maxRelations,
                     content != null ? content : id);
             String response = generator.generate(prompt);
