@@ -14,6 +14,7 @@ package com.spectrayan.spector.memory.graph;
 
 import com.spectrayan.spector.commons.ResourceUtils;
 import com.spectrayan.spector.embed.TextGenerationProvider;
+import com.spectrayan.spector.memory.error.SpectorEntityGraphException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,8 +121,9 @@ public final class LlmEntityExtractor implements EntityExtractor {
 
             return parseResponse(response, id);
 
-        } catch (Exception e) {
-            log.warn("LLM entity extraction failed for '{}': {}", id, e.getMessage());
+        } catch (RuntimeException e) {
+            SpectorEntityGraphException ex = new SpectorEntityGraphException("LLM extraction", e);
+            log.warn(ex.getMessage());
             return List.of();
         }
     }

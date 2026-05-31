@@ -75,6 +75,8 @@ import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.SpectorServerException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
+import com.spectrayan.spector.memory.error.SpectorGraphDecayException;
+
 /**
  * Default implementation of {@link SpectorMemory} — the Zero-GC Cognitive Backbone for Autonomous Agents.
  *
@@ -428,9 +430,14 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
         // ── Graph Decay (Sleep Consolidation) ──
         // Hebbian edges decay by 10% per reflection cycle (biological synaptic homeostasis)
-        int hebbianDecayed = hebbianGraph.decayEdges(0.9f);
-        if (hebbianDecayed > 0) {
-            log.info("Reflect: Hebbian graph decayed {} weak edges", hebbianDecayed);
+        try {
+            int hebbianDecayed = hebbianGraph.decayEdges(0.9f);
+            if (hebbianDecayed > 0) {
+                log.info("Reflect: Hebbian graph decayed {} weak edges", hebbianDecayed);
+            }
+        } catch (RuntimeException e) {
+            SpectorGraphDecayException ex = new SpectorGraphDecayException("Hebbian edge decay", e);
+            log.warn(ex.getMessage());
         }
 
         // Temporal chain: decay old links (prune chains older than 7 days)

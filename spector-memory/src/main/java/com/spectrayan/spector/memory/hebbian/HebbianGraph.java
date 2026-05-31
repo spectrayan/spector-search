@@ -16,7 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
+
+import com.spectrayan.spector.memory.error.SpectorGraphPersistenceException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -343,7 +344,7 @@ public final class HebbianGraph implements AutoCloseable {
             try {
                 Files.createDirectories(parent);
             } catch (IOException e) {
-                throw new UncheckedIOException("Cannot create graph directory: " + parent, e);
+                throw new SpectorGraphPersistenceException("HebbianGraph", parent, e);
             }
         }
 
@@ -377,7 +378,7 @@ public final class HebbianGraph implements AutoCloseable {
                     capacity, totalEdges(), filePath);
 
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to save HebbianGraph: " + filePath, e);
+            throw new SpectorGraphPersistenceException("HebbianGraph", filePath, e);
         }
     }
 

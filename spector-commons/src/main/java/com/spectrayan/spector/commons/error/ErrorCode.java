@@ -278,6 +278,30 @@ public enum ErrorCode {
     MEMORY_WAL_CORRUPTED      (310_005, ErrorCategory.MEMORY,
             "Memory WAL file corrupted: {}"),
 
+    /** Hebbian graph operation failed (edge strengthening, decay, spreading activation). */
+    GRAPH_HEBBIAN_FAILED      (310_006, ErrorCategory.MEMORY,
+            "Hebbian graph operation failed: {}"),
+
+    /** Temporal chain operation failed (link, follow forward/backward). */
+    GRAPH_TEMPORAL_FAILED     (310_007, ErrorCategory.MEMORY,
+            "Temporal chain operation failed: {}"),
+
+    /** Entity graph operation failed (add entity, relation, traversal). */
+    GRAPH_ENTITY_FAILED       (310_008, ErrorCategory.MEMORY,
+            "Entity graph operation failed: {}"),
+
+    /** Co-activation tracker operation failed (pair recording, STDP update). */
+    GRAPH_COACTIVATION_FAILED (310_009, ErrorCategory.MEMORY,
+            "Co-activation tracker operation failed: {}"),
+
+    /** Graph persistence (save/load) failed. */
+    GRAPH_PERSISTENCE_FAILED  (310_010, ErrorCategory.MEMORY,
+            "Graph persistence failed for {}: {}"),
+
+    /** Graph decay or pruning operation failed during consolidation. */
+    GRAPH_DECAY_FAILED        (310_011, ErrorCategory.MEMORY,
+            "Graph decay failed: {}"),
+
     // ══════════════════════════════════════════════════════════════════════
     // GPU (SPE-400-xxx)
     // ══════════════════════════════════════════════════════════════════════

@@ -16,7 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
+
+import com.spectrayan.spector.memory.error.SpectorGraphPersistenceException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -163,6 +164,8 @@ public final class EntityGraph implements AutoCloseable {
      * @return entity ID (index into entity segment)
      */
     public int addEntity(String name, EntityType type) {
+        if (name == null || name.isBlank()) return -1;
+        if (type == null) type = EntityType.OTHER;
         String normalized = name.trim().toLowerCase(Locale.ROOT);
 
         // Check if already exists
@@ -286,6 +289,7 @@ public final class EntityGraph implements AutoCloseable {
      * @return entity ID, or -1 if not found
      */
     public int findEntity(String name) {
+        if (name == null || name.isBlank()) return -1;
         String normalized = name.trim().toLowerCase(Locale.ROOT);
         Integer id = nameIndex.get(normalized);
         return id != null ? id : -1;
@@ -460,7 +464,7 @@ public final class EntityGraph implements AutoCloseable {
             try {
                 Files.createDirectories(parent);
             } catch (IOException e) {
-                throw new UncheckedIOException("Cannot create graph directory: " + parent, e);
+                throw new SpectorGraphPersistenceException("EntityGraph", parent, e);
             }
         }
 
@@ -506,7 +510,7 @@ public final class EntityGraph implements AutoCloseable {
                     entityCount, edgeCount, filePath);
 
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to save EntityGraph: " + filePath, e);
+            throw new SpectorGraphPersistenceException("EntityGraph", filePath, e);
         }
     }
 
