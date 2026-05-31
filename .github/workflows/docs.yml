@@ -204,8 +204,20 @@ jobs:
           python3 << 'PYSCRIPT'
           import yaml, re, sys
 
+          # MkDocs uses !!python/name: tags that SafeLoader can't handle.
+          # Register a constructor that simply ignores them.
+          class MkDocsLoader(yaml.SafeLoader):
+              pass
+
+          def _ignore_python_tags(loader, tag_suffix, node):
+              return None
+
+          MkDocsLoader.add_multi_constructor(
+              'tag:yaml.org,2002:python/', _ignore_python_tags
+          )
+
           with open('../main/docs/mkdocs.yml', 'r') as f:
-              config = yaml.safe_load(f)
+              config = yaml.load(f, Loader=MkDocsLoader)
 
           nav = config.get('nav', [])
 
