@@ -33,6 +33,11 @@ jobs:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: 'maven'
 
+      # ─── License Header Check ────────────────────────────────────────
+      - name: Check license headers
+        run: |
+          mvn -B license:check --no-transfer-progress
+
       # ─── Reproducible Build ───────────────────────────────────────────
       - name: Build with reproducible output
         run: |
