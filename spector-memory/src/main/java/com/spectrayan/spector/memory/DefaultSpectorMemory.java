@@ -236,7 +236,13 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         SurpriseDetector surpriseDetector = new SurpriseDetector(builder.surpriseWarmup);
         FlashbulbPolicy flashbulbPolicy = new FlashbulbPolicy(builder.flashbulbThreshold);
         this.valenceTracker = new ValenceTracker(builder.valenceLearningRate);
-        this.coActivationTracker = new CoActivationTracker();
+        // CoActivationTracker: load from disk if available, else create fresh
+        if (isDisk && basePath != null) {
+            this.coActivationTracker = CoActivationTracker.load(
+                    basePath.resolve("coactivation.tracker"), 10_000, 20_000);
+        } else {
+            this.coActivationTracker = new CoActivationTracker();
+        }
         this.suppressionSet = new SuppressionSet();
         this.habituationPenalty = new HabituationPenalty(0.2f, builder.inhibitionTtlMs, builder.inhibitionFloor);
         this.prospectiveScheduler = new ProspectiveScheduler();
@@ -419,6 +425,17 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         ReflectReport report = reflectDaemon.runCycle(
                 tierRouter.episodic(), tierRouter.semantic(),
                 offset -> index.findTextByOffset(MemoryType.EPISODIC, offset));
+
+        // ── Graph Decay (Sleep Consolidation) ──
+        // Hebbian edges decay by 10% per reflection cycle (biological synaptic homeostasis)
+        int hebbianDecayed = hebbianGraph.decayEdges(0.9f);
+        if (hebbianDecayed > 0) {
+            log.info("Reflect: Hebbian graph decayed {} weak edges", hebbianDecayed);
+        }
+
+        // Temporal chain: decay old links (prune chains older than 7 days)
+        // TemporalChain nodes don't have a decay mechanism yet — future work
+
         wal.append(WalEvent.EventType.REFLECT, "system", null);
         return report;
     }
@@ -640,6 +657,11 @@ public final class DefaultSpectorMemory implements SpectorMemory {
                     log.error("Failed to save EntityGraph on close: {}", e.getMessage(), e);
                 }
             }
+            try {
+                coActivationTracker.save(persistencePath.resolve("coactivation.tracker"));
+            } catch (Exception e) {
+                log.error("Failed to save CoActivationTracker on close: {}", e.getMessage(), e);
+            }
         }
 
         virtualExecutor.close();
@@ -647,6 +669,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         wal.close();
         hebbianGraph.close();
         temporalChain.close();
+        coActivationTracker.close();
         if (entityGraph != null) entityGraph.close();
     }
 
