@@ -37,16 +37,46 @@ import java.util.stream.Collectors;
  * for consolidation. Dense clusters of related episodes are compressed into
  * permanent semantic facts. Weak, isolated memories are pruned.</p>
  *
- * <h3>Two-Phase Sleep Cycle</h3>
- * <ol>
- *   <li><b>Deep Sleep (Synaptic Pruning):</b>
- *       Scan episodic partitions, tombstone records where decayed score &lt; threshold,
- *       trigger compaction when partition exceeds tombstone threshold.</li>
- *   <li><b>REM Sleep (Dreaming/Synthesis):</b>
- *       Cluster episodic memories by IVF centroid proximity. For each dense cluster,
- *       either synthesize a semantic fact via LLM (if {@code TextGenerationProvider}
- *       is available) or promote the highest-importance representative.</li>
- * </ol>
+ * <h3>Two-Phase Sleep Cycle — NREM + REM Mapping</h3>
+ *
+ * <table border="1">
+ *   <tr><th>Spector Phase</th><th>Sleep Stage</th><th>Neuroscience Mechanism</th><th>Implementation</th></tr>
+ *   <tr>
+ *     <td><b>Deep Sleep</b></td>
+ *     <td>NREM Stage 3-4 (Slow-Wave Sleep)</td>
+ *     <td><b>Synaptic Homeostasis Hypothesis (SHY)</b> — Tononi &amp; Cirelli, 2003.
+ *         During waking hours, synapses are strengthened by learning (LTP).
+ *         During SWS, global synaptic downscaling occurs: weak synapses are
+ *         pruned while strong ones are preserved. This prevents saturation
+ *         and frees capacity for new learning.</td>
+ *     <td>Scan episodic partitions, tombstone records where
+ *         {@code decayed_importance &lt; threshold}. Trigger compaction
+ *         when tombstone ratio exceeds 30%. This is the digital analog
+ *         of synaptic downscaling.</td>
+ *   </tr>
+ *   <tr>
+ *     <td><b>REM Sleep</b></td>
+ *     <td>REM (Rapid Eye Movement)</td>
+ *     <td><b>Memory Consolidation &amp; Schema Integration.</b> During REM,
+ *         the hippocampus replays episodic traces while the neocortex
+ *         integrates them into existing knowledge schemas. Related episodes
+ *         are generalized into semantic facts (gist extraction). This is
+ *         why "sleeping on it" helps problem-solving — REM finds patterns
+ *         across disparate episodes.</td>
+ *     <td>Cluster episodic memories by IVF centroid proximity. Dense
+ *         clusters (≥5 episodes) are synthesized into semantic facts via
+ *         LLM summarization or highest-importance promotion. Source
+ *         episodes are tombstoned (unless {@code pinSourceEpisodes=true}
+ *         for lossless consolidation).</td>
+ *   </tr>
+ * </table>
+ *
+ * <h3>Circadian Timing</h3>
+ * <p>Real brains consolidate on a ~90-minute ultradian cycle during sleep.
+ * The {@link CircadianPolicy} controls when the ReflectDaemon runs: either
+ * on a fixed interval (e.g., every 30 minutes of wall-clock time) or
+ * event-driven (when episodic partition fill reaches a threshold). This
+ * mimics the sleep pressure accumulation mechanism (Process S).</p>
  *
  * <h3>V3: IVF Centroid Clustering + LLM Synthesis</h3>
  * <ul>
