@@ -1,7 +1,7 @@
 package com.spectrayan.spector.memory.synapse;
 
 /**
- * SIMD-friendly bucket-based temporal decay with reconsolidation support.
+ * SIMD-friendly bucket-based temporal decay with reconsolidation and arousal modulation.
  *
  * <h3>Why Not {@code Math.exp()}?</h3>
  * <p>The naive exponential decay formula {@code e^(-λ·Age)} requires ~150 CPU cycles
@@ -16,6 +16,11 @@ package com.spectrayan.spector.memory.synapse;
  * <p>The {@link #adjustForReconsolidation} method shifts the bucket index down
  * based on recall count, making frequently-recalled memories behave as if they
  * are younger — the biological equivalent of Long-Term Potentiation.</p>
+ *
+ * <h3>Arousal Modulation (Amygdala)</h3>
+ * <p>Emotionally intense memories resist forgetting. The {@link #arousalModifier}
+ * method uses a precomputed 4-entry lookup (from unsigned arousal byte) to slow
+ * decay for high-arousal memories — up to 65% slower at extreme arousal.</p>
  */
 public final class DecayStrategy {
 
@@ -67,19 +72,29 @@ public final class DecayStrategy {
     }
 
     /**
-     * Adjusts the raw decay bucket for reconsolidation (Long-Term Potentiation).
+     * Adjusts the raw decay bucket for reconsolidation (Long-Term Potentiation)
+     * using exponential half-life doubling via bit-shift.
      *
-     * <p>Every 3 recalls shifts the bucket 1 position fresher (lower index).
-     * A memory recalled 9 times behaves as if it's 3 buckets younger than it
-     * actually is — frequently-used memories resist aging.</p>
+     * <p>Each recall effectively halves the memory's perceived age by shifting
+     * the bucket index right. This mirrors biological spaced repetition where
+     * each successful retrieval doubles the memory's half-life.</p>
+     *
+     * <table>
+     *   <tr><th>Recall Count</th><th>Shift</th><th>Effect</th></tr>
+     *   <tr><td>0</td><td>0</td><td>No change</td></tr>
+     *   <tr><td>1</td><td>÷2</td><td>bucket 6 → 3</td></tr>
+     *   <tr><td>2</td><td>÷4</td><td>bucket 6 → 1</td></tr>
+     *   <tr><td>3</td><td>÷8</td><td>bucket 7 → 0</td></tr>
+     *   <tr><td>5+</td><td>÷32</td><td>effectively fresh</td></tr>
+     * </table>
      *
      * @param rawBucket   original bucket from {@link #ageToBucket}
      * @param recallCount number of times this memory has been recalled
      * @return adjusted bucket index (clamped to 0)
      */
     public static int adjustForReconsolidation(int rawBucket, int recallCount) {
-        int shift = recallCount / 3;
-        return Math.max(0, rawBucket - shift);
+        int shift = Math.min(recallCount, 5);
+        return rawBucket >> shift;
     }
 
     /**
@@ -105,5 +120,62 @@ public final class DecayStrategy {
         int rawBucket = ageToBucket(timestampMs, nowMs);
         int adjusted = adjustForReconsolidation(rawBucket, recallCount);
         return decay(adjusted);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // AROUSAL MODULATION — Amygdala-driven decay resistance
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Precomputed arousal-based decay modifiers.
+     *
+     * <p>Higher arousal = slower decay. The arousal byte is unsigned (0-255),
+     * divided into 4 quartile buckets. The modifier is multiplied with the
+     * base decay to produce the final effective decay.</p>
+     *
+     * <p>At arousal=0 (neutral), the modifier is 1.0 — no effect.
+     * At arousal=255 (extreme), memories decay 65% slower.</p>
+     */
+    public static final float[] AROUSAL_DECAY_MODIFIERS = {
+            1.00f,  // arousal 0-63:    neutral     → no change
+            1.15f,  // arousal 64-127:  mild        → 15% slower decay
+            1.35f,  // arousal 128-191: moderate    → 35% slower decay
+            1.65f   // arousal 192-255: extreme     → 65% slower decay
+    };
+
+    /**
+     * Returns the decay modifier based on arousal intensity.
+     *
+     * <p>Uses an unsigned interpretation of the arousal byte.
+     * At arousal=0, returns 1.0 (no effect). At arousal=255,
+     * returns 1.65 (65% slower decay).</p>
+     *
+     * @param arousal unsigned arousal byte (0-255)
+     * @return decay modifier (≥ 1.0)
+     */
+    public static float arousalModifier(byte arousal) {
+        int unsigned = Byte.toUnsignedInt(arousal);
+        int bucket = Math.min(3, unsigned / 64);
+        return AROUSAL_DECAY_MODIFIERS[bucket];
+    }
+
+    /**
+     * Computes the full decay multiplier including arousal modulation.
+     *
+     * <p>The arousal modifier scales the base decay upward (toward 1.0),
+     * making emotionally intense memories resist forgetting. The result
+     * is clamped to [0.0, 1.0] to prevent inverted decay.</p>
+     *
+     * @param timestampMs memory creation time
+     * @param nowMs       current time
+     * @param recallCount number of recalls
+     * @param arousal     emotional intensity (unsigned byte 0-255)
+     * @return arousal-modulated decay multiplier
+     */
+    public static float computeDecayWithArousal(long timestampMs, long nowMs,
+                                                  int recallCount, byte arousal) {
+        float baseDecay = computeDecay(timestampMs, nowMs, recallCount);
+        float modifier = arousalModifier(arousal);
+        return Math.min(1.0f, baseDecay * modifier);
     }
 }

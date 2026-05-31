@@ -94,6 +94,12 @@ spector:
     capacity: 100000
     decay-enabled: true
     consolidation-interval: 60s
+    # Cognitive profile configuration (operational feature flags).
+    # Controls which profiles are available at runtime.
+    # Valid values: ALL, CORE_ONLY, WITH_NEURODIVERGENT, or a comma-separated
+    # list of profile names (e.g., "BALANCED,DEBUGGING,HYPERFOCUS").
+    # Default: ALL — BSL license governs commercial use, not this config.
+    cognitive-profiles: ALL
 
   # ─── File Ingestion ───
   ingestion:
