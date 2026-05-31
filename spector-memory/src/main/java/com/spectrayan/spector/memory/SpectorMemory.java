@@ -15,8 +15,10 @@ package com.spectrayan.spector.memory;
 import com.spectrayan.spector.core.quantization.ScalarQuantizer;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.TierRouter;
+import com.spectrayan.spector.memory.graph.EntityGraph;
 import com.spectrayan.spector.memory.habituation.HabituationPenalty;
 import com.spectrayan.spector.memory.hebbian.CoActivationTracker;
+import com.spectrayan.spector.memory.hebbian.HebbianGraph;
 import com.spectrayan.spector.memory.index.MemoryIndex;
 import com.spectrayan.spector.memory.inhibition.SuppressionSet;
 import com.spectrayan.spector.memory.metamemory.MemoryInsight;
@@ -26,6 +28,7 @@ import com.spectrayan.spector.memory.pipeline.RecallPipeline;
 import com.spectrayan.spector.memory.prospective.ProspectiveScheduler;
 import com.spectrayan.spector.memory.prospective.Reminder;
 import com.spectrayan.spector.memory.sync.MemoryWal;
+import com.spectrayan.spector.memory.temporal.TemporalChain;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -183,7 +186,21 @@ public interface SpectorMemory extends AutoCloseable {
     /** Returns the lateral (neurodivergent) evaluator. */
     LateralEvaluator lateralEvaluator();
 
+    // ══════════════════════════════════════════════════════════════
+    // GRAPH SUBSYSTEM ACCESSORS (3-Layer Cognitive Graph)
+    // ══════════════════════════════════════════════════════════════
+
+    /** Returns the Hebbian memory-to-memory association graph (nullable if disabled). */
+    HebbianGraph hebbianGraph();
+
+    /** Returns the temporal causal chain (nullable if disabled). */
+    TemporalChain temporalChain();
+
+    /** Returns the entity-relationship graph (nullable if disabled). */
+    EntityGraph entityGraph();
+
     /** Closes the memory system and persists data. */
     @Override
     void close();
 }
+

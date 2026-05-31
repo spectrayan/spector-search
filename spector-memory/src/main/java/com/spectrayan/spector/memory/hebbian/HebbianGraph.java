@@ -15,9 +15,16 @@ package com.spectrayan.spector.memory.hebbian;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,11 +42,21 @@ import java.util.List;
  *   <li>Bounded degree: max 20 neighbors per memory (prevents graph explosion)</li>
  *   <li>Edge weight = co-recall count (strengthened each time both are recalled together)</li>
  *   <li>Enables spreading activation: "if you recalled A, also consider B and C"</li>
+ *   <li>Persistence: save/load via raw segment serialization to file</li>
  * </ul>
  */
 public final class HebbianGraph implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(HebbianGraph.class);
+
+    /** File magic: "HGPH" in ASCII. */
+    private static final int FILE_MAGIC = 0x48475048;
+
+    /** File format version. */
+    private static final int FILE_VERSION = 1;
+
+    /** File header: 4B magic + 4B version + 4B capacity + 4B reserved = 16 bytes. */
+    private static final int FILE_HEADER_BYTES = 16;
 
     /** Maximum number of Hebbian neighbors per memory. */
     public static final int MAX_DEGREE = 20;
@@ -48,7 +65,7 @@ public final class HebbianGraph implements AutoCloseable {
     private static final int EDGE_BYTES = 8;
 
     /** Bytes per node: 4B (degree) + MAX_DEGREE * EDGE_BYTES. */
-    private static final int NODE_BYTES = 4 + MAX_DEGREE * EDGE_BYTES;
+    static final int NODE_BYTES = 4 + MAX_DEGREE * EDGE_BYTES;
 
     private final Arena arena;
     private final MemorySegment segment;
@@ -71,6 +88,22 @@ public final class HebbianGraph implements AutoCloseable {
     }
 
     /**
+     * Private constructor for loading from a pre-existing segment (deserialization).
+     */
+    private HebbianGraph(int capacity, Arena arena, MemorySegment segment) {
+        this.capacity = capacity;
+        this.arena = arena;
+        this.segment = segment;
+    }
+
+    /**
+     * Returns the capacity (maximum number of nodes).
+     */
+    public int capacity() {
+        return capacity;
+    }
+
+    /**
      * Adds or strengthens a bidirectional Hebbian edge between two memories.
      *
      * @param nodeA index of first memory
@@ -78,6 +111,8 @@ public final class HebbianGraph implements AutoCloseable {
      * @param weightDelta weight to add to the edge (default: 1.0)
      */
     public synchronized void strengthen(int nodeA, int nodeB, float weightDelta) {
+        if (nodeA < 0 || nodeA >= capacity || nodeB < 0 || nodeB >= capacity) return;
+        if (nodeA == nodeB) return;
         addOrUpdateEdge(nodeA, nodeB, weightDelta);
         addOrUpdateEdge(nodeB, nodeA, weightDelta);
     }
@@ -89,6 +124,7 @@ public final class HebbianGraph implements AutoCloseable {
      * @return list of (neighborIndex, weight) pairs
      */
     public List<HebbianEdge> neighbors(int node) {
+        if (node < 0 || node >= capacity) return List.of();
         long nodeOffset = (long) node * NODE_BYTES;
         int degree = segment.get(ValueLayout.JAVA_INT, nodeOffset);
 
@@ -108,7 +144,19 @@ public final class HebbianGraph implements AutoCloseable {
      * Returns the degree (number of Hebbian edges) for a node.
      */
     public int degree(int node) {
+        if (node < 0 || node >= capacity) return 0;
         return segment.get(ValueLayout.JAVA_INT, (long) node * NODE_BYTES);
+    }
+
+    /**
+     * Returns the total number of edges across all nodes.
+     */
+    public int totalEdges() {
+        int total = 0;
+        for (int i = 0; i < capacity; i++) {
+            total += degree(i);
+        }
+        return total;
     }
 
     private void addOrUpdateEdge(int from, int to, float weightDelta) {
@@ -252,6 +300,7 @@ public final class HebbianGraph implements AutoCloseable {
      * @return list of activated edges with compound weights
      */
     public List<HebbianEdge> activateNeighbors(int node, int depth) {
+        if (node < 0 || node >= capacity) return List.of();
         List<HebbianEdge> activated = new ArrayList<>();
         activateRecursive(node, depth, 1.0f, activated, new java.util.HashSet<>());
         activated.sort((a, b) -> Float.compare(b.weight(), a.weight()));
@@ -273,10 +322,141 @@ public final class HebbianGraph implements AutoCloseable {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // PERSISTENCE: save / load
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Saves the graph to a binary file.
+     *
+     * <h3>File Format</h3>
+     * <pre>
+     *   [4B magic: "HGPH"]  [4B version: 1]  [4B capacity]  [4B reserved]
+     *   [raw segment bytes: capacity × NODE_BYTES]
+     * </pre>
+     *
+     * @param filePath path to write the graph file
+     */
+    public void save(Path filePath) {
+        Path parent = filePath.getParent();
+        if (parent != null) {
+            try {
+                Files.createDirectories(parent);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Cannot create graph directory: " + parent, e);
+            }
+        }
+
+        try (FileChannel ch = FileChannel.open(filePath,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING)) {
+
+            // Write file header
+            ByteBuffer header = ByteBuffer.allocate(FILE_HEADER_BYTES);
+            header.putInt(FILE_MAGIC);
+            header.putInt(FILE_VERSION);
+            header.putInt(capacity);
+            header.putInt(0); // reserved
+            header.flip();
+            ch.write(header);
+
+            // Write raw segment bytes in chunks
+            long totalBytes = (long) NODE_BYTES * capacity;
+            long written = 0;
+            int chunkSize = 64 * 1024; // 64KB chunks
+            while (written < totalBytes) {
+                int toWrite = (int) Math.min(chunkSize, totalBytes - written);
+                ByteBuffer buf = segment.asSlice(written, toWrite)
+                        .asByteBuffer().asReadOnlyBuffer();
+                ch.write(buf);
+                written += toWrite;
+            }
+
+            ch.force(true);
+            log.info("HebbianGraph saved: capacity={}, edges={} → {}",
+                    capacity, totalEdges(), filePath);
+
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to save HebbianGraph: " + filePath, e);
+        }
+    }
+
+    /**
+     * Loads a graph from a binary file, or returns a new empty graph
+     * if the file doesn't exist.
+     *
+     * @param filePath path to the graph file
+     * @param defaultCapacity capacity to use if file doesn't exist
+     * @return a HebbianGraph (loaded or new)
+     */
+    public static HebbianGraph load(Path filePath, int defaultCapacity) {
+        if (filePath == null || !Files.exists(filePath)) {
+            log.info("HebbianGraph file not found, creating fresh: {}", filePath);
+            return new HebbianGraph(defaultCapacity);
+        }
+
+        try (FileChannel ch = FileChannel.open(filePath, StandardOpenOption.READ)) {
+            long fileSize = ch.size();
+            if (fileSize < FILE_HEADER_BYTES) {
+                log.warn("HebbianGraph file too small ({}B), creating fresh", fileSize);
+                return new HebbianGraph(defaultCapacity);
+            }
+
+            // Read file header
+            ByteBuffer header = ByteBuffer.allocate(FILE_HEADER_BYTES);
+            ch.read(header);
+            header.flip();
+
+            int magic = header.getInt();
+            int version = header.getInt();
+            int capacity = header.getInt();
+            header.getInt(); // reserved
+
+            if (magic != FILE_MAGIC) {
+                log.warn("Invalid HebbianGraph magic: 0x{}, creating fresh",
+                        Integer.toHexString(magic));
+                return new HebbianGraph(defaultCapacity);
+            }
+            if (version != FILE_VERSION) {
+                log.warn("Unsupported HebbianGraph version: {}, creating fresh", version);
+                return new HebbianGraph(defaultCapacity);
+            }
+
+            long expectedBytes = (long) NODE_BYTES * capacity;
+            if (fileSize < FILE_HEADER_BYTES + expectedBytes) {
+                log.warn("HebbianGraph file truncated, creating fresh");
+                return new HebbianGraph(defaultCapacity);
+            }
+
+            // Read segment data
+            Arena arena = Arena.ofShared();
+            MemorySegment seg = arena.allocate(expectedBytes);
+            long read = 0;
+            int chunkSize = 64 * 1024;
+            while (read < expectedBytes) {
+                int toRead = (int) Math.min(chunkSize, expectedBytes - read);
+                ByteBuffer buf = ByteBuffer.allocate(toRead);
+                ch.read(buf);
+                buf.flip();
+                MemorySegment.copy(MemorySegment.ofBuffer(buf), 0, seg, read, toRead);
+                read += toRead;
+            }
+
+            HebbianGraph graph = new HebbianGraph(capacity, arena, seg);
+            log.info("HebbianGraph loaded: capacity={}, edges={} from {}",
+                    capacity, graph.totalEdges(), filePath);
+            return graph;
+
+        } catch (IOException e) {
+            log.error("Failed to load HebbianGraph from {}, creating fresh: {}",
+                    filePath, e.getMessage());
+            return new HebbianGraph(defaultCapacity);
+        }
+    }
+
     @Override
     public void close() {
         log.info("HebbianGraph closing (capacity={})", capacity);
         arena.close();
     }
 }
-

@@ -40,6 +40,11 @@ import com.spectrayan.spector.memory.synapse.DecayStrategy;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
 import com.spectrayan.spector.memory.hebbian.CoActivationTracker;
+import com.spectrayan.spector.memory.hebbian.HebbianGraph;
+import com.spectrayan.spector.memory.graph.EntityExtractor;
+import com.spectrayan.spector.memory.graph.EntityGraph;
+import com.spectrayan.spector.memory.graph.ExtractedEntity;
+import com.spectrayan.spector.memory.temporal.TemporalChain;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +52,9 @@ import org.slf4j.LoggerFactory;
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -107,6 +114,12 @@ public final class RecallPipeline {
     private static final float CAUSAL_BOOST_WEIGHT = 0.3f;
 
     private final List<RecallListener> listeners = new ArrayList<>();
+
+    // ── 3-Layer Cognitive Graph (all nullable) ──
+    private final HebbianGraph hebbianGraph;
+    private final TemporalChain temporalChain;
+    private final EntityGraph entityGraph;
+    private final EntityExtractor entityExtractor;
 
     // ── Neurodivergent: Lateral feedback tracking ──
     // Maps memoryId → RetrievalMode for the most recent recall.
@@ -185,6 +198,30 @@ public final class RecallPipeline {
                            float[] calibrationScales,
                            SemanticRecallStrategy semanticRecallStrategy,
                            CoActivationTracker coActivationTracker) {
+        this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
+                prospectiveScheduler, wal, calibrationMins, calibrationScales,
+                semanticRecallStrategy, coActivationTracker,
+                null, null, null, null);
+    }
+
+    /**
+     * Creates a recall pipeline with optional fused semantic recall, STDP, and 3-Layer Cognitive Graph.
+     */
+    public RecallPipeline(EmbeddingProvider embeddingProvider,
+                           TierRouter tierRouter,
+                           MemoryIndex index,
+                           SuppressionSet suppressionSet,
+                           HabituationPenalty habituationPenalty,
+                           ProspectiveScheduler prospectiveScheduler,
+                           MemoryWal wal,
+                           float[] calibrationMins,
+                           float[] calibrationScales,
+                           SemanticRecallStrategy semanticRecallStrategy,
+                           CoActivationTracker coActivationTracker,
+                           HebbianGraph hebbianGraph,
+                           TemporalChain temporalChain,
+                           EntityGraph entityGraph,
+                           EntityExtractor entityExtractor) {
         this.embeddingProvider = embeddingProvider;
         this.tierRouter = tierRouter;
         this.index = index;
@@ -196,6 +233,10 @@ public final class RecallPipeline {
         this.calibrationScales = calibrationScales;
         this.semanticRecallStrategy = semanticRecallStrategy;
         this.coActivationTracker = coActivationTracker;
+        this.hebbianGraph = hebbianGraph;
+        this.temporalChain = temporalChain;
+        this.entityGraph = entityGraph;
+        this.entityExtractor = entityExtractor;
     }
 
     /**
@@ -308,6 +349,103 @@ public final class RecallPipeline {
                                 r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay()));
                     }
                 }
+            }
+        }
+
+        // Step 5c: Hebbian spreading activation — follow memory-to-memory associations
+        if (hebbianGraph != null && !allResults.isEmpty()) {
+            Set<String> existingIds = new HashSet<>();
+            for (CognitiveResult r : allResults) {
+                if (r.id() != null) existingIds.add(r.id());
+            }
+
+            // Use top 3 results as seeds for spreading activation
+            int seeds = Math.min(3, allResults.size());
+            for (int s = 0; s < seeds; s++) {
+                CognitiveResult seed = allResults.get(s);
+                // Find the memory index for this result
+                MemoryIndex.MemoryLocation loc = index.locate(seed.id());
+                if (loc == null) continue;
+
+                int memIdx = (int) (loc.offset() / 164); // approximate index from offset
+                var activated = hebbianGraph.activateNeighbors(memIdx, 2);
+                for (var edge : activated) {
+                    // Find the memory at this graph index
+                    String neighborId = findMemoryByApproximateIndex(edge.neighborIndex());
+                    if (neighborId != null && !existingIds.contains(neighborId)) {
+                        existingIds.add(neighborId);
+                        String text = index.text(neighborId);
+                        MemorySource source = index.source(neighborId);
+                        String[] tags = index.tags(neighborId);
+                        float graphScore = seed.score() * edge.weight() * 0.3f; // attenuated
+                        allResults.add(new CognitiveResult(
+                                neighborId, text, graphScore, seed.importance(), 0f,
+                                (short) 0, (byte) 0, seed.memoryType(), source,
+                                tags, 1.0f, 1.0f));
+                    }
+                }
+            }
+        }
+
+        // Step 5d: Temporal chain extension — follow session-linked sequences
+        if (temporalChain != null && !allResults.isEmpty()) {
+            Set<String> existingIds = new HashSet<>();
+            for (CognitiveResult r : allResults) {
+                if (r.id() != null) existingIds.add(r.id());
+            }
+
+            int seeds = Math.min(3, allResults.size());
+            for (int s = 0; s < seeds; s++) {
+                CognitiveResult seed = allResults.get(s);
+                MemoryIndex.MemoryLocation loc = index.locate(seed.id());
+                if (loc == null) continue;
+
+                int memIdx = (int) (loc.offset() / 164);
+                // Follow forward and backward
+                for (int chainIdx : temporalChain.followForward(memIdx, 3)) {
+                    addChainResult(chainIdx, seed, existingIds, allResults, 0.8f);
+                }
+                for (int chainIdx : temporalChain.followBackward(memIdx, 3)) {
+                    addChainResult(chainIdx, seed, existingIds, allResults, 0.7f);
+                }
+            }
+        }
+
+        // Step 5e: Entity graph traversal — multi-hop knowledge discovery
+        if (entityGraph != null && entityExtractor != null
+                && entityExtractor.isAvailable() && !allResults.isEmpty()) {
+            Set<String> existingIds = new HashSet<>();
+            for (CognitiveResult r : allResults) {
+                if (r.id() != null) existingIds.add(r.id());
+            }
+
+            // Extract entities from the query
+            try {
+                var queryEntities = entityExtractor.extract("query", queryText);
+                for (var entity : queryEntities) {
+                    int entityId = entityGraph.findEntity(entity.name());
+                    if (entityId < 0) continue;
+
+                    // Collect memories reachable within 2 hops
+                    Set<Integer> reachableMemories = entityGraph.collectMemories(
+                            entityId, null, 2);
+                    for (int memIdx : reachableMemories) {
+                        String memId = findMemoryByApproximateIndex(memIdx);
+                        if (memId != null && !existingIds.contains(memId)) {
+                            existingIds.add(memId);
+                            String text = index.text(memId);
+                            MemorySource source = index.source(memId);
+                            String[] tags = index.tags(memId);
+                            float entityScore = allResults.getFirst().score() * 0.25f;
+                            allResults.add(new CognitiveResult(
+                                    memId, text, entityScore, 0.5f, 0f,
+                                    (short) 0, (byte) 0, MemoryType.SEMANTIC, source,
+                                    tags, 1.0f, 1.0f));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Entity graph recall failed: {}", e.getMessage());
             }
         }
 
@@ -570,5 +708,44 @@ public final class RecallPipeline {
      */
     public RetrievalMode retrievalModeOf(String memoryId) {
         return recentRetrievalModes.get(memoryId);
+    }
+
+    // ── Graph helper methods ──
+
+    /**
+     * Finds a memory ID by approximate index. Uses the reverse index
+     * to search across all tiers.
+     */
+    private String findMemoryByApproximateIndex(int approxIdx) {
+        // Try each tier's typical record size to reverse-map
+        for (MemoryType type : MemoryType.values()) {
+            var layout = tierRouter.layoutFor(type);
+            if (layout == null) continue;
+            long offset = (long) approxIdx * layout.stride();
+            String id = index.findIdByOffset(type, offset);
+            if (id != null) return id;
+        }
+        return null;
+    }
+
+    /**
+     * Adds a temporal chain result to the result set if not already present.
+     */
+    private void addChainResult(int chainIdx, CognitiveResult seed,
+                                 Set<String> existingIds,
+                                 List<CognitiveResult> allResults,
+                                 float attenuation) {
+        String chainId = findMemoryByApproximateIndex(chainIdx);
+        if (chainId != null && !existingIds.contains(chainId)) {
+            existingIds.add(chainId);
+            String text = index.text(chainId);
+            MemorySource source = index.source(chainId);
+            String[] tags = index.tags(chainId);
+            float chainScore = seed.score() * attenuation * 0.2f;
+            allResults.add(new CognitiveResult(
+                    chainId, text, chainScore, seed.importance(), 0f,
+                    (short) 0, (byte) 0, seed.memoryType(), source,
+                    tags, 1.0f, 1.0f));
+        }
     }
 }
