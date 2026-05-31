@@ -224,6 +224,12 @@ public class MeteredSpectorMemory implements SpectorMemory {
     public void unsuppress(String memoryId) { delegate.unsuppress(memoryId); }
 
     @Override
+    public void markResolved(String memoryId) { delegate.markResolved(memoryId); }
+
+    @Override
+    public void markUnresolved(String memoryId) { delegate.markUnresolved(memoryId); }
+
+    @Override
     public MemoryInsight introspect(String topic) {
         return delegate.introspect(topic);
     }
