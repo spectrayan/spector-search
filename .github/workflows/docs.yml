@@ -80,47 +80,160 @@ jobs:
 
       - name: Sync docs to wiki
         run: |
+          set -euo pipefail
           cd wiki
-          # Remove existing content (except .git and _Sidebar.md)
-          find . -maxdepth 1 -name '*.md' ! -name '_Sidebar.md' -delete
 
-          # Copy and rename docs to wiki-friendly names
-          cp ../main/docs/docs/index.md Home.md
-          cp ../main/docs/docs/about.md What-is-Spector.md
-          cp ../main/docs/docs/getting-started/quickstart.md Getting-Started.md
-          cp ../main/docs/docs/faq.md FAQ.md
-          cp ../main/docs/docs/architecture/overview.md Architecture-Overview.md
-          cp ../main/docs/docs/architecture/core-concepts.md Core-Concepts.md
-          cp ../main/docs/docs/architecture/distributed-mode.md Distributed-Mode.md
-          cp ../main/docs/docs/architecture/gpu-acceleration.md GPU-Acceleration.md
-          cp ../main/docs/docs/architecture/rag-pipeline.md RAG-Pipeline.md
-          cp ../main/docs/docs/deep-dives/understanding-quantization.md Understanding-Quantization.md
-          cp ../main/docs/docs/deep-dives/quantization-comparison.md Quantization-Comparison.md
-          cp ../main/docs/docs/api-reference/rest-endpoints.md REST-API-Reference.md
-          cp ../main/docs/docs/sdk-usage/java-client.md Java-SDK-Guide.md
-          cp ../main/docs/docs/sdk-usage/spring-ai.md Spring-AI-Integration.md
-          cp ../main/docs/docs/cli-reference/spectorctl.md CLI-Reference.md
-          cp ../main/docs/docs/configuration/parameters.md Configuration-Guide.md
-          cp ../main/docs/docs/operations/performance-tuning.md Performance-Tuning.md
-          cp ../main/docs/docs/operations/contributing.md Contributing.md
+          # ─── 1. Clean existing wiki content ─────────────────────────
+          # Remove all .md files except _Footer.md (which may have custom content)
+          find . -maxdepth 1 -name '*.md' ! -name '_Footer.md' -delete
+          # Remove any existing image directories
+          rm -rf images screenshots
 
-          # Convert MkDocs relative links back to wiki-style [[links]]
-          sed -i 's|\[Core Concepts\]([^)]*)|[[Core Concepts]]|g' *.md
-          sed -i 's|\[Understanding Quantization\]([^)]*)|[[Understanding Quantization]]|g' *.md
-          sed -i 's|\[Quantization Comparison\]([^)]*)|[[Quantization Comparison]]|g' *.md
-          sed -i 's|\[Configuration Guide\]([^)]*)|[[Configuration Guide]]|g' *.md
-          sed -i 's|\[Architecture Overview\]([^)]*)|[[Architecture Overview]]|g' *.md
-          sed -i 's|\[Performance Tuning\]([^)]*)|[[Performance Tuning]]|g' *.md
-          sed -i 's|\[Getting Started\]([^)]*)|[[Getting Started]]|g' *.md
-          sed -i 's|\[REST API Reference\]([^)]*)|[[REST API Reference]]|g' *.md
-          sed -i 's|\[Java SDK Guide\]([^)]*)|[[Java SDK Guide]]|g' *.md
-          sed -i 's|\[Spring AI Integration\]([^)]*)|[[Spring AI Integration]]|g' *.md
-          sed -i 's|\[CLI Reference\]([^)]*)|[[CLI Reference]]|g' *.md
-          sed -i 's|\[Distributed Mode\]([^)]*)|[[Distributed Mode]]|g' *.md
-          sed -i 's|\[GPU Acceleration\]([^)]*)|[[GPU Acceleration]]|g' *.md
-          sed -i 's|\[RAG Pipeline\]([^)]*)|[[RAG Pipeline]]|g' *.md
-          sed -i 's|\[FAQ\]([^)]*)|[[FAQ]]|g' *.md
-          sed -i 's|\[Contributing\]([^)]*)|[[Contributing]]|g' *.md
+          # ─── 2. Page name mapping ───────────────────────────────────
+          # Maps docs/docs/<path>.md → Wiki-Page-Name.md
+          # Convention: directory/file.md → Directory-File.md
+          # Special cases: index.md → Directory.md (section overview)
+          declare -A PAGE_MAP
+
+          # Build the mapping from all .md files under docs/docs/
+          while IFS= read -r -d '' mdfile; do
+            # Strip the prefix to get the relative path
+            relpath="${mdfile#../main/docs/docs/}"
+
+            # Determine wiki page name
+            dir="$(dirname "$relpath")"
+            base="$(basename "$relpath" .md)"
+
+            if [ "$dir" = "." ]; then
+              # Top-level files
+              case "$base" in
+                index)   wiki_name="Home" ;;
+                about)   wiki_name="About" ;;
+                faq)     wiki_name="FAQ" ;;
+                roadmap) wiki_name="Roadmap" ;;
+                *)       wiki_name="$(echo "$base" | sed 's/-/ /g' | sed 's/\b\(.\)/\u\1/g' | sed 's/ /-/g')" ;;
+              esac
+            elif [ "$base" = "index" ]; then
+              # Section index → use directory name
+              wiki_name="$(echo "$dir" | sed 's/\//-/g; s/-/ /g' | sed 's/\b\(.\)/\u\1/g' | sed 's/ /-/g')"
+            else
+              # Regular file → Directory-Filename
+              wiki_name="$(echo "${dir}/${base}" | sed 's/\//-/g; s/-/ /g' | sed 's/\b\(.\)/\u\1/g' | sed 's/ /-/g')"
+            fi
+
+            PAGE_MAP["$relpath"]="$wiki_name"
+          done < <(find ../main/docs/docs/ -name '*.md' -print0)
+
+          # ─── 3. Copy files with mapped names ───────────────────────
+          for relpath in "${!PAGE_MAP[@]}"; do
+            wiki_name="${PAGE_MAP[$relpath]}"
+            src="../main/docs/docs/$relpath"
+
+            if [ -f "$src" ]; then
+              cp "$src" "${wiki_name}.md"
+            fi
+          done
+
+          # ─── 4. Copy images and screenshots ────────────────────────
+          # Copy any images referenced in docs
+          if [ -d "../main/docs/screenshots" ]; then
+            mkdir -p screenshots
+            cp -r ../main/docs/screenshots/* screenshots/ 2>/dev/null || true
+          fi
+
+          # Copy images from within docs directories (e.g., cortex/screenshot.png)
+          find ../main/docs/docs/ -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.svg' -o -name '*.webp' \) -print0 | while IFS= read -r -d '' imgfile; do
+            imgrel="${imgfile#../main/docs/docs/}"
+            mkdir -p "images/$(dirname "$imgrel")"
+            cp "$imgfile" "images/$imgrel"
+          done
+
+          # ─── 5. Fix links in wiki pages ─────────────────────────────
+          # Convert MkDocs-style relative links to wiki-style [[links]]
+          # Strategy: find markdown links [text](relative-path.md) and convert
+          # to [[Wiki-Page-Name|text]] using our PAGE_MAP
+
+          for wikifile in *.md; do
+            [ -f "$wikifile" ] || continue
+
+            # Fix image paths:
+            # - ../screenshots/file.png → screenshots/file.png
+            # - ./file.png or file.png (from subdir) → images/subdir/file.png
+            sed -i 's|](\.\.\/screenshots/|](screenshots/|g' "$wikifile"
+            sed -i 's|](\.\.\/\.\.\/screenshots/|](screenshots/|g' "$wikifile"
+
+            # Remove MkDocs-specific frontmatter (---\ntitle:...\n---)
+            # Only remove if the file starts with ---
+            if head -1 "$wikifile" | grep -q '^---$'; then
+              sed -i '1{/^---$/d}; /^---$/,/^---$/d' "$wikifile" 2>/dev/null || true
+            fi
+
+            # Remove MkDocs-specific admonition syntax that GitHub wiki doesn't support
+            # Convert !!! note "Title" → **Note: Title**
+            sed -i 's/^!!! \(note\|tip\|warning\|danger\|info\|important\|caution\) "\([^"]*\)"/> **\u\1:** \2/g' "$wikifile"
+            # Convert !!! quote "Title" → > **Title**
+            sed -i 's/^!!! quote "\([^"]*\)"/> **\1**/g' "$wikifile"
+
+            # Convert === "Tab Title" to ### Tab Title (GitHub wiki has no tabs)
+            sed -i 's/^=== "\([^"]*\)"/### \1/g' "$wikifile"
+
+            # Convert MkDocs snippets --8<-- "file" to a note
+            sed -i 's/^--8<-- "\([^"]*\)"/> *See: \1*/g' "$wikifile"
+          done
+
+          # ─── 6. Generate _Sidebar.md from mkdocs nav ───────────────
+          cat > _Sidebar.md << 'SIDEBAR_HEADER'
+          **[🏠 Home](Home)**
+
+          ---
+
+          SIDEBAR_HEADER
+
+          # Parse mkdocs.yml nav and generate sidebar
+          python3 << 'PYSCRIPT'
+          import yaml, re, sys
+
+          with open('../main/docs/mkdocs.yml', 'r') as f:
+              config = yaml.safe_load(f)
+
+          nav = config.get('nav', [])
+
+          def path_to_wiki_name(path):
+              """Convert docs path to wiki page name."""
+              path = path.replace('.md', '')
+              parts = path.split('/')
+              if parts[-1] == 'index':
+                  parts = parts[:-1]
+              if not parts:
+                  return 'Home'
+              name = '-'.join(parts)
+              # Title case with hyphens
+              return '-'.join(word.capitalize() for word in name.replace('-', ' ').split())
+
+          def write_nav(items, depth=0, f=None):
+              indent = '  ' * depth
+              for item in items:
+                  if isinstance(item, str):
+                      # Direct page reference
+                      wiki_name = path_to_wiki_name(item)
+                      f.write(f'{indent}- [[{wiki_name}]]\n')
+                  elif isinstance(item, dict):
+                      for title, value in item.items():
+                          if isinstance(value, str):
+                              # Leaf: title → path
+                              wiki_name = path_to_wiki_name(value)
+                              f.write(f'{indent}- [[{wiki_name}|{title}]]\n')
+                          elif isinstance(value, list):
+                              # Section with children
+                              f.write(f'{indent}- **{title}**\n')
+                              write_nav(value, depth + 1, f)
+
+          with open('_Sidebar.md', 'a') as f:
+              write_nav(nav, f=f)
+
+          PYSCRIPT
+
+          echo "✅ Wiki sync complete: $(ls -1 *.md | wc -l) pages, $(find images screenshots -type f 2>/dev/null | wc -l) assets"
 
       - name: Push wiki changes
         run: |
