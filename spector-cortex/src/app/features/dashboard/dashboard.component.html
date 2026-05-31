@@ -1,0 +1,133 @@
+<cortex-header />
+
+<!-- Query Input Bar -->
+<section class="query-bar" style="animation: fade-in-up 0.3s ease both">
+  <cortex-query-input />
+</section>
+
+<main class="dashboard-grid">
+  <!-- Row 1: Neural Graph + Vector Space (hero row) -->
+  <mat-card class="panel panel-neural-graph" appearance="outlined" style="animation: fade-in-up 0.4s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">hub</mat-icon>
+      <mat-card-title>Neural Graph</mat-card-title>
+      <mat-card-subtitle>3-Layer Cognitive Network</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-neural-graph />
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="panel panel-vector-space" appearance="outlined" style="animation: fade-in-up 0.45s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">scatter_plot</mat-icon>
+      <mat-card-title>Vector Space</mat-card-title>
+      <mat-card-subtitle>Embedding Projection (PCA)</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-vector-space />
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Row 2: Pipeline + Metrics + Profile Radar -->
+  <mat-card class="panel" appearance="outlined" style="animation: fade-in-up 0.5s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">filter_alt</mat-icon>
+      <mat-card-title>Scoring Pipeline</mat-card-title>
+      <mat-card-subtitle>Cognitive Funnel</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-pipeline-funnel />
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="panel" appearance="outlined" style="animation: fade-in-up 0.55s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">show_chart</mat-icon>
+      <mat-card-title>Live Metrics</mat-card-title>
+      <mat-card-subtitle>Ops/sec Time Series</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-metrics-chart />
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="panel panel-radar" appearance="outlined" style="animation: fade-in-up 0.6s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">psychology</mat-icon>
+      <mat-card-title>Cognitive Profile</mat-card-title>
+      <mat-card-subtitle>Thalamic Modulation</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-profile-radar />
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Row 3: SIMD + Memory Heatmap + Decay Curve -->
+  <mat-card class="panel" appearance="outlined" style="animation: fade-in-up 0.65s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">memory</mat-icon>
+      <mat-card-title>SIMD &amp; Hardware</mat-card-title>
+      <mat-card-subtitle>Vector Processing Unit</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-simd-panel />
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="panel" appearance="outlined" style="animation: fade-in-up 0.7s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">grid_on</mat-icon>
+      <mat-card-title>Memory Heatmap</mat-card-title>
+      <mat-card-subtitle>Off-Heap Segments</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-memory-heatmap />
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="panel" appearance="outlined" style="animation: fade-in-up 0.75s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">trending_down</mat-icon>
+      <mat-card-title>Decay Curve</mat-card-title>
+      <mat-card-subtitle>Ebbinghaus + LTP</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-decay-curve />
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Row 4: Query History + Zeigarnik + Habituation -->
+  <mat-card class="panel" appearance="outlined" style="animation: fade-in-up 0.8s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">history</mat-icon>
+      <mat-card-title>Query History</mat-card-title>
+      <mat-card-subtitle>Recent Recall Timeline</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-query-history />
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="panel" appearance="outlined" style="animation: fade-in-up 0.85s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">pending_actions</mat-icon>
+      <mat-card-title>Zeigarnik Effect</mat-card-title>
+      <mat-card-subtitle>Incomplete Tension</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-zeigarnik-tracker />
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="panel" appearance="outlined" style="animation: fade-in-up 0.9s ease both">
+    <mat-card-header>
+      <mat-icon mat-card-avatar class="panel-icon">do_not_disturb_on</mat-icon>
+      <mat-card-title>Habituation</mat-card-title>
+      <mat-card-subtitle>Anti-Loop Mechanisms</mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content class="panel-content">
+      <cortex-habituation-meter />
+    </mat-card-content>
+  </mat-card>
+</main>

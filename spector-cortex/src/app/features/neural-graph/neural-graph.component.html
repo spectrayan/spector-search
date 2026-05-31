@@ -1,0 +1,50 @@
+<div class="graph-wrapper">
+  <div #canvasContainer
+       class="graph-canvas"
+       (mousemove)="onMouseMove($event)">
+  </div>
+
+  <!-- Layer Toggle Controls -->
+  <div class="layer-controls">
+    <label class="layer-toggle">
+      <mat-checkbox
+        [checked]="state.graphLayers().hebbian"
+        (change)="state.toggleGraphLayer('hebbian')"
+        color="primary">
+      </mat-checkbox>
+      <span class="layer-label hebbian-label">Hebbian</span>
+    </label>
+    <label class="layer-toggle">
+      <mat-checkbox
+        [checked]="state.graphLayers().temporal"
+        (change)="state.toggleGraphLayer('temporal')"
+        color="primary">
+      </mat-checkbox>
+      <span class="layer-label temporal-label">Temporal</span>
+    </label>
+    <label class="layer-toggle">
+      <mat-checkbox
+        [checked]="state.graphLayers().entity"
+        (change)="state.toggleGraphLayer('entity')"
+        color="primary">
+      </mat-checkbox>
+      <span class="layer-label entity-label">Entity</span>
+    </label>
+    <label class="layer-toggle">
+      <mat-checkbox
+        [checked]="state.graphLayers().particles"
+        (change)="state.toggleGraphLayer('particles')"
+        color="primary">
+      </mat-checkbox>
+      <span class="layer-label">Particles</span>
+    </label>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background: #ffb74d"></span>Working</div>
+    <div class="legend-item"><span class="legend-dot" style="background: #66bb6a"></span>Episodic</div>
+    <div class="legend-item"><span class="legend-dot" style="background: #42a5f5"></span>Semantic</div>
+    <div class="legend-item"><span class="legend-dot" style="background: #ab47bc"></span>Procedural</div>
+  </div>
+</div>

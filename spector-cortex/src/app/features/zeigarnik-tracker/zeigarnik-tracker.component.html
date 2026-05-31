@@ -1,0 +1,33 @@
+<div class="tracker-container">
+  <div class="tracker-header">
+    <mat-icon class="tracker-icon pulse-icon">pending_actions</mat-icon>
+    <span class="tracker-title">Zeigarnik Effect</span>
+  </div>
+
+  <div class="tracker-body">
+    <div class="big-number" [class.warning]="state.zeigarnikPercentage() > 25">
+      <span class="number cortex-mono">{{ state.unresolvedCount() }}</span>
+      <span class="label">Unresolved</span>
+    </div>
+    <div class="tracker-divider"></div>
+    <div class="big-number">
+      <span class="number cortex-mono">{{ state.totalTaskCount() }}</span>
+      <span class="label">Total</span>
+    </div>
+    <div class="tracker-divider"></div>
+    <div class="big-number" [class.warning]="state.zeigarnikPercentage() > 25">
+      <span class="number cortex-mono">{{ state.zeigarnikPercentage() }}%</span>
+      <span class="label">Open Rate</span>
+    </div>
+  </div>
+
+  <div class="tension-bar-track">
+    <div class="tension-bar"
+         [style.width.%]="state.zeigarnikPercentage()"
+         [class.tension-high]="state.zeigarnikPercentage() > 25">
+    </div>
+  </div>
+  <div class="tension-label" matTooltip="Unresolved memories create cognitive tension that biases recall">
+    Cognitive Tension
+  </div>
+</div>

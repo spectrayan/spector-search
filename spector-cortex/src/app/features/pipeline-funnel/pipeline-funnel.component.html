@@ -1,0 +1,50 @@
+<div class="funnel-container">
+  <!-- Query Text -->
+  <div class="query-banner cortex-mono">
+    <span class="query-icon">⟩</span>
+    <span class="query-text">{{ queryText() }}</span>
+  </div>
+
+  <!-- Funnel Phases -->
+  @for (phase of phases(); track phase.label; let i = $index) {
+    <div class="funnel-row" [style.animation-delay]="(i * 80) + 'ms'">
+      <div class="phase-label">
+        <span class="phase-name">{{ phase.label }}</span>
+        <span class="phase-count cortex-mono">{{ formatCount(phase.count) }}</span>
+      </div>
+      <div class="phase-bar-track">
+        <div class="phase-bar"
+             [style.width.%]="phase.barWidth"
+             [class.phase-highlight]="i === 0"
+             [class.phase-gate]="i === 2"
+             [class.phase-final]="i === phases().length - 1">
+        </div>
+      </div>
+      @if (i > 0 && phase.filtered > 0) {
+        <span class="filter-badge">
+          −{{ phase.percentage | number:'1.1-1' }}%
+        </span>
+      }
+    </div>
+  }
+
+  <!-- Graph Augmentation -->
+  @if (augmentation(); as aug) {
+    @if (aug.total > 0) {
+      <div class="augmentation-section">
+        <div class="aug-title">Graph Augmentation</div>
+        <div class="aug-chips">
+          @if (aug.hebbian > 0) {
+            <span class="aug-chip hebbian">+{{ aug.hebbian }} Hebbian</span>
+          }
+          @if (aug.temporal > 0) {
+            <span class="aug-chip temporal">+{{ aug.temporal }} Temporal</span>
+          }
+          @if (aug.entity > 0) {
+            <span class="aug-chip entity">+{{ aug.entity }} Entity</span>
+          }
+        </div>
+      </div>
+    }
+  }
+</div>

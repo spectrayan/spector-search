@@ -1,0 +1,153 @@
+:host {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.funnel-container {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+// ── Query Banner ─────────────────────────────────────────────────────
+.query-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-high);
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant);
+  overflow: hidden;
+}
+
+.query-icon {
+  color: var(--mat-sys-primary);
+  font-weight: bold;
+}
+
+.query-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ── Funnel Row ───────────────────────────────────────────────────────
+.funnel-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  animation: fade-in-up 0.4s ease both;
+}
+
+.phase-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+}
+
+.phase-name {
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant);
+  white-space: nowrap;
+}
+
+.phase-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+}
+
+// ── Phase Bar ────────────────────────────────────────────────────────
+.phase-bar-track {
+  height: 16px;
+  border-radius: 4px;
+  background: var(--mat-sys-surface-container-highest);
+  overflow: hidden;
+}
+
+.phase-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--mat-sys-primary);
+  opacity: 0.7;
+  position: relative;
+
+  &.phase-highlight {
+    opacity: 1;
+    background: linear-gradient(90deg, var(--mat-sys-primary), var(--mat-sys-tertiary));
+  }
+
+  &.phase-gate {
+    background: var(--mat-sys-tertiary);
+    animation: neuron-fire 2s ease-in-out infinite;
+  }
+
+  &.phase-final {
+    background: linear-gradient(90deg, var(--mat-sys-tertiary), var(--mat-sys-primary));
+    opacity: 1;
+  }
+}
+
+// ── Filter Badge ─────────────────────────────────────────────────────
+.filter-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--mat-sys-error);
+  white-space: nowrap;
+  min-width: 48px;
+  text-align: right;
+}
+
+// ── Augmentation ─────────────────────────────────────────────────────
+.augmentation-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--mat-sys-outline-variant);
+}
+
+.aug-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mat-sys-on-surface-variant);
+  margin-bottom: 6px;
+}
+
+.aug-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.aug-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  animation: slide-in-right 0.3s ease both;
+
+  &.hebbian {
+    background: color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+    color: var(--mat-sys-primary);
+  }
+
+  &.temporal {
+    background: color-mix(in srgb, var(--mat-sys-tertiary) 20%, transparent);
+    color: var(--mat-sys-tertiary);
+  }
+
+  &.entity {
+    background: color-mix(in srgb, var(--mat-sys-secondary) 20%, transparent);
+    color: var(--mat-sys-secondary);
+  }
+}

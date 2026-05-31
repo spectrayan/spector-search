@@ -1,0 +1,24 @@
+<div class="history-container">
+  @for (item of history(); track item.timestamp; let i = $index) {
+    <div class="history-item" [style.animation-delay]="(i * 50) + 'ms'">
+      <div class="item-time cortex-mono">{{ formatTime(item.timestamp) }}</div>
+      <div class="item-body">
+        <div class="item-query">{{ item.text }}</div>
+        <div class="item-meta">
+          <span class="meta-chip profile-chip">{{ item.profile }}</span>
+          <span class="meta-chip latency-chip cortex-mono">{{ item.latencyMs }}ms</span>
+          <span class="meta-chip results-chip cortex-mono">{{ item.topK }}
+            @if (item.augmented > 0) {
+              <span class="aug-badge">+{{ item.augmented }}</span>
+            }
+          </span>
+        </div>
+      </div>
+    </div>
+  } @empty {
+    <div class="empty-state">
+      <mat-icon>history</mat-icon>
+      <span>No queries yet</span>
+    </div>
+  }
+</div>

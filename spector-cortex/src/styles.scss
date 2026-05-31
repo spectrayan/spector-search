@@ -1,0 +1,169 @@
+// ═══════════════════════════════════════════════════════════════════════
+// Spector Cortex — Global Styles & M3 Theme
+// ═══════════════════════════════════════════════════════════════════════
+@use '@angular/material' as mat;
+
+// ── M3 Theme Definition ────────────────────────────────────────────────
+// Deep purple seed for neural/brain aesthetic
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$violet-palette,
+      tertiary: mat.$cyan-palette,
+      theme-type: dark,
+    ),
+    typography: (
+      brand-family: 'Inter, system-ui, -apple-system, sans-serif',
+      plain-family: 'Inter, system-ui, -apple-system, sans-serif',
+    ),
+    density: 0,
+  ));
+
+  color-scheme: dark;
+}
+
+// ── Light Theme Override ───────────────────────────────────────────────
+html[data-theme='light'] {
+  @include mat.theme((
+    color: (
+      primary: mat.$violet-palette,
+      tertiary: mat.$cyan-palette,
+      theme-type: light,
+    ),
+    typography: (
+      brand-family: 'Inter, system-ui, -apple-system, sans-serif',
+      plain-family: 'Inter, system-ui, -apple-system, sans-serif',
+    ),
+    density: 0,
+  ));
+
+  color-scheme: light;
+}
+
+// ── Google Fonts ───────────────────────────────────────────────────────
+// Fonts loaded via <link> tags in index.html (Inter + JetBrains Mono)
+
+// ── CSS Reset & Base ───────────────────────────────────────────────────
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--mat-sys-body-medium-font);
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// ── Scrollbar Styling ──────────────────────────────────────────────────
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--mat-sys-outline-variant);
+  border-radius: 3px;
+
+  &:hover {
+    background: var(--mat-sys-outline);
+  }
+}
+
+// ── Global Keyframe Animations ─────────────────────────────────────────
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes neuron-fire {
+  0% {
+    box-shadow: 0 0 4px var(--mat-sys-primary);
+  }
+  50% {
+    box-shadow: 0 0 24px var(--mat-sys-primary), 0 0 48px var(--mat-sys-primary);
+  }
+  100% {
+    box-shadow: 0 0 4px var(--mat-sys-primary);
+  }
+}
+
+// ── Utility Classes ────────────────────────────────────────────────────
+.cortex-glass {
+  background: color-mix(in srgb, var(--mat-sys-surface-container) 80%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--mat-sys-outline-variant);
+}
+
+.cortex-card {
+  background: var(--mat-sys-surface-container);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+
+  &:hover {
+    border-color: var(--mat-sys-primary);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+  }
+}
+
+.cortex-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}

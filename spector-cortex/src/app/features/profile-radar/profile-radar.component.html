@@ -1,0 +1,12 @@
+<div class="radar-container">
+  <div class="canvas-wrapper">
+    <canvas #radarCanvas></canvas>
+  </div>
+
+  <!-- Profile Info -->
+  @if (state.activeProfile(); as profile) {
+    <div class="profile-info">
+      <span class="profile-badge cortex-mono">{{ profile }}</span>
+    </div>
+  }
+</div>

@@ -1,0 +1,44 @@
+<div class="habituation-container">
+  @if (state.habituation(); as hab) {
+    <!-- Gauges -->
+    <div class="gauge-row">
+      <div class="gauge" matTooltip="Inhibition of Return — suppresses recently recalled memories">
+        <div class="gauge-label">IoR</div>
+        <div class="gauge-bar-track">
+          <div class="gauge-bar ior-bar" [style.width.%]="hab.inhibitionOfReturn * 100"></div>
+        </div>
+        <span class="gauge-value cortex-mono">{{ (hab.inhibitionOfReturn * 100) | number:'1.0-0' }}%</span>
+      </div>
+
+      <div class="gauge" matTooltip="Semantic Satiation — repeated recall reduces salience">
+        <div class="gauge-label">Satiation</div>
+        <div class="gauge-bar-track">
+          <div class="gauge-bar satiation-bar" [style.width.%]="hab.semanticSatiation * 100"></div>
+        </div>
+        <span class="gauge-value cortex-mono">{{ (hab.semanticSatiation * 100) | number:'1.0-0' }}%</span>
+      </div>
+
+      <div class="gauge" matTooltip="Average habituation penalty applied to scores">
+        <div class="gauge-label">Penalty</div>
+        <div class="gauge-bar-track">
+          <div class="gauge-bar penalty-bar" [style.width.%]="hab.habituationPenalty * 100"></div>
+        </div>
+        <span class="gauge-value cortex-mono">{{ (hab.habituationPenalty * 100) | number:'1.0-0' }}%</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat">
+        <mat-icon class="stat-icon">block</mat-icon>
+        <span class="stat-value cortex-mono">{{ hab.activeSuppressions }}</span>
+        <span class="stat-label">Suppressed</span>
+      </div>
+      <div class="stat">
+        <mat-icon class="stat-icon">cached</mat-icon>
+        <span class="stat-value cortex-mono">{{ hab.satiationCacheSize }}</span>
+        <span class="stat-label">Cache</span>
+      </div>
+    </div>
+  }
+</div>

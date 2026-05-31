@@ -1,0 +1,83 @@
+:host {
+  display: block;
+  flex: 1;
+  min-height: 0;
+}
+
+.graph-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.graph-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  cursor: crosshair;
+
+  canvas {
+    display: block;
+    border-radius: 0 0 16px 16px;
+  }
+}
+
+// ── Layer Controls ───────────────────────────────────────────────────
+.layer-controls {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mat-sys-surface-container) 85%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--mat-sys-outline-variant);
+}
+
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.layer-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface-variant);
+
+  &.hebbian-label { color: #fff; }
+  &.temporal-label { color: #00bcd4; }
+  &.entity-label { color: #ffc107; }
+}
+
+// ── Legend ────────────────────────────────────────────────────────────
+.legend {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  gap: 10px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mat-sys-surface-container) 85%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--mat-sys-outline-variant);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}

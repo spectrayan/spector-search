@@ -1,0 +1,5 @@
+:host { display: block; flex: 1; min-height: 0; }
+.vector-canvas {
+  width: 100%; height: 100%; min-height: 200px; cursor: crosshair;
+  canvas { display: block; border-radius: 0 0 16px 16px; }
+}

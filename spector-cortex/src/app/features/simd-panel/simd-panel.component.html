@@ -1,0 +1,36 @@
+<div class="simd-container">
+  <!-- Register Grid Canvas -->
+  <div class="canvas-wrapper">
+    <canvas #simdCanvas></canvas>
+  </div>
+
+  <!-- Stats Bar -->
+  @if (state.simdState(); as simd) {
+    <div class="stats-bar">
+      <div class="stat">
+        <span class="stat-label">ISA</span>
+        <span class="stat-value cortex-mono">AVX-{{ simd.vectorBitSize }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Lanes</span>
+        <span class="stat-value cortex-mono">{{ simd.laneCount }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Iterations</span>
+        <span class="stat-value cortex-mono">{{ simd.totalIterations }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Tail</span>
+        <span class="stat-value cortex-mono">{{ simd.tailLanesActive }}/{{ simd.laneCount }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Kernel</span>
+        <span class="stat-value cortex-mono kernel-badge">{{ simd.activeKernel }}</span>
+      </div>
+    </div>
+  } @else {
+    <div class="stats-bar placeholder">
+      <span class="stat-label">Awaiting SIMD events...</span>
+    </div>
+  }
+</div>

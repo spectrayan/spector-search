@@ -1,0 +1,53 @@
+<div class="heatmap-container">
+  <!-- Segment Rows -->
+  <div class="segments">
+    @for (seg of segments(); track seg.name; let i = $index) {
+      <div class="segment-row" [style.animation-delay]="(i * 60) + 'ms'">
+        <div class="seg-info">
+          <span class="seg-name">{{ seg.name }}</span>
+          <span class="seg-count cortex-mono">{{ seg.count | number }}</span>
+        </div>
+        <div class="seg-bar-track">
+          <div class="seg-bar"
+               [style.width.%]="seg.intensity * 100"
+               [style.background]="getHeatColor(seg.intensity)">
+          </div>
+        </div>
+        <span class="seg-size cortex-mono">{{ seg.sizeLabel }}</span>
+      </div>
+    }
+  </div>
+
+  <!-- JVM Metrics Footer -->
+  @if (jvmMetrics(); as jvm) {
+    <div class="jvm-footer">
+      <div class="jvm-metric">
+        <span class="jvm-label">Heap</span>
+        <div class="jvm-bar-track">
+          <div class="jvm-bar" [style.width.%]="jvm.heapPct"></div>
+        </div>
+        <span class="jvm-value cortex-mono">{{ jvm.heapUsed }} / {{ jvm.heapMax }}</span>
+      </div>
+      <div class="jvm-stats">
+        <span class="jvm-stat">
+          <span class="jvm-stat-label">Off-heap</span>
+          <span class="jvm-stat-value cortex-mono">{{ jvm.offHeap }}</span>
+        </span>
+        <span class="jvm-stat">
+          <span class="jvm-stat-label">Pinned</span>
+          <span class="jvm-stat-value cortex-mono">{{ jvm.pinned }}</span>
+        </span>
+        <span class="jvm-stat">
+          <span class="jvm-stat-label">Soft PF</span>
+          <span class="jvm-stat-value cortex-mono">{{ jvm.softFaults | number }}</span>
+        </span>
+        <span class="jvm-stat">
+          <span class="jvm-stat-label">Hard PF</span>
+          <span class="jvm-stat-value cortex-mono" [class.danger]="jvm.hardFaults > 10">
+            {{ jvm.hardFaults }}
+          </span>
+        </span>
+      </div>
+    </div>
+  }
+</div>

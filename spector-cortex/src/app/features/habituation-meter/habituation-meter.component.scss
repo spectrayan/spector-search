@@ -1,0 +1,28 @@
+:host { display: block; flex: 1; min-height: 0; }
+.habituation-container { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.gauge-row { display: flex; flex-direction: column; gap: 6px; }
+.gauge {
+  display: grid; grid-template-columns: 60px 1fr 40px; align-items: center; gap: 8px;
+}
+.gauge-label {
+  font-size: 10px; font-weight: 500; color: var(--mat-sys-on-surface-variant); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.gauge-bar-track {
+  height: 10px; border-radius: 5px; background: var(--mat-sys-surface-container-highest); overflow: hidden;
+}
+.gauge-bar {
+  height: 100%; border-radius: 5px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ior-bar { background: var(--mat-sys-tertiary); }
+.satiation-bar { background: var(--mat-sys-secondary); }
+.penalty-bar { background: var(--mat-sys-error); }
+.gauge-value { font-size: 10px; font-weight: 600; color: var(--mat-sys-on-surface); text-align: right; }
+.stats-row {
+  display: flex; gap: 16px; padding-top: 6px; border-top: 1px solid var(--mat-sys-outline-variant);
+}
+.stat {
+  display: flex; align-items: center; gap: 4px;
+}
+.stat-icon { font-size: 14px; width: 14px; height: 14px; color: var(--mat-sys-on-surface-variant); }
+.stat-value { font-size: 13px; font-weight: 700; color: var(--mat-sys-on-surface); }
+.stat-label { font-size: 9px; color: var(--mat-sys-on-surface-variant); text-transform: uppercase; letter-spacing: 0.04em; }

@@ -1,0 +1,43 @@
+:host { display: block; flex: 1; min-height: 0; overflow: auto; }
+.history-container { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.history-item {
+  display: flex; gap: 8px; padding: 6px 8px; border-radius: 8px;
+  background: var(--mat-sys-surface-container-high);
+  animation: fade-in-up 0.3s ease both;
+  transition: background 0.2s ease;
+  &:hover { background: var(--mat-sys-surface-container-highest); }
+}
+.item-time {
+  font-size: 10px; color: var(--mat-sys-on-surface-variant);
+  white-space: nowrap; padding-top: 2px; min-width: 56px;
+}
+.item-body { flex: 1; min-width: 0; }
+.item-query {
+  font-size: 11px; color: var(--mat-sys-on-surface);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.item-meta { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
+.meta-chip {
+  font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 9999px;
+}
+.profile-chip {
+  background: color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+  color: var(--mat-sys-primary);
+}
+.latency-chip {
+  background: color-mix(in srgb, var(--mat-sys-tertiary) 15%, transparent);
+  color: var(--mat-sys-tertiary);
+}
+.results-chip {
+  background: color-mix(in srgb, var(--mat-sys-secondary) 15%, transparent);
+  color: var(--mat-sys-secondary);
+}
+.aug-badge {
+  color: var(--mat-sys-tertiary); font-weight: 700;
+}
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 24px; color: var(--mat-sys-on-surface-variant);
+  mat-icon { font-size: 32px; width: 32px; height: 32px; opacity: 0.3; }
+  span { font-size: 12px; }
+}

@@ -1,0 +1,144 @@
+:host {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.heatmap-container {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+}
+
+// ── Segment Rows ─────────────────────────────────────────────────────
+.segments {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.segment-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 70px;
+  align-items: center;
+  gap: 8px;
+  animation: fade-in-up 0.3s ease both;
+}
+
+.seg-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.seg-name {
+  font-size: 10px;
+  color: var(--mat-sys-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seg-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+}
+
+.seg-bar-track {
+  height: 14px;
+  border-radius: 3px;
+  background: var(--mat-sys-surface-container-highest);
+  overflow: hidden;
+}
+
+.seg-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.8s ease;
+  min-width: 2px;
+}
+
+.seg-size {
+  font-size: 9px;
+  color: var(--mat-sys-on-surface-variant);
+  text-align: right;
+}
+
+// ── JVM Footer ───────────────────────────────────────────────────────
+.jvm-footer {
+  padding-top: 6px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.jvm-metric {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.jvm-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.jvm-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--mat-sys-surface-container-highest);
+  overflow: hidden;
+}
+
+.jvm-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--mat-sys-primary);
+  transition: width 0.6s ease;
+}
+
+.jvm-value {
+  font-size: 10px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.jvm-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.jvm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.jvm-stat-label {
+  font-size: 8px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.jvm-stat-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+
+  &.danger {
+    color: var(--mat-sys-error);
+  }
+}

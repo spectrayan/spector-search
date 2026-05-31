@@ -1,0 +1,104 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--mat-sys-surface);
+}
+
+// ── Query Bar ────────────────────────────────────────────────────────
+.query-bar {
+  margin: 8px 12px 0;
+  flex-shrink: 0;
+}
+
+// ── Dashboard Grid ───────────────────────────────────────────────────
+.dashboard-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 380px;       // first row (hero) is explicit
+  grid-auto-rows: 280px;           // remaining rows are fixed 280px
+  column-gap: 14px;
+  row-gap: 16px;
+  padding: 12px 14px 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+// ── Panel (mat-card) ─────────────────────────────────────────────────
+.panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  // mat-card-content should fill remaining space
+  .panel-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 !important; // remove default mat-card-content padding
+  }
+}
+
+.panel-icon {
+  color: var(--mat-sys-primary);
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+// ── Hero row overrides ───────────────────────────────────────────────
+.panel-neural-graph {
+  grid-column: 1 / 3;
+}
+
+.panel-vector-space {
+  grid-column: 3 / 4;
+}
+
+// Radar needs explicit height for canvas sizing
+.panel-radar {}
+
+// ── Responsive ───────────────────────────────────────────────────────
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: minmax(260px, auto);
+  }
+
+  .panel-neural-graph {
+    grid-column: 1 / -1;
+    min-height: 300px;
+  }
+
+  .panel-vector-space {
+    grid-column: span 1;
+    min-height: 280px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(240px, auto);
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .panel-neural-graph,
+  .panel-vector-space {
+    grid-column: 1;
+    min-height: 260px;
+  }
+}

@@ -1,0 +1,61 @@
+<mat-toolbar class="cortex-toolbar">
+  <!-- Brand -->
+  <div class="brand">
+    <mat-icon class="brand-icon">hub</mat-icon>
+    <span class="brand-name">Spector Cortex</span>
+    <span class="brand-badge">Neural Dashboard</span>
+  </div>
+
+  <div class="spacer"></div>
+
+  <!-- Connection Status -->
+  <div class="status-group">
+    <div class="status-indicator"
+         [class.connected]="state.connectionStatus() === 'connected'"
+         [class.reconnecting]="state.connectionStatus() === 'reconnecting'"
+         [class.disconnected]="state.connectionStatus() === 'disconnected'"
+         [matTooltip]="'Status: ' + state.connectionStatus()">
+      <span class="status-dot"></span>
+      <span class="status-ring"></span>
+    </div>
+    <span class="status-label">{{ state.connectionStatus() }}</span>
+  </div>
+
+  <!-- Active Profile -->
+  @if (state.activeProfile(); as profile) {
+    <mat-chip-set class="profile-chip-set">
+      <mat-chip class="profile-chip" highlighted
+                [matTooltip]="profileParams[profile].description">
+        <mat-icon matChipAvatar>psychology</mat-icon>
+        {{ profileParams[profile].label }}
+      </mat-chip>
+    </mat-chip-set>
+  }
+
+  <!-- Latency -->
+  @if (state.currentQueryTrace(); as trace) {
+    <div class="metric-badge" matTooltip="Last query latency">
+      <mat-icon>speed</mat-icon>
+      <span class="metric-value cortex-mono">{{ state.latestLatencyMs() }}ms</span>
+    </div>
+  }
+
+  <!-- Node Selector -->
+  <mat-form-field appearance="outline" class="node-select">
+    <mat-select [value]="state.selectedNode()"
+                (selectionChange)="state.selectedNode.set($event.value)">
+      <mat-option value="local">Local Node</mat-option>
+      <mat-option value="cluster">Cluster View</mat-option>
+      <mat-option value="node-1">node-1</mat-option>
+      <mat-option value="node-2">node-2</mat-option>
+      <mat-option value="node-3">node-3</mat-option>
+    </mat-select>
+  </mat-form-field>
+
+  <!-- Theme Toggle -->
+  <button mat-icon-button
+          (click)="theme.toggle()"
+          [matTooltip]="'Switch to ' + (theme.isDark() ? 'light' : 'dark') + ' theme'">
+    <mat-icon>{{ theme.themeIcon() }}</mat-icon>
+  </button>
+</mat-toolbar>

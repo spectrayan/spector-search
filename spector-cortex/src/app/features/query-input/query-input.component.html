@@ -1,0 +1,18 @@
+<div class="query-input-container">
+  <div class="search-bar" [class.running]="state.isQueryRunning()">
+    <mat-icon class="search-icon">search</mat-icon>
+    <input class="search-input"
+           [(ngModel)]="queryText"
+           placeholder="Query memory — type to see the pipeline execute..."
+           (keydown.enter)="submitQuery()"
+           [disabled]="state.isQueryRunning()" />
+    <button class="send-button"
+            (click)="submitQuery()"
+            [disabled]="state.isQueryRunning() || !queryText.trim()">
+      <mat-icon>{{ state.isQueryRunning() ? 'hourglass_top' : 'arrow_upward' }}</mat-icon>
+    </button>
+  </div>
+  @if (state.isQueryRunning()) {
+    <div class="running-bar"></div>
+  }
+</div>

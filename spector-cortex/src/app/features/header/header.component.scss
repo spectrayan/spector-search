@@ -1,0 +1,166 @@
+:host {
+  display: block;
+}
+
+.cortex-toolbar {
+  background: var(--mat-sys-surface-container);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  padding: 0 16px;
+  gap: 12px;
+  height: 56px;
+}
+
+// ── Brand ────────────────────────────────────────────────────────────
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon {
+  color: var(--mat-sys-primary);
+  font-size: 28px;
+  width: 28px;
+  height: 28px;
+}
+
+.brand-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+  letter-spacing: -0.02em;
+}
+
+.brand-badge {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mat-sys-on-tertiary-container);
+  background: var(--mat-sys-tertiary-container);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+// ── Connection Status ────────────────────────────────────────────────
+.status-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-indicator {
+  position: relative;
+  width: 12px;
+  height: 12px;
+}
+
+.status-dot {
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.status-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+}
+
+.status-indicator.connected {
+  .status-dot {
+    background-color: #4caf50;
+  }
+  .status-ring {
+    border-color: #4caf50;
+    animation: pulse-ring 2s ease-out infinite;
+  }
+}
+
+.status-indicator.reconnecting {
+  .status-dot {
+    background-color: #ff9800;
+    animation: pulse-glow 1s ease-in-out infinite;
+  }
+  .status-ring {
+    border-color: #ff9800;
+  }
+}
+
+.status-indicator.disconnected {
+  .status-dot {
+    background-color: var(--mat-sys-error);
+  }
+  .status-ring {
+    border-color: var(--mat-sys-error);
+  }
+}
+
+.status-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// ── Profile Chip ─────────────────────────────────────────────────────
+.profile-chip-set {
+  .profile-chip {
+    font-size: 12px;
+    font-weight: 500;
+  }
+}
+
+// ── Metric Badge ─────────────────────────────────────────────────────
+.metric-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--mat-sys-surface-container-high);
+  border: 1px solid var(--mat-sys-outline-variant);
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: var(--mat-sys-tertiary);
+  }
+
+  .metric-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mat-sys-on-surface);
+  }
+}
+
+// ── Node Select ──────────────────────────────────────────────────────
+.node-select {
+  width: 140px;
+  margin: 0;
+
+  ::ng-deep {
+    .mat-mdc-form-field-subscript-wrapper {
+      display: none;
+    }
+    .mdc-text-field--outlined {
+      --mdc-outlined-text-field-container-shape: 9999px;
+    }
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border: none !important;
+    }
+    .mat-mdc-select-value-text {
+      font-size: 12px;
+    }
+  }
+}
