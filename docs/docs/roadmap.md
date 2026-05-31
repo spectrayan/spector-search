@@ -232,6 +232,144 @@ Native ColBERT reranking using Panama FMA loops. ColBERT stores a vector for eve
 
 ---
 
+## Cognitive Graph Memory
+
+### ✅ 3-Layer Cognitive Graph {#cognitive-graph}
+
+!!! success "Completed"
+    All four phases implemented and merged. 357 tests pass, 0 failures.
+
+Full graph augmentation layer for `spector-memory` — three biologically-inspired graph structures that augment vector recall with associative, temporal, and relational signals.
+
+**Architecture:**
+```
+RecallPipeline
+  Step 5a: Habituation + Inhibition of Return
+  Step 5b: STDP causal boost (CoActivationTracker)
+  Step 5c: Hebbian spreading activation (HebbianGraph, depth=2)
+  Step 5d: Temporal chain extension (TemporalChain, maxHops=3)
+  Step 5e: Entity graph traversal (EntityGraph, 2-hop BFS)
+```
+
+**Layer 1 — Hebbian Association Graph:**
+
+- Off-heap adjacency list (164B/node, MAX_DEGREE=20) via Panama `MemorySegment`
+- Edge strengthening, decay (0.9 factor per consolidation), spreading activation
+- Persistence via `HGPH` magic header, chunked 64KB FileChannel I/O
+- CoActivationTracker migrated to off-heap: `OffHeapPairTable` (32B/slot) + `OffHeapEdgeTable` (40B/slot)
+- Persistence via `COAX` magic header with hash→tag reverse map
+
+**Layer 2 — Entity-Relationship Graph:**
+
+- Off-heap entity store (48B/entity, 16B/edge), BFS traversal with typed edge filtering
+- 22 entity types × 21 relation types
+- `EntityExtractor` SPI with `LlmEntityExtractor` (externalized prompt template) and `NoOpEntityExtractor`
+- Persistence via `ENTG` magic header with nameIndex reconstruction
+
+**Layer 3 — Temporal Causal Chain:**
+
+- Off-heap linked list (16B/node: prevIdx + nextIdx + sessionId + pad)
+- Session-local memory linking at ingestion, forward/backward traversal at recall
+- Persistence via `TPCH` magic header
+
+**Error framework:** 6 error codes (`SPE-310-006..011`), 7 granular exception classes extending `SpectorGraphException`. All catch sites use `catch(RuntimeException)` → create exception → `log(ex.getMessage())`. No string concatenation.
+
+**Each graph step is additive and gracefully degrading** — if the graph is null/empty or the operation throws, the step is a no-op.
+
+---
+
+### 🔜 Temporal Chain Pruning {#temporal-pruning}
+
+!!! info "Status: Planned (next)"
+    Low effort. Prevents unbounded temporal chain growth.
+
+Temporal chain links are permanent — unlike Hebbian edges which decay via `decayEdges(0.9f)`, temporal links have no homeostasis mechanism. Old session-local links waste slots indefinitely.
+
+**Design:**
+
+- Add `pruneOlderThan(long cutoffEpochMs)` to `TemporalChain`
+- Replace the `pad:4B` field in the 16B node layout with `epochSec:4B` (seconds since epoch, ~136 year range)
+- Integrate into `DefaultSpectorMemory.reflect()` after Hebbian decay
+- Configurable retention period via Builder: `temporalRetentionDays(int)` (default: 7)
+
+**Effort:** ~0.5 day
+
+---
+
+### 🔜 Cross-Layer Promotion (Hebbian → Entity) {#cross-layer-promotion}
+
+!!! info "Status: Planned (next)"
+    Medium effort. Enables automatic knowledge graph construction from statistical patterns.
+
+Promote strong statistical Hebbian associations into explicit entity relations during sleep consolidation — analogous to hippocampal replay.
+
+**Design:**
+
+- During `reflect()`, scan HebbianGraph for edges with `weight ≥ 0.8` AND `activationCount ≥ 5`
+- For each strong edge, look up shared entities via `EntityGraph.memoriesForEntity()`
+- If shared entities exist, strengthen the entity relation edge; if none, create a `RELATED_TO` relation
+- Add `promotionThreshold(float)` and `promotionMinActivations(int)` to Builder config
+- Add `PromotionReport` record for observability: `promotedCount`, `strengthenedCount`, `skippedCount`
+
+**Effort:** ~1-2 days
+
+---
+
+### 🔜 Entity Graph Decay + Node Merging {#entity-decay}
+
+!!! info "Status: Planned"
+    Medium effort. Prevents entity graph bloat.
+
+Entity graph edges accumulate without decay. Near-duplicate entities (e.g., "John Smith" and "J. Smith") should be merged during consolidation.
+
+**Design:**
+
+- Add `decayRelations(float factor)` to `EntityGraph` — multiplicative decay, prune below threshold
+- Add `mergeEntities(int sourceId, int targetId)` — redirect all edges and memory links
+- Fuzzy name matching via Levenshtein distance during consolidation
+- Integrate into `reflect()` cycle
+
+**Effort:** ~1-2 days
+
+---
+
+### 🔜 Graph-Aware Scoring Weights {#graph-scoring}
+
+!!! info "Status: Planned"
+    Low effort. Highest ROI among remaining graph improvements.
+
+Extract hardcoded graph score attenuation factors into a configurable `GraphScoringPolicy`.
+
+**Current hardcoded values:**
+
+| Factor | Current Value | Used In |
+|---|---|---|
+| Hebbian boost | 0.3f | RecallPipeline Step 5c |
+| Temporal forward | 0.8f | RecallPipeline Step 5d |
+| Temporal backward | 0.7f | RecallPipeline Step 5d |
+| Entity hop attenuation | 0.25f | RecallPipeline Step 5e |
+
+**Design:**
+
+```java
+public record GraphScoringPolicy(
+    float hebbianBoostFactor,     // default 0.3
+    float temporalForwardFactor,  // default 0.8
+    float temporalBackwardFactor, // default 0.7
+    float entityHopAttenuation,   // default 0.25
+    int hebbianMaxDepth,          // default 2
+    int temporalMaxHops,          // default 3
+    int entityMaxHops             // default 2
+) {}
+```
+
+- Configurable via Builder: `graphScoringPolicy(GraphScoringPolicy)`
+- Future: online tuning based on user reinforcement/suppression feedback
+
+**Effort:** ~0.5 day
+
+---
+
 ## Compute & Hardware
 
 ### 🔜 GPU Kernel Dispatch {#gpu-dispatch}
@@ -310,20 +448,25 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 
 ## Summary Table
 
-| # | Improvement | Compression | Recall Impact | Effort | Status |
-|---|------------|-------------|---------------|--------|--------|
-| 1 | **SVASQ-4** | 6–8× vs float32 | -2 to -4% (mitigated w/ rescore) | Medium | ✅ Done |
-| 2 | **Native MCP Server** | N/A (agent integration) | N/A | Medium | ✅ Done |
-| 3 | **Padding-aware storage** | +25% (non-pow2 dims) | None (L2) | Low | 🔜 Next |
-| 4 | **Norm header f16** | +2 bytes/vec | Negligible | Very Low | 🔜 Next |
-| 5 | **Streamable HTTP transport** | N/A (deployment) | N/A | Medium | 🔜 Planned |
-| 6 | **SVASQ-PQ hybrid** | 16–32× vs float32 | -7 to -15% | Very High | 🔬 Research |
-| 7 | **Flat-mode SVASQ** | 3× on flat shards | None or -0.5% | Medium | 🔬 Research |
-| 8 | **LoRA adapter routing** | N/A (multi-tenant) | N/A | High | 🔬 Research |
-| 9 | **ColBERT late interaction** | N/A (reranking) | N/A | High | 🔬 Research |
-| 10 | **Adaptive bit-width** | ~10–15% | Negligible | Very High | 🔴 Not planned |
-| 11 | **GPU kernel dispatch** | N/A (compute) | N/A | Medium | 🔜 Infra ready |
-| 12 | **NPU acceleration** | N/A (compute) | N/A | High | 🔬 Exploratory |
-| 13 | **WASM edge runtime** | N/A (deployment) | N/A | High | 🔬 Exploratory |
-| 14 | **Structured concurrency** | N/A (runtime) | N/A | Low | ✅ Done |
-| 15 | **Project Valhalla Value Classes** | N/A (zero-GC heap layouts) | None | Medium | 🔬 Research |
+| # | Improvement | Category | Effort | Status |
+|---|------------|----------|--------|--------|
+| 1 | **SVASQ-4** | Compression | Medium | ✅ Done |
+| 2 | **Native MCP Server** | Agentic AI | Medium | ✅ Done |
+| 3 | **3-Layer Cognitive Graph** | Graph Memory | High | ✅ Done |
+| 4 | **Structured Concurrency** | Runtime | Low | ✅ Done |
+| 5 | **Padding-aware storage** | Compression | Low | 🔜 Next |
+| 6 | **Norm header f16** | Compression | Very Low | 🔜 Next |
+| 7 | **Temporal chain pruning** | Graph Memory | Low | 🔜 Next |
+| 8 | **Cross-layer promotion** | Graph Memory | Medium | 🔜 Planned |
+| 9 | **Entity graph decay + merging** | Graph Memory | Medium | 🔜 Planned |
+| 10 | **Graph scoring weights** | Graph Memory | Low | 🔜 Planned |
+| 11 | **Streamable HTTP transport** | Agentic AI | Medium | 🔜 Planned |
+| 12 | **GPU kernel dispatch** | Compute | Medium | 🔜 Infra ready |
+| 13 | **SVASQ-PQ hybrid** | Compression | Very High | 🔬 Research |
+| 14 | **Flat-mode SVASQ** | Compression | Medium | 🔬 Research |
+| 15 | **LoRA adapter routing** | Agentic AI | High | 🔬 Research |
+| 16 | **ColBERT late interaction** | Agentic AI | High | 🔬 Research |
+| 17 | **NPU acceleration** | Compute | High | 🔬 Exploratory |
+| 18 | **WASM edge runtime** | Runtime | High | 🔬 Exploratory |
+| 19 | **Project Valhalla** | Runtime | Medium | 🔬 Research |
+| 20 | **Adaptive bit-width** | Compression | Very High | 🔴 Not planned |
