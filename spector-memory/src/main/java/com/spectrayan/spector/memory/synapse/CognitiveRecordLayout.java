@@ -9,111 +9,115 @@ import java.lang.foreign.ValueLayout;
 import static com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.*;
 
 /**
- * Read/write operations for the 32-byte cognitive record layout.
+ * Read/write operations for cognitive memory records.
  *
- * <p>A cognitive record = 32-byte synaptic header + quantized vector payload.
+ * <p>A cognitive record = versioned synaptic header + quantized vector payload.
+ * The header size depends on the {@link HeaderLayout} version (32B/48B/64B).
  * This layout does <em>not</em> extend or modify the existing {@code VectorStoreLayout}
  * in {@code spector-storage}. It is a new, independent layout specific to
  * {@code spector-memory}.</p>
  *
  * <h3>Biological Analog: The Synaptic Tag</h3>
  * <p>In neuroscience, synapses are "tagged" during learning (Frey &amp; Morris, 1997)
- * to mark them for later consolidation. This 32-byte header is the digital
+ * to mark them for later consolidation. The synaptic header is the digital
  * equivalent — a lightweight marker enabling microsecond-latency routing,
  * filtering, and scoring without touching the heavy vector payload.</p>
  *
+ * <h3>Polymorphic Header Layout</h3>
+ * <p>The {@link HeaderLayout} sealed interface provides version-aware access
+ * to header fields. V1 (32B) stores only core fields. V2 (48B) adds arousal
+ * and storage strength. V3 (64B) adds a full cache-line-sized future buffer.
+ * Extended fields return safe defaults when read via older layouts.</p>
+ *
  * @param quantizedVecBytes number of bytes for the quantized vector payload
+ * @param headerLayout      the versioned header layout to use for read/write
+ *
+ * @see HeaderLayout
+ * @see HeaderLayoutV1
+ * @see HeaderLayoutV2
+ * @see HeaderLayoutV3
  */
-public record CognitiveRecordLayout(int quantizedVecBytes) {
+public record CognitiveRecordLayout(int quantizedVecBytes, HeaderLayout headerLayout) {
+
+    /**
+     * Backward-compatible constructor — defaults to V3 (64B) layout.
+     *
+     * @param quantizedVecBytes bytes per quantized vector payload
+     */
+    public CognitiveRecordLayout(int quantizedVecBytes) {
+        this(quantizedVecBytes, HeaderLayout.defaultLayout());
+    }
 
     /**
      * Total bytes per record (header + payload).
      */
     public int stride() {
-        return HEADER_BYTES + quantizedVecBytes;
+        return headerLayout.headerBytes() + quantizedVecBytes;
     }
 
     /**
      * Offset where the quantized vector payload begins within a record.
      */
     public long vectorOffset(long recordOffset) {
-        return recordOffset + HEADER_BYTES;
+        return recordOffset + headerLayout.headerBytes();
     }
 
-    // ── Write operations ──
+    // ── Write operations (delegate to HeaderLayout) ──
 
     /**
      * Writes a complete cognitive header to the given segment at the specified record offset.
      */
     public void writeHeader(MemorySegment segment, long offset, CognitiveHeader header) {
-        segment.set(LAYOUT_TIMESTAMP,     offset + OFFSET_TIMESTAMP,     header.timestampMs());
-        segment.set(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS, header.synapticTags());
-        segment.set(LAYOUT_EXACT_NORM,    offset + OFFSET_EXACT_NORM,    header.exactNorm());
-        segment.set(LAYOUT_IMPORTANCE,    offset + OFFSET_IMPORTANCE,    header.importance());
-        segment.set(LAYOUT_RECALL_COUNT,  offset + OFFSET_RECALL_COUNT,  header.recallCount());
-        segment.set(LAYOUT_CENTROID_ID,   offset + OFFSET_CENTROID_ID,   header.centroidId());
-        segment.set(LAYOUT_VALENCE,       offset + OFFSET_VALENCE,       header.valence());
-        segment.set(LAYOUT_FLAGS,         offset + OFFSET_FLAGS,         header.flags());
+        headerLayout.writeHeader(segment, offset, header);
     }
 
     /**
      * Reads a complete cognitive header from the given segment at the specified record offset.
      */
     public CognitiveHeader readHeader(MemorySegment segment, long offset) {
-        return new CognitiveHeader(
-                segment.get(LAYOUT_TIMESTAMP,     offset + OFFSET_TIMESTAMP),
-                segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS),
-                segment.get(LAYOUT_EXACT_NORM,    offset + OFFSET_EXACT_NORM),
-                segment.get(LAYOUT_IMPORTANCE,    offset + OFFSET_IMPORTANCE),
-                segment.get(LAYOUT_RECALL_COUNT,  offset + OFFSET_RECALL_COUNT),
-                segment.get(LAYOUT_CENTROID_ID,   offset + OFFSET_CENTROID_ID),
-                segment.get(LAYOUT_VALENCE,       offset + OFFSET_VALENCE),
-                segment.get(LAYOUT_FLAGS,         offset + OFFSET_FLAGS)
-        );
+        return headerLayout.readHeader(segment, offset);
     }
 
-    // ── Field-level accessors for hot-loop usage ──
+    // ── Field-level accessors (delegate to HeaderLayout) ──
 
-    /**
-     * Reads the flags byte at the given record offset.
-     */
+    /** Reads the flags byte at the given record offset. */
     public byte readFlags(MemorySegment segment, long offset) {
-        return segment.get(LAYOUT_FLAGS, offset + OFFSET_FLAGS);
+        return headerLayout.readFlags(segment, offset);
     }
 
-    /**
-     * Reads the synaptic tags (Bloom filter) at the given record offset.
-     */
+    /** Reads the synaptic tags (Bloom filter) at the given record offset. */
     public long readSynapticTags(MemorySegment segment, long offset) {
-        return segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS);
+        return headerLayout.readSynapticTags(segment, offset);
     }
 
-    /**
-     * Reads the valence byte at the given record offset.
-     */
+    /** Reads the valence byte at the given record offset. */
     public byte readValence(MemorySegment segment, long offset) {
-        return segment.get(LAYOUT_VALENCE, offset + OFFSET_VALENCE);
+        return headerLayout.readValence(segment, offset);
     }
 
-    /**
-     * Reads the timestamp at the given record offset.
-     */
+    /** Reads the timestamp at the given record offset. */
     public long readTimestamp(MemorySegment segment, long offset) {
-        return segment.get(LAYOUT_TIMESTAMP, offset + OFFSET_TIMESTAMP);
+        return headerLayout.readTimestamp(segment, offset);
     }
 
-    /**
-     * Reads the importance at the given record offset.
-     */
+    /** Reads the importance at the given record offset. */
     public float readImportance(MemorySegment segment, long offset) {
-        return segment.get(LAYOUT_IMPORTANCE, offset + OFFSET_IMPORTANCE);
+        return headerLayout.readImportance(segment, offset);
     }
 
-    /**
-     * Reads the recall count at the given record offset.
-     */
+    /** Reads the recall count at the given record offset. */
     public int readRecallCount(MemorySegment segment, long offset) {
-        return segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
+        return headerLayout.readRecallCount(segment, offset);
+    }
+
+    /** Reads the arousal byte (unsigned 0-255). Returns 0 on V1 layouts. */
+    public byte readArousal(MemorySegment segment, long offset) {
+        return headerLayout.readArousal(segment, offset);
+    }
+
+    /** Reads the storage strength. Returns 1.0f on V1 layouts. */
+    public float readStorageStrength(MemorySegment segment, long offset) {
+        return headerLayout.readStorageStrength(segment, offset);
     }
 
     /**
@@ -126,30 +130,24 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
      * in search results." This produces more meaningful LTP adjustment.</p>
      *
      * <h3>Thread Safety</h3>
-     * <p>Uses a thread-safe atomic getAndAdd operation via the {@link java.lang.invoke.VarHandle}
-     * view over the off-heap segment. This guarantees atomicity and zero race conditions
-     * under heavy concurrent reinforcement workloads on modern multicore CPUs.</p>
+     * <p>Uses a thread-safe atomic getAndAdd operation via {@link java.lang.invoke.VarHandle}.
+     * This guarantees atomicity and zero race conditions under heavy concurrent
+     * reinforcement workloads on modern multicore CPUs.</p>
      *
      * @return the previous recall count value
      */
     public int incrementRecallCount(MemorySegment segment, long offset) {
-        return (int) VAR_HANDLE_RECALL_COUNT.getAndAdd(segment, offset + OFFSET_RECALL_COUNT, 1);
+        return headerLayout.incrementRecallCount(segment, offset);
     }
 
-    /**
-     * Sets the tombstone flag (logical deletion / pruning by Deep Sleep).
-     */
+    /** Sets the tombstone flag (logical deletion / pruning by Deep Sleep). */
     public void tombstone(MemorySegment segment, long offset) {
-        byte flags = readFlags(segment, offset);
-        segment.set(LAYOUT_FLAGS, offset + OFFSET_FLAGS, (byte) (flags | FLAG_TOMBSTONE));
+        headerLayout.markTombstoned(segment, offset);
     }
 
-    /**
-     * Sets the consolidated flag (memory has been reflected into Semantic tier).
-     */
+    /** Sets the consolidated flag (memory has been reflected into Semantic tier). */
     public void markConsolidated(MemorySegment segment, long offset) {
-        byte flags = readFlags(segment, offset);
-        segment.set(LAYOUT_FLAGS, offset + OFFSET_FLAGS, (byte) (flags | FLAG_CONSOLIDATED));
+        headerLayout.markConsolidated(segment, offset);
     }
 
     /**
@@ -160,30 +158,52 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
      * alongside the synthesized semantic fact.</p>
      */
     public void pin(MemorySegment segment, long offset) {
-        byte flags = readFlags(segment, offset);
-        segment.set(LAYOUT_FLAGS, offset + OFFSET_FLAGS, (byte) (flags | FLAG_PINNED));
+        headerLayout.markPinned(segment, offset);
     }
 
     /**
-     * Updates the importance field.
+     * Sets the resolved flag (Zeigarnik Effect — marks a task/issue as done).
+     *
+     * <p>Once resolved, the memory succumbs to normal time-decay and gradually
+     * fades from active recall. Call {@link #markUnresolved} if the issue resurfaces.</p>
      */
+    public void markResolved(MemorySegment segment, long offset) {
+        headerLayout.markResolved(segment, offset);
+    }
+
+    /**
+     * Clears the resolved flag (Zeigarnik Effect — re-opens a task/issue).
+     *
+     * <p>The memory re-enters the Zeigarnik loop: it resists decay and floats
+     * to the top of recall until explicitly resolved again.</p>
+     */
+    public void markUnresolved(MemorySegment segment, long offset) {
+        headerLayout.markUnresolved(segment, offset);
+    }
+
+    /** Updates the importance field. */
     public void writeImportance(MemorySegment segment, long offset, float importance) {
-        segment.set(LAYOUT_IMPORTANCE, offset + OFFSET_IMPORTANCE, importance);
+        headerLayout.writeImportance(segment, offset, importance);
     }
 
-    /**
-     * Updates the timestamp field.
-     */
+    /** Updates the timestamp field. */
     public void writeTimestamp(MemorySegment segment, long offset, long timestampMs) {
-        segment.set(LAYOUT_TIMESTAMP, offset + OFFSET_TIMESTAMP, timestampMs);
+        headerLayout.writeTimestamp(segment, offset, timestampMs);
     }
 
-    /**
-     * Merges synaptic tags by ORing the existing tags with new ones.
-     */
+    /** Merges synaptic tags by ORing the existing tags with new ones. */
     public void mergeSynapticTags(MemorySegment segment, long offset, long additionalTags) {
-        long existing = readSynapticTags(segment, offset);
-        segment.set(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS, existing | additionalTags);
+        headerLayout.mergeSynapticTags(segment, offset, additionalTags);
+    }
+
+    /** Writes the arousal byte. No-op on V1 layouts. */
+    public void writeArousal(MemorySegment segment, long offset, byte arousal) {
+        headerLayout.writeArousal(segment, offset, arousal);
+    }
+
+    /** Writes the storage strength. No-op on V1 layouts. */
+    public void writeStorageStrength(MemorySegment segment, long offset, float strength) {
+        headerLayout.writeStorageStrength(segment, offset, strength);
     }
 
     /**
@@ -202,10 +222,6 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
      * Quantizes a float32 vector using a calibrated {@link ScalarQuantizer} and writes
      * the result directly to the segment at the record's vector offset.
      *
-     * <p>This is the production encoding path. The quantizer uses per-dimension min/max
-     * bounds to linearly map each float to [0, 255], achieving accurate distance
-     * computation when paired with the same quantizer's mins/scales during recall.</p>
-     *
      * @param segment      off-heap memory segment
      * @param recordOffset byte offset of the record start
      * @param vector       float32 vector to quantize
@@ -218,10 +234,21 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
     }
 
     /**
-     * Immutable record holding all 32-byte header fields.
+     * Immutable record holding all header fields across all layout versions.
      *
-     * <p>Header v3: recall_count widened to int (4B, atomic-ready at offset 24),
-     * centroid_id narrowed to short (2B at offset 28, max 65,535 centroids).</p>
+     * <p>V1-only code can use the 8-arg constructor; the extended fields
+     * default to {@code arousal=0} and {@code storageStrength=1.0f}.</p>
+     *
+     * @param timestampMs     when the memory was formed (epoch millis)
+     * @param synapticTags    64-bit Bloom filter of contextual markers
+     * @param exactNorm       L2 norm for SIMD distance computation
+     * @param importance      base importance (set by Prediction Error engine)
+     * @param recallCount     LTP reinforcement counter
+     * @param centroidId      IVF partition routing ID
+     * @param valence         signed emotion/reward (-128 to +127)
+     * @param flags           bit field (tombstone, type, consolidated, pinned, resolved)
+     * @param arousal         emotional intensity (unsigned 0-255, V2+)
+     * @param storageStrength Two-Factor Memory storage strength (V2+, default 1.0f)
      */
     public record CognitiveHeader(
             long timestampMs,
@@ -231,8 +258,25 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
             int recallCount,
             short centroidId,
             byte valence,
-            byte flags
+            byte flags,
+            // ── Extended fields (V2+) ──
+            byte arousal,
+            float storageStrength
     ) {
+        /**
+         * V1-compatible constructor — defaults for extended fields.
+         *
+         * <p>Provides backward compatibility for code that constructs headers
+         * without arousal or storage strength fields.</p>
+         */
+        public CognitiveHeader(long timestampMs, long synapticTags, float exactNorm,
+                                float importance, int recallCount, short centroidId,
+                                byte valence, byte flags) {
+            this(timestampMs, synapticTags, exactNorm, importance,
+                 recallCount, centroidId, valence, flags,
+                 (byte) 0, 1.0f);
+        }
+
         /**
          * Creates a new header for initial ingestion with default recall count and valence.
          */
@@ -241,6 +285,18 @@ public record CognitiveRecordLayout(int quantizedVecBytes) {
             byte flags = SynapticHeaderConstants.withMemoryType((byte) 0, memoryType.ordinal());
             return new CognitiveHeader(timestampMs, synapticTags, exactNorm, importance,
                     0, centroidId, (byte) 0, flags);
+        }
+
+        /**
+         * Creates a new header with arousal for V2+ ingestion.
+         */
+        public static CognitiveHeader createWithArousal(long timestampMs, long synapticTags,
+                                                          float exactNorm, float importance,
+                                                          short centroidId, MemoryType memoryType,
+                                                          byte valence, byte arousal) {
+            byte flags = SynapticHeaderConstants.withMemoryType((byte) 0, memoryType.ordinal());
+            return new CognitiveHeader(timestampMs, synapticTags, exactNorm, importance,
+                    0, centroidId, valence, flags, arousal, 1.0f);
         }
     }
 }

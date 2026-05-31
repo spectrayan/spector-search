@@ -9,7 +9,7 @@ import java.lang.foreign.MemorySegment;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for {@link CognitiveRecordLayout} — 32-byte header read/write.
+ * Tests for {@link CognitiveRecordLayout} — versioned header read/write.
  */
 class CognitiveRecordLayoutTest {
 
@@ -18,13 +18,13 @@ class CognitiveRecordLayoutTest {
 
     @Test
     void strideIs32PlusVectorBytes() {
-        assertThat(layout.stride()).isEqualTo(32 + VECTOR_BYTES);
+        assertThat(layout.stride()).isEqualTo(64 + VECTOR_BYTES);
     }
 
     @Test
     void vectorOffsetIs32() {
-        assertThat(layout.vectorOffset(0)).isEqualTo(32);
-        assertThat(layout.vectorOffset(800)).isEqualTo(832);
+        assertThat(layout.vectorOffset(0)).isEqualTo(64);
+        assertThat(layout.vectorOffset(832)).isEqualTo(896);
     }
 
     @Test

@@ -113,10 +113,10 @@ public final class SemanticRecallStrategy {
 
         for (ScoredResult sr : hnswResults) {
             // HNSW returns an internal store index — compute header offset
-            long headerOffset = (long) sr.index() * SynapticHeaderConstants.HEADER_BYTES;
+            long headerOffset = (long) sr.index() * layout.headerLayout().headerBytes();
 
             // Bounds check: ensure we're within the slab
-            if (headerSlab == null || headerOffset + SynapticHeaderConstants.HEADER_BYTES > headerSlab.byteSize()) {
+            if (headerSlab == null || headerOffset + layout.headerLayout().headerBytes() > headerSlab.byteSize()) {
                 continue;
             }
 
