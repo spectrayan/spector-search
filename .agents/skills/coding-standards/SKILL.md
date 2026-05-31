@@ -8,6 +8,8 @@ Reference this document when:
 - Writing new Java classes or methods
 - Reviewing code changes for standards compliance
 - Creating new modules or packages
+- Adding or auditing exception handling
+- Creating new ErrorCode constants or SpectorException subclasses
 - Resolving code style disagreements
 
 ---
@@ -173,26 +175,149 @@ public class MyClass implements AutoCloseable {
 
 ---
 
-## Error Handling
+## Error Handling — SpectorException Framework
+
+Spector uses a structured error framework based on `ErrorCode` + `SpectorException`. **Never throw generic exceptions.** All errors go through this system.
+
+### Core Architecture
+
+```
+ErrorCode (enum)              — Central registry of SPE-XXX-YYY codes with {} message templates
+  ↓
+SpectorException (abstract)   — Base class, stores ErrorCode, formats message via errorCode.format(args)
+  ├── SpectorValidationException   (SPE-100-xxx)
+  ├── SpectorConfigException       (SPE-110-xxx)
+  ├── SpectorIndexException        (SPE-200-xxx)
+  ├── SpectorStorageException      (SPE-210-xxx)
+  ├── SpectorEmbeddingException    (SPE-300-xxx)
+  ├── SpectorMemoryException       (SPE-310-xxx)
+  │   ├── SpectorGraphException           (SPE-310-006..011)
+  │   │   ├── SpectorHebbianException         (SPE-310-006)
+  │   │   ├── SpectorTemporalChainException   (SPE-310-007)
+  │   │   ├── SpectorEntityGraphException     (SPE-310-008)
+  │   │   ├── SpectorCoActivationException    (SPE-310-009)
+  │   │   ├── SpectorGraphPersistenceException(SPE-310-010)
+  │   │   └── SpectorGraphDecayException      (SPE-310-011)
+  │   ├── SpectorMemoryRecallException    (SPE-310-002)
+  │   ├── SpectorMemoryConsolidationException (SPE-310-003)
+  │   └── SpectorMemoryTierFullException  (SPE-310-001)
+  ├── SpectorGpuException             (SPE-400-xxx)
+  ├── SpectorServerException          (SPE-500-xxx)
+  ├── SpectorClientException          (SPE-510-xxx)
+  ├── SpectorIngestionException       (SPE-600-xxx)
+  ├── SpectorClusterException         (SPE-700-xxx)
+  └── SpectorInternalException        (SPE-900-xxx)
+```
+
+**Key files:**
+- `spector-commons/src/main/java/com/spectrayan/spector/commons/error/ErrorCode.java`
+- `spector-commons/src/main/java/com/spectrayan/spector/commons/error/SpectorException.java`
+- Module-specific errors: `spector-{module}/src/main/java/.../error/`
+
+### Adding a New Error Code
+
+1. Add the constant to `ErrorCode.java` under the correct category section:
 
 ```java
-// ✅ Domain-specific exceptions
-throw new WalCorruptionException("CRC mismatch at offset " + offset, cause);
+// In ErrorCode.java — under the correct category section
+/** Brief description of when this error occurs. */
+MY_OPERATION_FAILED  (310_012, ErrorCategory.MEMORY,
+        "My operation failed for {}: {}"),
+```
 
-// ✅ Log + rethrow pattern for IO
-try {
-    channel.write(buffer);
-} catch (IOException e) {
-    log.error("WAL write failed at position {}", position, e);
-    throw new UncheckedIOException("WAL write failed", e);
+- Code format: `{category_prefix}_{sequence}` → e.g., `310_012` → `SPE-310-012`
+- Message template uses `{}` placeholders (SLF4J-style)
+- **Codes are immutable once assigned — never reuse or renumber**
+
+### Creating a Granular Exception
+
+Create a domain-specific exception that binds a default `ErrorCode` and captures typed context:
+
+```java
+// ✅ CORRECT — granular exception with typed constructor
+public class SpectorHebbianException extends SpectorGraphException {
+
+    private final String operation;
+
+    public SpectorHebbianException(String operation) {
+        super(ErrorCode.GRAPH_HEBBIAN_FAILED, operation);   // format via errorCode.format(args)
+        this.operation = operation;
+    }
+
+    public SpectorHebbianException(String operation, Throwable cause) {
+        super(ErrorCode.GRAPH_HEBBIAN_FAILED, cause, operation);
+        this.operation = operation;
+    }
+
+    public String getOperation() { return operation; }
+}
+```
+
+**Rules:**
+- Constructor args map 1:1 to `{}` placeholders in the ErrorCode template
+- **No string concatenation at construction site** — formatting happens inside `SpectorException` via `errorCode.format(args)`
+- Store domain-specific context as fields (e.g., `operation`, `path`, `graphType`)
+- Follow the naming pattern: `Spector{Domain}Exception`
+
+### Throw Sites — Throwing Exceptions
+
+```java
+// ✅ CORRECT — typed exception, no string concatenation
+throw new SpectorGraphPersistenceException("HebbianGraph", filePath, e);
+// getMessage() → "[SPE-310-010] Graph persistence failed for HebbianGraph: /path/to/file"
+
+// ✅ CORRECT — ErrorCode with typed args
+throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "listener");
+// getMessage() → "[SPE-100-007] listener must not be null"
+
+// ❌ WRONG — string concatenation at throw site
+throw new SpectorGraphException(ErrorCode.GRAPH_PERSISTENCE_FAILED, e,
+        "HebbianGraph save to " + filePath + " failed: " + e.getMessage());
+
+// ❌ WRONG — generic exception
+throw new RuntimeException("something failed");
+
+// ❌ WRONG — UncheckedIOException (use SpectorException subtypes)
+throw new UncheckedIOException("write failed", e);
+```
+
+### Catch Sites — Graceful Degradation
+
+For enrichment steps that should **not** crash the main pipeline:
+
+```java
+// ✅ CORRECT — create exception for formatted message, log, continue
+} catch (RuntimeException e) {
+    SpectorHebbianException ex = new SpectorHebbianException("edge strengthening", e);
+    log.warn(ex.getMessage());
 }
 
-// ❌ WRONG — swallowing exceptions
-try { ... } catch (Exception e) { /* ignored */ }
+// ✅ CORRECT — catch and rethrow as domain exception
+} catch (IOException e) {
+    throw new SpectorGraphPersistenceException("EntityGraph", filePath, e);
+}
 
-// ❌ WRONG — generic exceptions
-throw new RuntimeException("something failed");
+// ❌ WRONG — catch generic Exception
+} catch (Exception e) { ... }
+
+// ❌ WRONG — ErrorCode.format() with string concatenation at call site
+log.warn(ErrorCode.GRAPH_HEBBIAN_FAILED.format(
+        "edge strengthening for '" + id + "': " + e.getMessage()));
+
+// ❌ WRONG — swallowing exceptions
+} catch (Exception e) { /* ignored */ }
 ```
+
+### Pattern Summary
+
+| Scenario | Pattern |
+|---|---|
+| **New domain error** | Add `ErrorCode` constant → create `Spector{Domain}Exception` subclass |
+| **Throw on failure** | `throw new Spector{Domain}Exception(args, cause)` |
+| **Graceful degradation** | `catch(RuntimeException) → new Exception(args, e) → log(ex.getMessage())` |
+| **IO failure** | `catch(IOException) → throw new SpectorGraphPersistenceException(type, path, e)` |
+| **Validation** | `throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "paramName")` |
+| **Never** | `catch(Exception)`, `throw new RuntimeException()`, string concat in ErrorCode.format() |
 
 ---
 
