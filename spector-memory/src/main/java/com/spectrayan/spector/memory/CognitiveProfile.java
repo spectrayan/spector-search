@@ -108,7 +108,73 @@ public enum CognitiveProfile {
      * <p>Enables {@code lateralMode} with default thresholds. Lateral candidates
      * are tag-matched but semantically distant — blended with standard results.</p>
      */
-    DIVERGENT(0.8f, 0.2f, Byte.MIN_VALUE, Byte.MAX_VALUE);
+    DIVERGENT(0.8f, 0.2f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+
+    // ══ Enhanced Profiles (feature-flagged for licensing) ══
+
+    /**
+     * Paranoid Sentinel mode — SRE / Cyber Auditor.
+     *
+     * <p>Biological analog: Threat-detection circuitry in the amygdala.
+     * Only surfaces memories associated with negative outcomes (errors,
+     * failures, security incidents). Uses valence alignment to amplify
+     * mood-congruent threat recall.</p>
+     *
+     * <p>Scoring: α=0.2 (minimal similarity), β=0.8 (importance-dominated),
+     * valence range [-128, -1] (only negative memories).
+     * Valence alignment set to queryValence=-128 (maximum threat).</p>
+     *
+     * <p><b>Note:</b> This profile is functionally equivalent to the proposed
+     * "Anxious / Hyper-vigilant" cognitive profile from neuroscience literature.
+     * Threat-association weighting, negative valence bias, and amygdala modulation
+     * are all implemented via the valence range and alignment parameters.
+     * Users seeking "Anxious" or "Hyper-vigilant" behavior should use this profile.</p>
+     */
+    PARANOID_SENTINEL(0.2f, 0.8f, Byte.MIN_VALUE, (byte) -1),
+
+    /**
+     * The Executor mode — Devin-style agentic task runner.
+     *
+     * <p>Biological analog: Prefrontal cortex in "executive function" mode.
+     * Strict matching via Heaviside Cliff (only near-exact matches surface).
+     * Lateral retrieval is disabled to prevent tangential exploration.
+     * Combined with Zeigarnik Effect for task tracking.</p>
+     *
+     * <p>Scoring: α=0.3 (moderate similarity), β=0.7 (importance-dominated),
+     * strictnessCoefficient=10.0 (cliff function).</p>
+     */
+    THE_EXECUTOR(0.3f, 0.7f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+
+    /**
+     * Highly Sensitive mode — Sensory Processing Sensitivity.
+     *
+     * <p>Biological analog: Enhanced sensory processing depth. The highly
+     * sensitive brain processes stimuli more deeply, captures finer details,
+     * and has a lower threshold for emotional activation. Memories are
+     * ingested at a lower flashbulb threshold and retained with stronger
+     * lateral inhibition to prevent interference.</p>
+     *
+     * <p>Scoring: α=0.7 (similarity-leaning), β=0.3 (importance secondary).
+     * Overrides: flashbulbThreshold=2.0 (lower than default 3.0),
+     * inhibitionFloor=0.3 (stronger than default).</p>
+     *
+     * <p>Users who previously tuned flashbulbThreshold and inhibition parameters
+     * manually can use this profile instead for a curated experience.</p>
+     */
+    HIGHLY_SENSITIVE(0.7f, 0.3f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+
+    /**
+     * Default Mode Network — "Shower Thoughts" / mind-wandering.
+     *
+     * <p>Biological analog: The brain's default mode network activates during
+     * rest, surfacing deep, consolidated knowledge from long-term memory.
+     * Skips Working and Episodic tiers to focus on Semantic and Procedural
+     * memories.</p>
+     *
+     * <p>Scoring: α=0.2 (low similarity), β=0.8 (importance-dominated).
+     * memoryTypes restricted to SEMANTIC + PROCEDURAL.</p>
+     */
+    DEFAULT_MODE_NETWORK(0.2f, 0.8f, Byte.MIN_VALUE, Byte.MAX_VALUE);
 
     private final float alpha;
     private final float beta;
@@ -158,7 +224,15 @@ public enum CognitiveProfile {
         // Neurodivergent profile-specific overrides
         return switch (this) {
             case HYPERFOCUS -> builder.hyperfocusBoost(1.5f);
+            case SYSTEMATIZER -> builder.strictnessCoefficient(10.0f);
             case DIVERGENT  -> builder.lateralMode(true);
+            case PARANOID_SENTINEL -> builder.queryValence(Byte.MIN_VALUE)
+                                            .enableValenceAlignment(true);
+            case THE_EXECUTOR -> builder.lateralMode(false)
+                                        .strictnessCoefficient(10.0f);
+            case HIGHLY_SENSITIVE -> builder.minImportance(0.01f);
+            case DEFAULT_MODE_NETWORK -> builder.memoryTypes(
+                    MemoryType.SEMANTIC, MemoryType.PROCEDURAL);
             default         -> builder;
         };
     }

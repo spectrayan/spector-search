@@ -59,23 +59,23 @@ class DecayStrategyTest {
 
     @Test
     void reconsolidationShiftsBucketFresher() {
-        // A memory in bucket 5 (1-4 weeks old)
-        int rawBucket = 5;
+        // A memory in bucket 6 (1-3 months old) — using 6 for clearer bit-shift demo
+        int rawBucket = 6;
 
-        // No recalls → stays at bucket 5
-        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 0)).isEqualTo(5);
+        // No recalls → stays at bucket 6
+        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 0)).isEqualTo(6);
 
-        // 3 recalls → shifts 1 bucket fresher → bucket 4
-        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 3)).isEqualTo(4);
+        // 1 recall → bucket >> 1 = 3 (halves perceived age)
+        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 1)).isEqualTo(3);
 
-        // 6 recalls → shifts 2 buckets fresher → bucket 3
-        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 6)).isEqualTo(3);
+        // 2 recalls → bucket >> 2 = 1 (quarter perceived age)
+        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 2)).isEqualTo(1);
 
-        // 9 recalls → shifts 3 buckets → bucket 2
-        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 9)).isEqualTo(2);
+        // 3 recalls → bucket >> 3 = 0 (effectively fresh)
+        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 3)).isEqualTo(0);
 
-        // 15 recalls → shifts 5 buckets → clamped to 0
-        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 15)).isZero();
+        // 5+ recalls → capped at shift 5, bucket >> 5 = 0
+        assertThat(DecayStrategy.adjustForReconsolidation(rawBucket, (short) 10)).isZero();
     }
 
     @Test
@@ -95,8 +95,8 @@ class DecayStrategyTest {
         float decayNoRecalls = DecayStrategy.computeDecay(twoDaysAgo, now, (short) 0);
         assertThat(decayNoRecalls).isEqualTo(0.70f);
 
-        // With 6 recalls: bucket shifts from 3 to 1, decay = 0.95
-        float decayWithRecalls = DecayStrategy.computeDecay(twoDaysAgo, now, (short) 6);
+        // With 1 recall: bucket shifts from 3 >> 1 = 1, decay = 0.95
+        float decayWithRecalls = DecayStrategy.computeDecay(twoDaysAgo, now, (short) 1);
         assertThat(decayWithRecalls).isEqualTo(0.95f);
     }
 
