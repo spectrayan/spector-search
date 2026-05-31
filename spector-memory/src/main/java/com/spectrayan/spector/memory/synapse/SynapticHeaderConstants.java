@@ -4,9 +4,21 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /**
- * Constants and {@link VarHandle} accessors for the 32-byte Synaptic Header v2.
+ * Constants for the Synaptic Header — shared across all layout versions.
  *
- * <h3>Layout (32 bytes, cache-line aligned)</h3>
+ * <h3>Versioned Layout System</h3>
+ * <p>The header format is versioned via the {@link HeaderLayout} sealed interface.
+ * Three versions are supported:</p>
+ * <ul>
+ *   <li><b>V1 (32B)</b> — Legacy/lightweight. Core fields only.
+ *       See {@link HeaderLayoutV1}.</li>
+ *   <li><b>V2 (48B)</b> — Adds arousal + storage_strength for emotional
+ *       modulation and Two-Factor Memory. See {@link HeaderLayoutV2}.</li>
+ *   <li><b>V3 (64B)</b> — Full cache-line-aligned format with 32B of future
+ *       buffer. Default for all new stores. See {@link HeaderLayoutV3}.</li>
+ * </ul>
+ *
+ * <h3>Core Layout (first 32 bytes — shared by all versions)</h3>
  * <pre>
  *   [8B timestamp_ms]      Offset 0  — when the memory was formed
  *   [8B synaptic_tags]     Offset 8  — 64-bit Bloom filter of contextual markers
@@ -21,23 +33,34 @@ import java.lang.foreign.ValueLayout;
  * <h3>Flags Bitfield</h3>
  * <pre>
  *   bit 0:   tombstone  (deleted / pruned by Deep Sleep)
- *   bit 1-2: memory_type (Working=0, Episodic=1, Semantic=2, Procedural=3)
+ *   bit 1-2: memory_type (2 bits → 4 types)
  *   bit 3:   consolidated (has been reflected into Semantic tier)
  *   bit 4:   pinned (exempt from decay/pruning)
- *   bits 5-7: reserved
+ *   bit 5:   resolved (Zeigarnik Effect — unresolved tasks resist decay)
+ *   bits 6-7: reserved
  * </pre>
  *
- * <p>The vector payload starts at offset 32, perfectly aligned for AVX-256 (32-byte)
- * and AVX-512 (64-byte) register loads.</p>
+ * <p>This class holds only the <em>core</em> constants shared across all versions.
+ * Version-specific offsets and layouts are defined in the respective
+ * {@link HeaderLayout} implementations.</p>
  *
+ * @see HeaderLayout
  * @see CognitiveRecordLayout
  */
 public final class SynapticHeaderConstants {
 
     private SynapticHeaderConstants() {}
 
-    // ── Header size ──
-    /** Total header size in bytes (must be 32 for SIMD alignment). */
+    /**
+     * V1 (core) header size in bytes.
+     *
+     * <p>This constant is retained for SIMD alignment purposes (Arena allocation
+     * alignment parameter) and for backward compatibility. The actual header size
+     * used at runtime is determined by the {@link HeaderLayout#headerBytes()} method
+     * on the active layout version.</p>
+     *
+     * @see HeaderLayout#headerBytes()
+     */
     public static final int HEADER_BYTES = 32;
 
     // ── Field offsets ──
@@ -60,6 +83,12 @@ public final class SynapticHeaderConstants {
     public static final ValueLayout.OfByte  LAYOUT_VALENCE       = ValueLayout.JAVA_BYTE;
     public static final ValueLayout.OfByte  LAYOUT_FLAGS         = ValueLayout.JAVA_BYTE;
 
+    // ── V2+ Extended field offsets (beyond 32-byte core) ──
+    /** Arousal byte offset (V2/V3 only — returns 0 on V1 reads). */
+    public static final long OFFSET_AROUSAL = 32L;
+    /** Layout for arousal: unsigned byte (0-255), stored as signed Java byte. */
+    public static final ValueLayout.OfByte  LAYOUT_AROUSAL       = ValueLayout.JAVA_BYTE;
+
     // ── VarHandle view for atomic access ──
     /** VarHandle for atomic updates to the recall_count field. */
     public static final java.lang.invoke.VarHandle VAR_HANDLE_RECALL_COUNT = LAYOUT_RECALL_COUNT.varHandle();
@@ -75,6 +104,8 @@ public final class SynapticHeaderConstants {
     public static final byte FLAG_CONSOLIDATED = 0x08;
     /** Bit 4: Memory is pinned (exempt from decay and pruning). */
     public static final byte FLAG_PINNED       = 0x10;
+    /** Bit 5: Memory is resolved (Zeigarnik Effect — unresolved memories resist time-decay). */
+    public static final byte FLAG_RESOLVED     = 0x20;
 
     // ── Convenience methods ──
 
@@ -90,6 +121,18 @@ public final class SynapticHeaderConstants {
      */
     public static boolean isPinned(byte flags) {
         return (flags & FLAG_PINNED) != 0;
+    }
+
+    /**
+     * Checks if the resolved flag is set (Zeigarnik Effect).
+     *
+     * <p>When {@code false} (default for new memories), the memory resists
+     * time-decay — it floats to the top of recall like an unfinished task.
+     * When the agent marks the task complete, this flips to {@code true}
+     * and the memory succumbs to normal decay.</p>
+     */
+    public static boolean isResolved(byte flags) {
+        return (flags & FLAG_RESOLVED) != 0;
     }
 
     /**

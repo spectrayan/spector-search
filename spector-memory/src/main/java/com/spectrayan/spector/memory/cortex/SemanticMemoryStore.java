@@ -2,6 +2,7 @@ package com.spectrayan.spector.memory.cortex;
 
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
+import com.spectrayan.spector.memory.synapse.HeaderLayout;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 
 import org.slf4j.Logger;
@@ -29,7 +30,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * <ul>
  *   <li>Extends {@link AbstractTierStore} for common Arena/layout/segment lifecycle</li>
  *   <li>Header-only store — vectors go through SpectorIndex's HNSW/VASQ pipeline</li>
- *   <li>Maintains a parallel off-heap slab for 32-byte synaptic headers</li>
+ *   <li>Maintains a parallel off-heap slab for synaptic headers (size depends on layout version)</li>
  *   <li>On search: reads header for scoring, delegates vector distance to VASQ kernel</li>
  *   <li>Deduplication check before insert (via {@code SemanticDeduplicator})</li>
  * </ul>
@@ -49,10 +50,12 @@ public final class SemanticMemoryStore extends AbstractTierStore {
      */
     public SemanticMemoryStore(int quantizedVecBytes, int capacity) {
         super(quantizedVecBytes, capacity,
-                (long) SynapticHeaderConstants.HEADER_BYTES * capacity);
+                (long) layout(quantizedVecBytes).headerLayout().headerBytes() * capacity);
 
-        log.info("SemanticMemoryStore initialized: capacity={}, headerSlab={}KB, persistent=false",
-                capacity, (long) SynapticHeaderConstants.HEADER_BYTES * capacity / 1024);
+        log.info("SemanticMemoryStore initialized: capacity={}, headerSlab={}KB, persistent=false, headerVersion=V{}",
+                capacity,
+                (long) layout.headerLayout().headerBytes() * capacity / 1024,
+                layout.headerLayout().version());
     }
 
     /**
@@ -64,11 +67,14 @@ public final class SemanticMemoryStore extends AbstractTierStore {
      */
     public SemanticMemoryStore(int quantizedVecBytes, int capacity, Path filePath) {
         super(quantizedVecBytes, capacity,
-                (long) SynapticHeaderConstants.HEADER_BYTES * capacity,
+                (long) layout(quantizedVecBytes).headerLayout().headerBytes() * capacity,
                 filePath);
 
-        log.info("SemanticMemoryStore initialized: capacity={}, headerSlab={}KB, persistent=true, count={}",
-                capacity, (long) SynapticHeaderConstants.HEADER_BYTES * capacity / 1024, count);
+        log.info("SemanticMemoryStore initialized: capacity={}, headerSlab={}KB, persistent=true, count={}, headerVersion=V{}",
+                capacity,
+                (long) layout.headerLayout().headerBytes() * capacity / 1024,
+                count,
+                layout.headerLayout().version());
     }
 
     @Override
@@ -80,14 +86,14 @@ public final class SemanticMemoryStore extends AbstractTierStore {
     public long write(CognitiveHeader header, byte[] quantizedVec) {
         // Semantic store is header-only — quantizedVec is ignored
         int index = store(header);
-        return dataOffset() + (long) index * SynapticHeaderConstants.HEADER_BYTES;
+        return dataOffset() + (long) index * layout.headerLayout().headerBytes();
     }
 
     /**
      * Stores a new semantic memory header.
      *
      * <p>The actual vector is stored via SpectorIndex's existing HNSW/VASQ pipeline.
-     * This method only writes the 32-byte cognitive header to the parallel slab.</p>
+     * This method only writes the cognitive header to the parallel slab.</p>
      *
      * @param header cognitive header
      * @return the record index (used to correlate with SpectorIndex vector)
@@ -97,7 +103,7 @@ public final class SemanticMemoryStore extends AbstractTierStore {
             throw new SpectorMemoryTierFullException("SEMANTIC", capacity);
         }
 
-        long offset = dataOffset() + (long) count * SynapticHeaderConstants.HEADER_BYTES;
+        long offset = dataOffset() + (long) count * layout.headerLayout().headerBytes();
         layout.writeHeader(segment, offset, header);
         int index = count++;
         persistCount();
@@ -108,7 +114,7 @@ public final class SemanticMemoryStore extends AbstractTierStore {
      * Reads the cognitive header at the given index.
      */
     public CognitiveHeader readHeader(int index) {
-        long offset = dataOffset() + (long) index * SynapticHeaderConstants.HEADER_BYTES;
+        long offset = dataOffset() + (long) index * layout.headerLayout().headerBytes();
         return layout.readHeader(segment, offset);
     }
 
@@ -118,5 +124,12 @@ public final class SemanticMemoryStore extends AbstractTierStore {
      */
     public MemorySegment headerSlab() {
         return segment;
+    }
+
+    /**
+     * Helper to create a layout for slab size calculation in super() calls.
+     */
+    private static com.spectrayan.spector.memory.synapse.CognitiveRecordLayout layout(int quantizedVecBytes) {
+        return new com.spectrayan.spector.memory.synapse.CognitiveRecordLayout(quantizedVecBytes);
     }
 }
