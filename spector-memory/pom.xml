@@ -76,4 +76,25 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <!-- Override: BSL 1.1 header for this module -->
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <configuration>
+                    <licenseSets>
+                        <licenseSet>
+                            <header>src/license/bsl-header.txt</header>
+                            <includes>
+                                <include>src/main/java/**/*.java</include>
+                                <include>src/test/java/**/*.java</include>
+                            </includes>
+                        </licenseSet>
+                    </licenseSets>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

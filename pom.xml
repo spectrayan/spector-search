@@ -82,6 +82,7 @@
         <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
         <maven-shade-plugin.version>3.6.0</maven-shade-plugin.version>
         <jacoco-plugin.version>0.8.12</jacoco-plugin.version>
+        <license-maven-plugin.version>5.0.0</license-maven-plugin.version>
 
         <!-- Reproducible builds: fixed timestamp for deterministic JARs -->
         <project.build.outputTimestamp>2024-01-01T00:00:00Z</project.build.outputTimestamp>
@@ -400,6 +401,28 @@
                         </execution>
                     </executions>
                 </plugin>
+
+                <!-- License header management (mycila) -->
+                <plugin>
+                    <groupId>com.mycila</groupId>
+                    <artifactId>license-maven-plugin</artifactId>
+                    <version>${license-maven-plugin.version}</version>
+                    <configuration>
+                        <properties>
+                            <year>2026</year>
+                        </properties>
+                        <licenseSets>
+                            <licenseSet>
+                                <header>src/license/apache2-header.txt</header>
+                                <includes>
+                                    <include>src/main/java/**/*.java</include>
+                                    <include>src/test/java/**/*.java</include>
+                                </includes>
+                            </licenseSet>
+                        </licenseSets>
+                        <skipExistingHeaders>false</skipExistingHeaders>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -415,6 +438,10 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
