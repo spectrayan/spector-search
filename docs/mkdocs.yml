@@ -150,6 +150,7 @@ nav:
           - System Architecture: memory/architecture.md
           - The 6-Phase Scoring Pipeline: memory/scoring-pipeline.md
       - Biological Systems:
+          - Overview: memory/biological-systems.md
           - "Cortex — Tier Stores": memory/cortex.md
           - "Hippocampus — Sleep Consolidation": memory/hippocampus.md
           - "Synapse — Tags & Scoring": memory/synapse.md
