@@ -186,6 +186,7 @@ nav:
   - Roadmap: roadmap.md
   - "🔬 Labs":
       - labs/index.md
+      - Research Roadmap: labs/roadmap.md
 
 extra_css:
   - stylesheets/extra.css
