@@ -27,6 +27,7 @@ import com.spectrayan.spector.memory.synapse.CognitiveScorer.ScoredRecord;
 import com.spectrayan.spector.memory.synapse.DecayStrategy;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
+import com.spectrayan.spector.memory.hebbian.CoActivationTracker;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static com.spectrayan.spector.memory.cortex.EpisodicMemoryStore.EpisodicPartition.METADATA_HEADER_BYTES;
 
@@ -86,6 +89,10 @@ public final class RecallPipeline {
     private final float[] calibrationMins;
     private final float[] calibrationScales;
     private final SemanticRecallStrategy semanticRecallStrategy; // nullable
+    private final CoActivationTracker coActivationTracker; // nullable — for STDP causal boost
+
+    /** STDP causal boost weight applied to predictive strength. */
+    private static final float CAUSAL_BOOST_WEIGHT = 0.3f;
 
     private final List<RecallListener> listeners = new ArrayList<>();
 
@@ -97,6 +104,19 @@ public final class RecallPipeline {
             = new ConcurrentHashMap<>();
     private static final int RETRIEVAL_MODE_CACHE_MAX = 2000;
     private RecallOptions lastRecallOptions; // for detecting hyperfocus mode
+
+    // ── Semantic Satiation: Anti-looping LRU cache ──
+    // Bounded LRU of last N result IDs. Any result that appears in this
+    // hot cache gets a 0.5× penalty, breaking exact-query loops.
+    private static final int SATIATION_CACHE_SIZE = 10;
+    private static final float SATIATION_PENALTY = 0.5f;
+    private final LinkedHashMap<String, Long> satiationCache =
+            new LinkedHashMap<>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                    return size() > SATIATION_CACHE_SIZE;
+                }
+            };
 
     /**
      * Creates a recall pipeline with all required subsystems.
@@ -111,7 +131,7 @@ public final class RecallPipeline {
                            float[] calibrationMins,
                            float[] calibrationScales) {
         this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
-                prospectiveScheduler, wal, calibrationMins, calibrationScales, null);
+                prospectiveScheduler, wal, calibrationMins, calibrationScales, null, null);
     }
 
     /**
@@ -130,6 +150,29 @@ public final class RecallPipeline {
                            float[] calibrationMins,
                            float[] calibrationScales,
                            SemanticRecallStrategy semanticRecallStrategy) {
+        this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
+                prospectiveScheduler, wal, calibrationMins, calibrationScales,
+                semanticRecallStrategy, null);
+    }
+
+    /**
+     * Creates a recall pipeline with optional fused semantic recall and STDP.
+     *
+     * @param semanticRecallStrategy nullable — when provided, semantic recall uses
+     *                                HNSW vector search fused with cognitive scoring
+     * @param coActivationTracker    nullable — when provided, STDP causal boost is applied
+     */
+    public RecallPipeline(EmbeddingProvider embeddingProvider,
+                           TierRouter tierRouter,
+                           MemoryIndex index,
+                           SuppressionSet suppressionSet,
+                           HabituationPenalty habituationPenalty,
+                           ProspectiveScheduler prospectiveScheduler,
+                           MemoryWal wal,
+                           float[] calibrationMins,
+                           float[] calibrationScales,
+                           SemanticRecallStrategy semanticRecallStrategy,
+                           CoActivationTracker coActivationTracker) {
         this.embeddingProvider = embeddingProvider;
         this.tierRouter = tierRouter;
         this.index = index;
@@ -140,6 +183,7 @@ public final class RecallPipeline {
         this.calibrationMins = calibrationMins;
         this.calibrationScales = calibrationScales;
         this.semanticRecallStrategy = semanticRecallStrategy;
+        this.coActivationTracker = coActivationTracker;
     }
 
     /**
@@ -205,17 +249,53 @@ public final class RecallPipeline {
         // Step 4: Filter suppressed memories (inhibition)
         allResults.removeIf(r -> suppressionSet.isSuppressed(r.id()));
 
-        // Step 5: Apply habituation penalty + inhibition of return (anti-filter-bubble)
+        // Step 5: Apply habituation penalty + inhibition of return + semantic satiation
         for (int i = 0; i < allResults.size(); i++) {
             CognitiveResult r = allResults.get(i);
             float habPenalty = habituationPenalty.recordAndComputePenalty(r.id());
             float iorPenalty = habituationPenalty.computeInhibitionOfReturn(r.id(), nowMs);
             float combinedPenalty = Math.min(habPenalty, iorPenalty); // stronger suppression wins
+
+            // Semantic Satiation: 0.5× penalty for results in the hot LRU cache
+            if (satiationCache.containsKey(r.id())) {
+                combinedPenalty *= SATIATION_PENALTY;
+            }
+
             if (combinedPenalty < 1.0f) {
                 allResults.set(i, new CognitiveResult(
                         r.id(), r.text(), r.score() * combinedPenalty, r.importance(), r.ageDays(),
                         r.recallCount(), r.valence(), r.memoryType(), r.source(),
                         r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay()));
+            }
+        }
+
+        // Step 5b: STDP causal boost — cross-boost results whose tags are causally linked
+        // For each result, check if earlier results' tags predict its tags (via STDP edges).
+        // This promotes memories that form causal chains.
+        if (coActivationTracker != null && allResults.size() >= 2) {
+            // Use tags from the first few results as "context tags" to boost subsequent results
+            List<String> contextTags = allResults.stream()
+                    .limit(3)
+                    .filter(r -> r.synapticTags() != null)
+                    .flatMap(r -> java.util.Arrays.stream(r.synapticTags()))
+                    .distinct()
+                    .toList();
+
+            if (!contextTags.isEmpty()) {
+                for (int i = 0; i < allResults.size(); i++) {
+                    CognitiveResult r = allResults.get(i);
+                    if (r.synapticTags() == null || r.synapticTags().length == 0) continue;
+
+                    float predictive = coActivationTracker.getPredictiveStrength(
+                            contextTags, r.synapticTags());
+                    if (predictive > 0) {
+                        float boostedScore = r.score() * (1.0f + predictive * CAUSAL_BOOST_WEIGHT);
+                        allResults.set(i, new CognitiveResult(
+                                r.id(), r.text(), boostedScore, r.importance(), r.ageDays(),
+                                r.recallCount(), r.valence(), r.memoryType(), r.source(),
+                                r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay()));
+                    }
+                }
             }
         }
 
@@ -254,6 +334,14 @@ public final class RecallPipeline {
         for (CognitiveResult r : allResults) {
             if (r.id() != null) {
                 recentRetrievalModes.put(r.id(), r.retrievalMode());
+            }
+        }
+
+        // Update semantic satiation LRU cache with returned result IDs
+        long nowForSatiation = System.currentTimeMillis();
+        for (CognitiveResult r : allResults) {
+            if (r.id() != null) {
+                satiationCache.put(r.id(), nowForSatiation);
             }
         }
 
@@ -384,7 +472,7 @@ public final class RecallPipeline {
 
         List<CognitiveResult> results = new ArrayList<>();
         for (int i = 0; i < recordCount; i++) {
-            long offset = (long) i * SynapticHeaderConstants.HEADER_BYTES;
+            long offset = (long) i * layout.headerLayout().headerBytes();
             CognitiveHeader header = layout.readHeader(headerSlab, offset);
 
             byte flags = header.flags();

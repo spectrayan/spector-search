@@ -112,6 +112,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     private final MemoryPersistenceMode persistenceMode;
     private final Path persistencePath;
     private final CircadianPolicy circadianPolicy;
+    private final CognitiveProfileConfig profileConfig;
     private final ExecutorService virtualExecutor;
     private final AtomicInteger episodicIngestCount = new AtomicInteger(0);
 
@@ -121,6 +122,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         this.persistencePath = builder.persistencePath;
         if (builder.embeddingProvider == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "embeddingProvider is required"); } EmbeddingProvider embeddingProvider = builder.embeddingProvider;
         this.circadianPolicy = builder.circadianPolicy;
+        this.profileConfig = builder.profileConfig;
         this.virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
         boolean isDisk = persistenceMode == MemoryPersistenceMode.DISK;
@@ -306,7 +308,8 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
     @Override
     public List<CognitiveResult> recall(String queryText, CognitiveProfile profile) {
-        return recall(queryText, RecallOptions.builder().profile(profile).build());
+        CognitiveProfile effective = profileConfig.validate(profile);
+        return recall(queryText, RecallOptions.builder().profile(effective).build());
     }
 
     @Override
@@ -400,6 +403,22 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
     @Override
     public void unsuppress(String memoryId) { suppressionSet.unsuppress(memoryId); }
+
+    @Override
+    public void markResolved(String memoryId) {
+        var loc = index.locate(memoryId);
+        if (loc == null) return;
+        tierRouter.layoutFor(loc.type()).markResolved(tierRouter.segmentFor(loc.type()), loc.offset());
+        log.debug("Zeigarnik: marked '{}' as RESOLVED", memoryId);
+    }
+
+    @Override
+    public void markUnresolved(String memoryId) {
+        var loc = index.locate(memoryId);
+        if (loc == null) return;
+        tierRouter.layoutFor(loc.type()).markUnresolved(tierRouter.segmentFor(loc.type()), loc.offset());
+        log.debug("Zeigarnik: marked '{}' as UNRESOLVED", memoryId);
+    }
 
     @Override
     public MemoryInsight introspect(String topic) {
@@ -561,6 +580,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         private int pinnedQuota = 10_000;
         private com.spectrayan.spector.memory.pipeline.TagExtractor tagExtractor;
         private com.spectrayan.spector.storage.VectorStore vectorStore;
+        private CognitiveProfileConfig profileConfig = CognitiveProfileConfig.allEnabled();
 
         public Builder dimensions(int dimensions) { this.dimensions = dimensions; return this; }
         public Builder embeddingProvider(EmbeddingProvider p) { this.embeddingProvider = p; return this; }
@@ -604,6 +624,16 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
         /** Pluggable tag extraction strategy for cognitive ingestion (default: ContentTagExtractor). */
         public Builder tagExtractor(com.spectrayan.spector.memory.pipeline.TagExtractor te) { this.tagExtractor = te; return this; }
+
+        /** Cognitive profile configuration (default: all profiles enabled). */
+        public Builder profileConfig(CognitiveProfileConfig config) { this.profileConfig = config; return this; }
+
+        /**
+         * Parses a cognitive profile config from a YAML string value.
+         * Supports: "ALL", "CORE_ONLY", "WITH_NEURODIVERGENT", or comma-separated profile names.
+         * @see CognitiveProfileConfig#fromConfigValue(String)
+         */
+        public Builder cognitiveProfiles(String configValue) { this.profileConfig = CognitiveProfileConfig.fromConfigValue(configValue); return this; }
 
         public SpectorMemory build() {
             if (dimensions <= 0 && embeddingProvider != null) {

@@ -97,6 +97,18 @@ public interface SpectorMemory extends AutoCloseable {
     /** Removes a suppression, allowing recall again. */
     void unsuppress(String memoryId);
 
+    /**
+     * Marks a memory as resolved (Zeigarnik Effect).
+     * Resolved memories return to normal time-decay and gradually fade.
+     */
+    void markResolved(String memoryId);
+
+    /**
+     * Marks a memory as unresolved (Zeigarnik Effect).
+     * Unresolved memories resist time-decay and float to the top of recall.
+     */
+    void markUnresolved(String memoryId);
+
     /** Introspects the agent's knowledge about a topic (metamemory). */
     MemoryInsight introspect(String topic);
 

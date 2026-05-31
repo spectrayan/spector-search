@@ -143,6 +143,11 @@ public final class CognitiveScorer {
         float alpha = options.alpha();
         float beta = options.beta();
         float tagRelevanceBoost = options.tagRelevanceBoost();
+        float strictness = options.strictnessCoefficient();
+
+        // ── Valence Alignment (State-Dependent Recall) ──
+        boolean valenceAlign = options.enableValenceAlignment();
+        byte queryValence = options.queryValence();
 
         // ── Neurodivergent: Hyperfocus parameters ──
         long hyperfocusMask = options.hyperfocusMask();
@@ -168,6 +173,7 @@ public final class CognitiveScorer {
                 : null;
 
         int stride = layout.stride();
+        boolean hasArousal = layout.headerLayout().headerBytes() > HEADER_BYTES; // V2+ has arousal
 
         for (int i = 0; i < recordCount; i++) {
             long offset = baseOffset + (long) i * stride;
@@ -212,10 +218,23 @@ public final class CognitiveScorer {
                 adjustedBucket = 0; // time ceases to exist for this topic
             }
 
-            // Skip if too old AND low importance (pinned memories are exempt)
+            // Zeigarnik Effect: unresolved memories resist time-decay.
+            // They act like a biological "itch" — always fresh until explicitly resolved.
+            if (!isResolved(flags) && !isPinned(flags)) {
+                adjustedBucket = 0;
+            }
+
+            // Arousal-modulated decay: emotionally intense memories resist forgetting.
+            // On V2+ layouts, read the arousal byte; on V1, arousal=0 (no effect).
+            byte arousal = hasArousal
+                    ? segment.get(LAYOUT_AROUSAL, offset + OFFSET_AROUSAL)
+                    : (byte) 0;
+
+            // Skip if too old AND low importance (pinned/unresolved memories are exempt)
             if (adjustedBucket >= DecayStrategy.MAX_BUCKET
                     && importance < 1.0f
-                    && !isPinned(flags)) {
+                    && !isPinned(flags)
+                    && isResolved(flags)) {
                 continue;
             }
 
@@ -231,10 +250,15 @@ public final class CognitiveScorer {
             // semantically distant candidates into a separate heap.
             if (lateralMode && l2dist > lateralDistanceThreshold
                     && tagOverlap >= lateralMinTagOverlap) {
-                // Lateral scoring: bounded [0,1] via 1/(1 + 1/l2dist)
-                // Higher L2 distance → higher lateral score (inverted relationship)
-                float lateralSimilarity = 1.0f / (1.0f + 1.0f / l2dist);
-                float decay = DecayStrategy.decay(adjustedBucket);
+                // Parabolic RBF: peaks at orthogonality (L2²=2.0 for normalized vectors).
+                // Formula: 1.0 - 0.25 * (L2² - 2.0)²
+                // Falls to 0.0 for both identical (L2²=0) and opposite (L2²=4) vectors.
+                // Costs ~3 FMA cycles vs the old formula's division risk.
+                float l2sq = l2dist * l2dist;
+                float diff = l2sq - 2.0f;
+                float lateralSimilarity = Math.max(0f, 1.0f - 0.25f * diff * diff);
+                float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);
+                decay = Math.min(1.0f, decay);
                 float lateralScore = lateralSimilarity * tagOverlap * importance * decay;
 
                 // Build header for lateral candidate
@@ -256,10 +280,19 @@ public final class CognitiveScorer {
                 continue;
             }
 
-            // Standard scoring path
-            float similarity = 1.0f / (1.0f + l2dist);
-            float decay = DecayStrategy.decay(adjustedBucket);
+            // Standard scoring path — with configurable strictness coefficient.
+            // strictness=1.0 → standard curve: 1/(1+L2)
+            // strictness=10.0 → Heaviside cliff: near-matches stay high, vague matches plummet
+            float similarity = 1.0f / (1.0f + l2dist * strictness);
+            float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);
+            decay = Math.min(1.0f, decay);
             float baseScore = alpha * similarity + beta * importance * decay;
+
+            // Valence alignment: state-dependent recall (mood-congruent memory)
+            if (valenceAlign) {
+                float valenceMultiplier = 1.0f - (Math.abs(queryValence - valence) / 255.0f);
+                baseScore *= valenceMultiplier;
+            }
 
             // Weighted tag relevance: partial matches get proportional boost
             float finalScore = baseScore * (1.0f + tagOverlap * tagRelevanceBoost);

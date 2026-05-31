@@ -55,7 +55,12 @@ public record RecallOptions(
         boolean lateralMode,
         float lateralDistanceThreshold,
         int lateralMaxResults,
-        float lateralMinTagOverlap
+        float lateralMinTagOverlap,
+        // ── Enhanced Scoring ──
+        float strictnessCoefficient,
+        // ── Valence Alignment (State-Dependent Recall) ──
+        byte queryValence,
+        boolean enableValenceAlignment
 ) {
 
     /** Default options: top 10, no filters, balanced scoring. */
@@ -93,6 +98,13 @@ public record RecallOptions(
         private float lateralDistanceThreshold = 1.2f;
         private int lateralMaxResults = -1;      // -1 = topK/3
         private float lateralMinTagOverlap = 0.5f;
+
+        // ── Enhanced Scoring ──
+        private float strictnessCoefficient = 1.0f; // 1.0 = standard, 10.0 = Heaviside cliff
+
+        // ── Valence Alignment (State-Dependent Recall) ──
+        private byte queryValence = 0;              // 0 = neutral
+        private boolean enableValenceAlignment = false;
 
         /**
          * Applies a {@link CognitiveProfile} preset to this builder.
@@ -259,6 +271,38 @@ public record RecallOptions(
             return this;
         }
 
+        // ── Enhanced Scoring ──
+
+        /**
+         * Strictness coefficient for the similarity function (default: 1.0).
+         * Higher values create a steeper "cliff" — near-matches score well,
+         * slightly vague matches plummet. Use 10.0 for SYSTEMATIZER / THE_EXECUTOR.
+         */
+        public Builder strictnessCoefficient(float k) {
+            this.strictnessCoefficient = k;
+            return this;
+        }
+
+        // ── Valence Alignment (State-Dependent Recall) ──
+
+        /**
+         * Sets the query's emotional valence for state-dependent recall.
+         * Memories with similar valence score higher. Enables valence alignment automatically.
+         */
+        public Builder queryValence(byte valence) {
+            this.queryValence = valence;
+            this.enableValenceAlignment = true;
+            return this;
+        }
+
+        /**
+         * Explicitly enables/disables valence alignment scoring.
+         */
+        public Builder enableValenceAlignment(boolean enabled) {
+            this.enableValenceAlignment = enabled;
+            return this;
+        }
+
         public RecallOptions build() {
             int effectiveLateralMax = lateralMaxResults >= 0
                     ? lateralMaxResults
@@ -268,7 +312,8 @@ public record RecallOptions(
                     tagRelevanceBoost, semanticCandidateMultiplier,
                     hyperfocusMask, hyperfocusBoost,
                     lateralMode, lateralDistanceThreshold,
-                    effectiveLateralMax, lateralMinTagOverlap);
+                    effectiveLateralMax, lateralMinTagOverlap,
+                    strictnessCoefficient, queryValence, enableValenceAlignment);
         }
     }
 }

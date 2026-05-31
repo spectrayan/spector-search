@@ -67,6 +67,7 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
     private final VectorIndex semanticIndex;  // nullable — shared HNSW for semantic recall
     private final VectorStore vectorStore;    // nullable — engine's off-heap vector storage
     private final TagExtractor tagExtractor;
+    private final boolean normalizeAtIngest;
 
     public CognitiveIngestionTarget(ScalarQuantizer quantizer,
                                      SurpriseDetector surpriseDetector,
@@ -78,7 +79,8 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                                      IcnuWeights icnuWeights,
                                      VectorIndex semanticIndex,
                                      VectorStore vectorStore,
-                                     TagExtractor tagExtractor) {
+                                     TagExtractor tagExtractor,
+                                     boolean normalizeAtIngest) {
         this.quantizer = quantizer;
         this.surpriseDetector = surpriseDetector;
         this.flashbulbPolicy = flashbulbPolicy;
@@ -90,6 +92,26 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         this.semanticIndex = semanticIndex;
         this.vectorStore = vectorStore;
         this.tagExtractor = tagExtractor != null ? tagExtractor : new ContentTagExtractor();
+        this.normalizeAtIngest = normalizeAtIngest;
+    }
+
+    /**
+     * Legacy constructor — defaults normalizeAtIngest to {@code true}.
+     */
+    public CognitiveIngestionTarget(ScalarQuantizer quantizer,
+                                     SurpriseDetector surpriseDetector,
+                                     FlashbulbPolicy flashbulbPolicy,
+                                     TierRouter tierRouter,
+                                     MemoryIndex index,
+                                     MemoryWal wal,
+                                     WorkingMemoryStore workingStore,
+                                     IcnuWeights icnuWeights,
+                                     VectorIndex semanticIndex,
+                                     VectorStore vectorStore,
+                                     TagExtractor tagExtractor) {
+        this(quantizer, surpriseDetector, flashbulbPolicy, tierRouter,
+                index, wal, workingStore, icnuWeights, semanticIndex,
+                vectorStore, tagExtractor, true);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -135,6 +157,11 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         // Step 2: Encode synaptic tags
         long synapticTags = SynapticTagEncoder.encode(tags);
 
+        // Step 1c: L2-normalize vector (required for Parabolic RBF lateral scoring)
+        if (normalizeAtIngest) {
+            vector = l2Normalize(vector);
+        }
+
         // Step 5 (early): Quantize vector to INT8 — needed for WM distance scan
         byte[] quantized = quantizer.encode(vector);
 
@@ -176,11 +203,13 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
             flags = (byte) (flags | SynapticHeaderConstants.FLAG_PINNED);
         }
 
-        // Step 6: Build cognitive header
+        // Step 6: Build cognitive header (with emotional context from hints)
         float l2Norm = computeL2Norm(vector);
+        byte valence = (hints != null) ? hints.valence() : (byte) 0;
+        byte arousal = (hints != null) ? hints.effectiveArousal() : (byte) 0;
         CognitiveHeader header = new CognitiveHeader(
                 System.currentTimeMillis(), synapticTags, l2Norm, importance,
-                0, (short) 0, (byte) 0, flags);
+                0, (short) 0, valence, flags, arousal, 1.0f);
 
         // Step 7: Route to tier store and write
         long offset = tierRouter.write(type, header, quantized);
@@ -216,5 +245,21 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         float sum = 0f;
         for (float v : vector) sum += v * v;
         return (float) Math.sqrt(sum);
+    }
+
+    /**
+     * Returns a new L2-normalized copy of the vector.
+     * Required for Parabolic RBF scoring to work correctly
+     * (L2²=2.0 only equals orthogonality when ‖u‖ = ‖v‖ = 1).
+     */
+    private static float[] l2Normalize(float[] vector) {
+        float norm = computeL2Norm(vector);
+        if (norm == 0f || Math.abs(norm - 1.0f) < 1e-6f) return vector; // already normalized or zero
+        float[] normalized = new float[vector.length];
+        float invNorm = 1.0f / norm;
+        for (int i = 0; i < vector.length; i++) {
+            normalized[i] = vector[i] * invNorm;
+        }
+        return normalized;
     }
 }
