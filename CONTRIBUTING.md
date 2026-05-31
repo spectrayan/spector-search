@@ -5,6 +5,7 @@ Thank you for your interest in contributing to Spector! This document provides g
 ## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
+- [Contributor License Agreement](#contributor-license-agreement)
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
 - [Making Changes](#making-changes)
@@ -15,6 +16,34 @@ Thank you for your interest in contributing to Spector! This document provides g
 ## Code of Conduct
 
 This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [support@spectrayan.com](mailto:support@spectrayan.com).
+
+## Contributor License Agreement
+
+By contributing to Spector, you agree that:
+
+1. **You have the right** to submit the contribution. The code is your original work, or you have permission to submit it under the project's license terms.
+
+2. **You grant Spectrayan** a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license to use, reproduce, modify, distribute, and sublicense your contribution under:
+   - The **Apache License 2.0** for all modules except `spector-memory`.
+   - The **Business Source License 1.1** for the `spector-memory` module (which transitions to Apache 2.0 on the Change Date specified in its LICENSE file).
+
+3. **You understand** that your contribution becomes part of the project and may be distributed under the project's current or future license terms as described above.
+
+### How to Sign Off
+
+All commits must include a `Signed-off-by` line certifying this agreement. Use the `-s` flag when committing:
+
+```bash
+git commit -s -m "feat(core): add new SIMD kernel"
+```
+
+This adds a line like:
+
+```
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+> **Note:** Pull requests without signed-off commits will not be merged.
 
 ## Getting Started
 
