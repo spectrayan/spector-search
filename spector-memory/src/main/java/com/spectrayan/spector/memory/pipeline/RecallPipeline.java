@@ -15,6 +15,10 @@ package com.spectrayan.spector.memory.pipeline;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
+import com.spectrayan.spector.memory.error.SpectorEntityGraphException;
+import com.spectrayan.spector.memory.error.SpectorHebbianException;
+import com.spectrayan.spector.memory.error.SpectorTemporalChainException;
+
 import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
 import com.spectrayan.spector.embed.EmbeddingProvider;
@@ -354,60 +358,70 @@ public final class RecallPipeline {
 
         // Step 5c: Hebbian spreading activation — follow memory-to-memory associations
         if (hebbianGraph != null && !allResults.isEmpty()) {
-            Set<String> existingIds = new HashSet<>();
-            for (CognitiveResult r : allResults) {
-                if (r.id() != null) existingIds.add(r.id());
-            }
+            try {
+                Set<String> existingIds = new HashSet<>();
+                for (CognitiveResult r : allResults) {
+                    if (r.id() != null) existingIds.add(r.id());
+                }
 
-            // Use top 3 results as seeds for spreading activation
-            int seeds = Math.min(3, allResults.size());
-            for (int s = 0; s < seeds; s++) {
-                CognitiveResult seed = allResults.get(s);
-                // Find the memory index for this result
-                MemoryIndex.MemoryLocation loc = index.locate(seed.id());
-                if (loc == null) continue;
+                // Use top 3 results as seeds for spreading activation
+                int seeds = Math.min(3, allResults.size());
+                for (int s = 0; s < seeds; s++) {
+                    CognitiveResult seed = allResults.get(s);
+                    // Find the memory index for this result
+                    MemoryIndex.MemoryLocation loc = index.locate(seed.id());
+                    if (loc == null) continue;
 
-                int memIdx = (int) (loc.offset() / 164); // approximate index from offset
-                var activated = hebbianGraph.activateNeighbors(memIdx, 2);
-                for (var edge : activated) {
-                    // Find the memory at this graph index
-                    String neighborId = findMemoryByApproximateIndex(edge.neighborIndex());
-                    if (neighborId != null && !existingIds.contains(neighborId)) {
-                        existingIds.add(neighborId);
-                        String text = index.text(neighborId);
-                        MemorySource source = index.source(neighborId);
-                        String[] tags = index.tags(neighborId);
-                        float graphScore = seed.score() * edge.weight() * 0.3f; // attenuated
-                        allResults.add(new CognitiveResult(
-                                neighborId, text, graphScore, seed.importance(), 0f,
-                                (short) 0, (byte) 0, seed.memoryType(), source,
-                                tags, 1.0f, 1.0f));
+                    int memIdx = (int) (loc.offset() / 164); // approximate index from offset
+                    var activated = hebbianGraph.activateNeighbors(memIdx, 2);
+                    for (var edge : activated) {
+                        // Find the memory at this graph index
+                        String neighborId = findMemoryByApproximateIndex(edge.neighborIndex());
+                        if (neighborId != null && !existingIds.contains(neighborId)) {
+                            existingIds.add(neighborId);
+                            String text = index.text(neighborId);
+                            MemorySource source = index.source(neighborId);
+                            String[] tags = index.tags(neighborId);
+                            float graphScore = seed.score() * edge.weight() * 0.3f; // attenuated
+                            allResults.add(new CognitiveResult(
+                                    neighborId, text, graphScore, seed.importance(), 0f,
+                                    (short) 0, (byte) 0, seed.memoryType(), source,
+                                    tags, 1.0f, 1.0f));
+                        }
                     }
                 }
+            } catch (RuntimeException e) {
+                SpectorHebbianException ex = new SpectorHebbianException("spreading activation", e);
+                log.debug(ex.getMessage());
             }
         }
 
         // Step 5d: Temporal chain extension — follow session-linked sequences
         if (temporalChain != null && !allResults.isEmpty()) {
-            Set<String> existingIds = new HashSet<>();
-            for (CognitiveResult r : allResults) {
-                if (r.id() != null) existingIds.add(r.id());
-            }
-
-            int seeds = Math.min(3, allResults.size());
-            for (int s = 0; s < seeds; s++) {
-                CognitiveResult seed = allResults.get(s);
-                MemoryIndex.MemoryLocation loc = index.locate(seed.id());
-                if (loc == null) continue;
-
-                int memIdx = (int) (loc.offset() / 164);
-                // Follow forward and backward
-                for (int chainIdx : temporalChain.followForward(memIdx, 3)) {
-                    addChainResult(chainIdx, seed, existingIds, allResults, 0.8f);
+            try {
+                Set<String> existingIds = new HashSet<>();
+                for (CognitiveResult r : allResults) {
+                    if (r.id() != null) existingIds.add(r.id());
                 }
-                for (int chainIdx : temporalChain.followBackward(memIdx, 3)) {
-                    addChainResult(chainIdx, seed, existingIds, allResults, 0.7f);
+
+                int seeds = Math.min(3, allResults.size());
+                for (int s = 0; s < seeds; s++) {
+                    CognitiveResult seed = allResults.get(s);
+                    MemoryIndex.MemoryLocation loc = index.locate(seed.id());
+                    if (loc == null) continue;
+
+                    int memIdx = (int) (loc.offset() / 164);
+                    // Follow forward and backward
+                    for (int chainIdx : temporalChain.followForward(memIdx, 3)) {
+                        addChainResult(chainIdx, seed, existingIds, allResults, 0.8f);
+                    }
+                    for (int chainIdx : temporalChain.followBackward(memIdx, 3)) {
+                        addChainResult(chainIdx, seed, existingIds, allResults, 0.7f);
+                    }
                 }
+            } catch (RuntimeException e) {
+                SpectorTemporalChainException ex = new SpectorTemporalChainException("chain extension", e);
+                log.debug(ex.getMessage());
             }
         }
 
@@ -444,8 +458,9 @@ public final class RecallPipeline {
                         }
                     }
                 }
-            } catch (Exception e) {
-                log.debug("Entity graph recall failed: {}", e.getMessage());
+            } catch (RuntimeException e) {
+                SpectorEntityGraphException ex = new SpectorEntityGraphException("graph traversal", e);
+                log.debug(ex.getMessage());
             }
         }
 

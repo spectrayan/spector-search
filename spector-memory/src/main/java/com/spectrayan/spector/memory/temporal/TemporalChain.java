@@ -16,7 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
+
+import com.spectrayan.spector.memory.error.SpectorGraphPersistenceException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -210,7 +211,7 @@ public final class TemporalChain implements AutoCloseable {
             try {
                 Files.createDirectories(parent);
             } catch (IOException e) {
-                throw new UncheckedIOException("Cannot create chain directory: " + parent, e);
+                throw new SpectorGraphPersistenceException("TemporalChain", parent, e);
             }
         }
 
@@ -241,7 +242,7 @@ public final class TemporalChain implements AutoCloseable {
             log.info("TemporalChain saved: capacity={} → {}", capacity, filePath);
 
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to save TemporalChain: " + filePath, e);
+            throw new SpectorGraphPersistenceException("TemporalChain", filePath, e);
         }
     }
 

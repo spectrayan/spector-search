@@ -16,7 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
+
+import com.spectrayan.spector.memory.error.SpectorGraphPersistenceException;
 import java.lang.foreign.Arena;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -183,7 +184,7 @@ public final class CoActivationTracker implements AutoCloseable {
      * @param tags array of tag strings that appeared together in recall results
      */
     public void recordCoActivation(String... tags) {
-        if (tags.length < 2) return;
+        if (tags == null || tags.length < 2) return;
 
         for (int i = 0; i < tags.length; i++) {
             for (int j = i + 1; j < tags.length; j++) {
@@ -416,7 +417,7 @@ public final class CoActivationTracker implements AutoCloseable {
             try {
                 Files.createDirectories(parent);
             } catch (IOException e) {
-                throw new UncheckedIOException("Cannot create tracker directory: " + parent, e);
+                throw new SpectorGraphPersistenceException("CoActivationTracker", parent, e);
             }
         }
 
@@ -447,7 +448,7 @@ public final class CoActivationTracker implements AutoCloseable {
                     pairCount(), edgeCount(), hashToTag.size(), filePath);
 
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to save CoActivationTracker: " + filePath, e);
+            throw new SpectorGraphPersistenceException("CoActivationTracker", filePath, e);
         }
     }
 

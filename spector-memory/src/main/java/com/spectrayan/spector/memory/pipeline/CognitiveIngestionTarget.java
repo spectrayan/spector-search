@@ -37,6 +37,10 @@ import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
 import com.spectrayan.spector.memory.temporal.TemporalChain;
 import com.spectrayan.spector.storage.VectorStore;
 
+import com.spectrayan.spector.memory.error.SpectorEntityGraphException;
+import com.spectrayan.spector.memory.error.SpectorHebbianException;
+import com.spectrayan.spector.memory.error.SpectorTemporalChainException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -281,25 +285,35 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         // Step 9b: Hebbian edge strengthening (co-ingestion within session)
         int memoryIdx = index.size() - 1; // approximate index of this memory
         if (hebbianGraph != null) {
-            // Check session boundary
-            if (hebbianGraph.isNewSession()) {
-                currentSessionId++;
-                lastIngestedMemoryIdx.set(-1);
-            }
+            try {
+                // Check session boundary
+                if (hebbianGraph.isNewSession()) {
+                    currentSessionId++;
+                    lastIngestedMemoryIdx.set(-1);
+                }
 
-            int lastIdx = lastIngestedMemoryIdx.getAndSet(memoryIdx);
-            if (lastIdx >= 0 && lastIdx != memoryIdx) {
-                hebbianGraph.strengthen(memoryIdx, lastIdx, 1.0f);
+                int lastIdx = lastIngestedMemoryIdx.getAndSet(memoryIdx);
+                if (lastIdx >= 0 && lastIdx != memoryIdx) {
+                    hebbianGraph.strengthen(memoryIdx, lastIdx, 1.0f);
+                }
+            } catch (RuntimeException e) {
+                SpectorHebbianException ex = new SpectorHebbianException("edge strengthening", e);
+                log.warn(ex.getMessage());
             }
         }
 
         // Step 9c: Temporal chain linking (session-local sequence)
         if (temporalChain != null) {
-            int lastIdx = lastIngestedMemoryIdx.get() == memoryIdx
-                    ? -1 : lastIngestedMemoryIdx.get();
-            // Use the previous memory index from the same session
-            if (lastIdx >= 0) {
-                temporalChain.link(memoryIdx, lastIdx, currentSessionId);
+            try {
+                int lastIdx = lastIngestedMemoryIdx.get() == memoryIdx
+                        ? -1 : lastIngestedMemoryIdx.get();
+                // Use the previous memory index from the same session
+                if (lastIdx >= 0) {
+                    temporalChain.link(memoryIdx, lastIdx, currentSessionId);
+                }
+            } catch (RuntimeException e) {
+                SpectorTemporalChainException ex = new SpectorTemporalChainException("linking", e);
+                log.warn(ex.getMessage());
             }
         }
 
@@ -327,8 +341,9 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                         }
                     }
                 }
-            } catch (Exception e) {
-                log.warn("Entity extraction failed for '{}': {}", id, e.getMessage());
+            } catch (RuntimeException e) {
+                SpectorEntityGraphException ex = new SpectorEntityGraphException("extraction", e);
+                log.warn(ex.getMessage());
             }
         }
 
