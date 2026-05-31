@@ -21,6 +21,11 @@ import com.spectrayan.spector.memory.cortex.TierRouter;
 import com.spectrayan.spector.memory.cortex.WorkingMemoryStore;
 import com.spectrayan.spector.memory.dopamine.FlashbulbPolicy;
 import com.spectrayan.spector.memory.dopamine.SurpriseDetector;
+import com.spectrayan.spector.memory.graph.EntityExtractor;
+import com.spectrayan.spector.memory.graph.EntityGraph;
+import com.spectrayan.spector.memory.graph.EntityRelation;
+import com.spectrayan.spector.memory.graph.ExtractedEntity;
+import com.spectrayan.spector.memory.hebbian.HebbianGraph;
 import com.spectrayan.spector.memory.index.MemoryIndex;
 import com.spectrayan.spector.memory.index.MemoryIndex.MemoryLocation;
 import com.spectrayan.spector.memory.neurodivergent.IcnuWeights;
@@ -29,10 +34,14 @@ import com.spectrayan.spector.memory.sync.MemoryWal;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
+import com.spectrayan.spector.memory.temporal.TemporalChain;
 import com.spectrayan.spector.storage.VectorStore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Cognitive memory implementation of {@link IngestionTarget}.
@@ -52,6 +61,9 @@ import org.slf4j.LoggerFactory;
  *   Step 7b: Add to HNSW index (SEMANTIC type only)
  *   Step  8: Register in ID index
  *   Step  9: WAL append
+ *   Step 9b: Hebbian edge strengthening (co-ingestion within session)
+ *   Step 9c: Temporal chain linking (session-local sequence)
+ *   Step 9d: Entity extraction and graph population
  * </pre>
  *
  * <h3>Two Entry Points</h3>
@@ -81,6 +93,16 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
     private final TagExtractor tagExtractor;
     private final boolean normalizeAtIngest;
 
+    // ── Graph components (all nullable — graceful degradation) ──
+    private final HebbianGraph hebbianGraph;
+    private final TemporalChain temporalChain;
+    private final EntityExtractor entityExtractor;
+    private final EntityGraph entityGraph;
+
+    // ── Session tracking for Hebbian co-ingestion and temporal chains ──
+    private final AtomicInteger lastIngestedMemoryIdx = new AtomicInteger(-1);
+    private volatile int currentSessionId = 0;
+
     public CognitiveIngestionTarget(ScalarQuantizer quantizer,
                                      SurpriseDetector surpriseDetector,
                                      FlashbulbPolicy flashbulbPolicy,
@@ -92,7 +114,11 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                                      VectorIndex semanticIndex,
                                      VectorStore vectorStore,
                                      TagExtractor tagExtractor,
-                                     boolean normalizeAtIngest) {
+                                     boolean normalizeAtIngest,
+                                     HebbianGraph hebbianGraph,
+                                     TemporalChain temporalChain,
+                                     EntityExtractor entityExtractor,
+                                     EntityGraph entityGraph) {
         this.quantizer = quantizer;
         this.surpriseDetector = surpriseDetector;
         this.flashbulbPolicy = flashbulbPolicy;
@@ -105,10 +131,14 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         this.vectorStore = vectorStore;
         this.tagExtractor = tagExtractor != null ? tagExtractor : new ContentTagExtractor();
         this.normalizeAtIngest = normalizeAtIngest;
+        this.hebbianGraph = hebbianGraph;
+        this.temporalChain = temporalChain;
+        this.entityExtractor = entityExtractor;
+        this.entityGraph = entityGraph;
     }
 
     /**
-     * Legacy constructor — defaults normalizeAtIngest to {@code true}.
+     * Legacy constructor — defaults normalizeAtIngest to {@code true}, no graph components.
      */
     public CognitiveIngestionTarget(ScalarQuantizer quantizer,
                                      SurpriseDetector surpriseDetector,
@@ -123,7 +153,8 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                                      TagExtractor tagExtractor) {
         this(quantizer, surpriseDetector, flashbulbPolicy, tierRouter,
                 index, wal, workingStore, icnuWeights, semanticIndex,
-                vectorStore, tagExtractor, true);
+                vectorStore, tagExtractor, true,
+                null, null, null, null);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -246,6 +277,60 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
 
         // Step 9: WAL append
         wal.appendRemember(id, quantized);
+
+        // Step 9b: Hebbian edge strengthening (co-ingestion within session)
+        int memoryIdx = index.size() - 1; // approximate index of this memory
+        if (hebbianGraph != null) {
+            // Check session boundary
+            if (hebbianGraph.isNewSession()) {
+                currentSessionId++;
+                lastIngestedMemoryIdx.set(-1);
+            }
+
+            int lastIdx = lastIngestedMemoryIdx.getAndSet(memoryIdx);
+            if (lastIdx >= 0 && lastIdx != memoryIdx) {
+                hebbianGraph.strengthen(memoryIdx, lastIdx, 1.0f);
+            }
+        }
+
+        // Step 9c: Temporal chain linking (session-local sequence)
+        if (temporalChain != null) {
+            int lastIdx = lastIngestedMemoryIdx.get() == memoryIdx
+                    ? -1 : lastIngestedMemoryIdx.get();
+            // Use the previous memory index from the same session
+            if (lastIdx >= 0) {
+                temporalChain.link(memoryIdx, lastIdx, currentSessionId);
+            }
+        }
+
+        // Step 9d: Entity extraction and graph population
+        if (entityExtractor != null && entityGraph != null && entityExtractor.isAvailable()) {
+            try {
+                List<ExtractedEntity> entities = entityExtractor.extract(id, text);
+                for (ExtractedEntity entity : entities) {
+                    int eid = entityGraph.addEntity(entity.name(), entity.type());
+                    if (eid >= 0) {
+                        entityGraph.linkEntityToMemory(eid, memoryIdx);
+
+                        // Add relations
+                        for (EntityRelation rel : entity.relations()) {
+                            int targetEid = entityGraph.findEntity(rel.targetEntityName());
+                            if (targetEid < 0) {
+                                // Target not yet in graph — add it as OTHER
+                                targetEid = entityGraph.addEntity(
+                                        rel.targetEntityName(),
+                                        com.spectrayan.spector.memory.graph.EntityType.OTHER);
+                            }
+                            if (targetEid >= 0) {
+                                entityGraph.addRelation(eid, targetEid, rel.relationType());
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Entity extraction failed for '{}': {}", id, e.getMessage());
+            }
+        }
 
         log.debug("Ingested '{}' as {} (importance={}, {} tags, hnswIdx={}, source={})",
                 id, type, importance, tags.length, storeIndex, source);

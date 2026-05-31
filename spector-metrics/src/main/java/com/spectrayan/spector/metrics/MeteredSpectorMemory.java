@@ -24,8 +24,10 @@ import com.spectrayan.spector.memory.ReflectReport;
 import com.spectrayan.spector.memory.SpectorMemory;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.TierRouter;
+import com.spectrayan.spector.memory.graph.EntityGraph;
 import com.spectrayan.spector.memory.habituation.HabituationPenalty;
 import com.spectrayan.spector.memory.hebbian.CoActivationTracker;
+import com.spectrayan.spector.memory.hebbian.HebbianGraph;
 import com.spectrayan.spector.memory.index.MemoryIndex;
 import com.spectrayan.spector.memory.inhibition.SuppressionSet;
 import com.spectrayan.spector.memory.metamemory.MemoryInsight;
@@ -35,6 +37,7 @@ import com.spectrayan.spector.memory.pipeline.RecallPipeline;
 import com.spectrayan.spector.memory.prospective.ProspectiveScheduler;
 import com.spectrayan.spector.memory.prospective.Reminder;
 import com.spectrayan.spector.memory.sync.MemoryWal;
+import com.spectrayan.spector.memory.temporal.TemporalChain;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -287,6 +290,9 @@ public class MeteredSpectorMemory implements SpectorMemory {
     @Override public TierRouter tierRouter() { return delegate.tierRouter(); }
     @Override public MemoryIndex index() { return delegate.index(); }
     @Override public LateralEvaluator lateralEvaluator() { return delegate.lateralEvaluator(); }
+    @Override public HebbianGraph hebbianGraph() { return delegate.hebbianGraph(); }
+    @Override public TemporalChain temporalChain() { return delegate.temporalChain(); }
+    @Override public EntityGraph entityGraph() { return delegate.entityGraph(); }
 
     // ── Lifecycle ──
 

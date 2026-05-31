@@ -28,8 +28,14 @@ import com.spectrayan.spector.memory.cortex.TierRouter;
 import com.spectrayan.spector.memory.cortex.WorkingMemoryStore;
 import com.spectrayan.spector.memory.dopamine.FlashbulbPolicy;
 import com.spectrayan.spector.memory.dopamine.SurpriseDetector;
+import com.spectrayan.spector.memory.graph.EntityExtractionMode;
+import com.spectrayan.spector.memory.graph.EntityExtractor;
+import com.spectrayan.spector.memory.graph.EntityGraph;
+import com.spectrayan.spector.memory.graph.LlmEntityExtractor;
+import com.spectrayan.spector.memory.graph.NoOpEntityExtractor;
 import com.spectrayan.spector.memory.habituation.HabituationPenalty;
 import com.spectrayan.spector.memory.hebbian.CoActivationTracker;
+import com.spectrayan.spector.memory.hebbian.HebbianGraph;
 import com.spectrayan.spector.memory.hippocampus.CircadianPolicy;
 import com.spectrayan.spector.memory.hippocampus.ReflectDaemon;
 import com.spectrayan.spector.memory.index.MemoryIndex;
@@ -50,6 +56,7 @@ import com.spectrayan.spector.memory.sync.MemoryWal;
 import com.spectrayan.spector.memory.sync.WalEvent;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
+import com.spectrayan.spector.memory.temporal.TemporalChain;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,6 +125,11 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     private final MemoryIntrospector introspector;
     private final MemoryWal wal;
     private final LateralEvaluator lateralEvaluator;
+
+    // ── 3-Layer Cognitive Graph ──
+    private final HebbianGraph hebbianGraph;
+    private final TemporalChain temporalChain;
+    private final EntityGraph entityGraph;
 
     // ── Configuration ──
     private final int dimensions;
@@ -239,12 +251,63 @@ public final class DefaultSpectorMemory implements SpectorMemory {
                 builder.pinSourceEpisodes,
                 builder.pinnedQuota);
 
+        // ── 3-Layer Cognitive Graph ──
+        int graphCapacity = builder.hebbianGraphCapacity > 0
+                ? builder.hebbianGraphCapacity : builder.episodicPartitionCapacity;
+
+        // HebbianGraph: load from disk if available, else create fresh
+        if (isDisk && basePath != null) {
+            this.hebbianGraph = HebbianGraph.load(
+                    basePath.resolve("hebbian.graph"), graphCapacity);
+        } else {
+            this.hebbianGraph = new HebbianGraph(graphCapacity);
+        }
+
+        // TemporalChain: load from disk if available, else create fresh
+        int temporalCapacity = builder.temporalChainCapacity > 0
+                ? builder.temporalChainCapacity : graphCapacity;
+        if (isDisk && basePath != null) {
+            this.temporalChain = TemporalChain.load(
+                    basePath.resolve("temporal.chain"), temporalCapacity);
+        } else {
+            this.temporalChain = new TemporalChain(temporalCapacity);
+        }
+
+        // EntityGraph + EntityExtractor: based on mode
+        EntityExtractor entityExtractor;
+        if (builder.entityExtractionMode == EntityExtractionMode.LLM
+                && builder.textGenerationProvider != null) {
+            entityExtractor = new LlmEntityExtractor(
+                    builder.textGenerationProvider,
+                    builder.maxEntitiesPerMemory, builder.maxRelationsPerMemory);
+        } else if (builder.entityExtractionMode == EntityExtractionMode.CUSTOM
+                && builder.entityExtractor != null) {
+            entityExtractor = builder.entityExtractor;
+        } else {
+            entityExtractor = NoOpEntityExtractor.INSTANCE;
+        }
+
+        boolean entityEnabled = builder.entityExtractionMode != EntityExtractionMode.NONE;
+        if (entityEnabled) {
+            int entityCap = builder.entityGraphCapacity;
+            int edgeCap = entityCap * EntityGraph.MAX_DEGREE;
+            if (isDisk && basePath != null) {
+                this.entityGraph = EntityGraph.load(
+                        basePath.resolve("entity.graph"), entityCap, edgeCap);
+            } else {
+                this.entityGraph = new EntityGraph(entityCap, edgeCap);
+            }
+        } else {
+            this.entityGraph = null;
+        }
+
         // ── Pipelines ──
         this.embeddingProvider = embeddingProvider;
         this.cognitiveTarget = new CognitiveIngestionTarget(
                 quantizer, surpriseDetector, flashbulbPolicy,
                 tierRouter, index, wal, workingStore, builder.icnuWeights,
-                builder.semanticIndex, builder.vectorStore, builder.tagExtractor);
+                builder.semanticIndex, builder.vectorStore, builder.tagExtractor, true,
+                hebbianGraph, temporalChain, entityExtractor, entityGraph);
 
         // Build optional fused semantic recall strategy
         SemanticRecallStrategy semanticStrategy = builder.semanticIndex != null
@@ -254,7 +317,8 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         this.recallPipeline = new RecallPipeline(
                 embeddingProvider, tierRouter, index,
                 suppressionSet, habituationPenalty, prospectiveScheduler, wal,
-                quantizer.mins(), quantizer.scales(), semanticStrategy);
+                quantizer.mins(), quantizer.scales(), semanticStrategy,
+                null, hebbianGraph, temporalChain, entityGraph, entityExtractor);
 
         // Register post-recall observers (Phase 6: Observer pattern)
         recallPipeline.addListener(new LtpReconsolidationListener(index, tierRouter, wal));
@@ -542,6 +606,9 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     @Override public TierRouter tierRouter() { return tierRouter; }
     @Override public MemoryIndex index() { return index; }
     @Override public LateralEvaluator lateralEvaluator() { return lateralEvaluator; }
+    @Override public HebbianGraph hebbianGraph() { return hebbianGraph; }
+    @Override public TemporalChain temporalChain() { return temporalChain; }
+    @Override public EntityGraph entityGraph() { return entityGraph; }
 
     @Override
     public void close() {
@@ -554,11 +621,33 @@ public final class DefaultSpectorMemory implements SpectorMemory {
             } catch (Exception e) {
                 log.error("Failed to save MemoryIndex on close: {}", e.getMessage(), e);
             }
+
+            // Save 3-Layer Cognitive Graph
+            try {
+                hebbianGraph.save(persistencePath.resolve("hebbian.graph"));
+            } catch (Exception e) {
+                log.error("Failed to save HebbianGraph on close: {}", e.getMessage(), e);
+            }
+            try {
+                temporalChain.save(persistencePath.resolve("temporal.chain"));
+            } catch (Exception e) {
+                log.error("Failed to save TemporalChain on close: {}", e.getMessage(), e);
+            }
+            if (entityGraph != null) {
+                try {
+                    entityGraph.save(persistencePath.resolve("entity.graph"));
+                } catch (Exception e) {
+                    log.error("Failed to save EntityGraph on close: {}", e.getMessage(), e);
+                }
+            }
         }
 
         virtualExecutor.close();
         tierRouter.close();
         wal.close();
+        hebbianGraph.close();
+        temporalChain.close();
+        if (entityGraph != null) entityGraph.close();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -593,6 +682,15 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         private com.spectrayan.spector.memory.pipeline.TagExtractor tagExtractor;
         private com.spectrayan.spector.storage.VectorStore vectorStore;
         private CognitiveProfileConfig profileConfig = CognitiveProfileConfig.allEnabled();
+
+        // 3-Layer Cognitive Graph configuration
+        private int hebbianGraphCapacity = 0; // 0 = use episodicPartitionCapacity
+        private int temporalChainCapacity = 0; // 0 = use hebbianGraphCapacity
+        private EntityExtractionMode entityExtractionMode = EntityExtractionMode.NONE;
+        private EntityExtractor entityExtractor;
+        private int entityGraphCapacity = 50_000;
+        private int maxEntitiesPerMemory = 10;
+        private int maxRelationsPerMemory = 20;
 
         public Builder dimensions(int dimensions) { this.dimensions = dimensions; return this; }
         public Builder embeddingProvider(EmbeddingProvider p) { this.embeddingProvider = p; return this; }
@@ -639,6 +737,29 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
         /** Cognitive profile configuration (default: all profiles enabled). */
         public Builder profileConfig(CognitiveProfileConfig config) { this.profileConfig = config; return this; }
+
+        // ── 3-Layer Cognitive Graph configuration ──
+
+        /** Hebbian graph capacity (default: same as episodicPartitionCapacity). */
+        public Builder hebbianGraphCapacity(int c) { this.hebbianGraphCapacity = c; return this; }
+
+        /** Temporal chain capacity (default: same as hebbianGraphCapacity). */
+        public Builder temporalChainCapacity(int c) { this.temporalChainCapacity = c; return this; }
+
+        /** Entity extraction mode (default: NONE). */
+        public Builder entityExtractionMode(EntityExtractionMode mode) { this.entityExtractionMode = mode; return this; }
+
+        /** Custom entity extractor (used when mode = CUSTOM). */
+        public Builder entityExtractor(EntityExtractor extractor) { this.entityExtractor = extractor; return this; }
+
+        /** Entity graph capacity — max entities (default: 50,000). */
+        public Builder entityGraphCapacity(int c) { this.entityGraphCapacity = c; return this; }
+
+        /** Max entities to extract per memory (default: 10). */
+        public Builder maxEntitiesPerMemory(int c) { this.maxEntitiesPerMemory = c; return this; }
+
+        /** Max relations to extract per memory (default: 20). */
+        public Builder maxRelationsPerMemory(int c) { this.maxRelationsPerMemory = c; return this; }
 
         /**
          * Parses a cognitive profile config from a YAML string value.
