@@ -10,7 +10,7 @@
 
 1. **SIMD Similarity Kernels (`SimilarityKernel`):** Vectorized mathematical calculations for Euclidean ($L2^2$), Cosine, and Dot Product similarity functions. Fully optimized for 256-bit AVX2/AVX-512 lanes.
 2. **Fast Walsh-Hadamard Transform (`Fwht`):** Ultra-fast, in-place $O(D \log D)$ orthogonal rotation butterflies using only addition and subtraction instructions. This spreads dynamic range variance uniformly across all dimensions.
-3. **Asymmetric SIMD Quantization (`VasqSimdKernel`):** Panama FFM-native distance calculators that evaluate off-heap INT8 codes directly against exact float32 query states, bypassing dequantization overhead.
+3. **Asymmetric SIMD Quantization (`SvasqSimdKernel`):** Panama FFM-native distance calculators that evaluate off-heap INT8 codes directly against exact float32 query states, bypassing dequantization overhead.
 
 ---
 

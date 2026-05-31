@@ -1,3 +1,15 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Business Source License 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://github.com/spectrayan/spector/blob/main/spector-memory/LICENSE
+ *
+ * Change Date: May 27, 2030
+ * Change License: Apache License, Version 2.0
+ */
 package com.spectrayan.spector.memory;
 
 /**
@@ -7,7 +19,7 @@ package com.spectrayan.spector.memory;
  * <ul>
  *   <li>{@link #WORKING} — Prefrontal Cortex (short-term buffer, volatile RAM)</li>
  *   <li>{@link #EPISODIC} — Hippocampus (event sequences, time-partitioned mmap)</li>
- *   <li>{@link #SEMANTIC} — Neocortex (permanent facts, HNSW/VASQ indexed)</li>
+ *   <li>{@link #SEMANTIC} — Neocortex (permanent facts, HNSW/SVASQ indexed)</li>
  *   <li>{@link #PROCEDURAL} — Basal Ganglia (motor/habit memory, small indexed store)</li>
  * </ul>
  *
@@ -32,7 +44,7 @@ public enum MemoryType {
 
     /**
      * Permanent, deduplicated factual knowledge.
-     * Backed by persistent mmap with HNSW/VASQ index.
+     * Backed by persistent mmap with HNSW/SVASQ index.
      * Reuses existing {@code SpectorIndex} infrastructure.
      */
     SEMANTIC,

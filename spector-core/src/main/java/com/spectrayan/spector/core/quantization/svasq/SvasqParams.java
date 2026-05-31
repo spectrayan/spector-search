@@ -1,4 +1,19 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.util.Arrays;
@@ -6,9 +21,9 @@ import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Immutable calibration parameters for the VASQ quantizer.
+ * Immutable calibration parameters for the SVASQ quantizer.
  *
- * <p>Produced by {@link VasqCalibrator#calibrate} from a representative sample corpus.
+ * <p>Produced by {@link SvasqCalibrator#calibrate} from a representative sample corpus.
  * Contains all parameters needed for encoding vectors and preparing query states.</p>
  *
  * <h3>Parameter Semantics</h3>
@@ -24,34 +39,34 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *
  * <p>Instances are immutable and safe for concurrent use.</p>
  */
-public final class VasqParams {
+public final class SvasqParams {
 
     /** Number of ±1 sign-flip seed to use when no explicit seed is provided. */
     public static final long DEFAULT_SEED = 42L;
 
-    /** Standard VASQ bit width — signed INT8 [-127, 127], 1 byte per dimension. */
+    /** Standard SVASQ bit width — signed INT8 [-127, 127], 1 byte per dimension. */
     public static final int BIT_WIDTH_8 = 8;
 
-    /** Half-precision VASQ bit width — offset-encoded INT4 [0, 14], nibble-packed. */
+    /** Half-precision SVASQ bit width — offset-encoded INT4 [0, 14], nibble-packed. */
     public static final int BIT_WIDTH_4 = 4;
 
     private final int originalDim;
     private final int paddedDim;
-    private final int bitWidth;       // 8 (VASQ-8) or 4 (VASQ-4)
+    private final int bitWidth;       // 8 (SVASQ-8) or 4 (SVASQ-4)
     private final float[] means;      // μᵢ per rotated dim  [paddedDim]
     private final float[] scales;     // scaleᵢ per rotated dim  [paddedDim]
     private final float[] invScales;  // invScaleᵢ per rotated dim  [paddedDim]
-    private final VasqFwht fwht;
+    private final SvasqFwht fwht;
 
     /**
-     * Package-private constructor for VASQ-8 (INT8) — backward-compatible.
+     * Package-private constructor for SVASQ-8 (INT8) — backward-compatible.
      *
-     * <p>Created exclusively by {@link VasqCalibrator}. Defaults to
+     * <p>Created exclusively by {@link SvasqCalibrator}. Defaults to
      * {@link #BIT_WIDTH_8} (signed INT8).</p>
      */
-    VasqParams(int originalDim, int paddedDim,
+    SvasqParams(int originalDim, int paddedDim,
                float[] means, float[] scales, float[] invScales,
-               VasqFwht fwht) {
+               SvasqFwht fwht) {
         this(originalDim, paddedDim, means, scales, invScales, fwht, BIT_WIDTH_8);
     }
 
@@ -60,9 +75,9 @@ public final class VasqParams {
      *
      * @param bitWidth {@link #BIT_WIDTH_8} for signed INT8 or {@link #BIT_WIDTH_4} for offset INT4
      */
-    VasqParams(int originalDim, int paddedDim,
+    SvasqParams(int originalDim, int paddedDim,
                float[] means, float[] scales, float[] invScales,
-               VasqFwht fwht, int bitWidth) {
+               SvasqFwht fwht, int bitWidth) {
         if (bitWidth != BIT_WIDTH_8 && bitWidth != BIT_WIDTH_4) {
             throw new SpectorValidationException(ErrorCode.BIT_WIDTH_INVALID, "4, 8", bitWidth);
         }
@@ -90,7 +105,7 @@ public final class VasqParams {
     public int paddedDim() { return paddedDim; }
 
     /**
-     * The quantization bit width: 8 for VASQ-8 (INT8), 4 for VASQ-4 (INT4).
+     * The quantization bit width: 8 for SVASQ-8 (INT8), 4 for SVASQ-4 (INT4).
      *
      * @return bit width (4 or 8)
      */
@@ -131,14 +146,14 @@ public final class VasqParams {
      *
      * @return FWHT instance
      */
-    public VasqFwht fwht() { return fwht; }
+    public SvasqFwht fwht() { return fwht; }
 
     /**
      * Returns the number of bytes required to store one encoded vector in a MemorySegment.
      *
      * <ul>
-     *   <li>VASQ-8: {@code 4 (float32 norm) + paddedDim (1 byte per dim)}</li>
-     *   <li>VASQ-4: {@code 4 (float32 norm) + paddedDim/2 (nibble-packed, 2 dims per byte)}</li>
+     *   <li>SVASQ-8: {@code 4 (float32 norm) + paddedDim (1 byte per dim)}</li>
+     *   <li>SVASQ-4: {@code 4 (float32 norm) + paddedDim/2 (nibble-packed, 2 dims per byte)}</li>
      * </ul>
      *
      * @return bytes per vector
@@ -160,7 +175,7 @@ public final class VasqParams {
     @Override
     public String toString() {
         return String.format(
-                "VasqParams{originalDim=%d, paddedDim=%d, bitWidth=%d, bytesPerVector=%d}",
+                "SvasqParams{originalDim=%d, paddedDim=%d, bitWidth=%d, bytesPerVector=%d}",
                 originalDim, paddedDim, bitWidth, bytesPerVector());
     }
 }

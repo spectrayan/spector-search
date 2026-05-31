@@ -1,6 +1,6 @@
 # 📊 Large-Scale Real-Embedding & Shard Promotion Benchmarks
 
-This page presents the exhaustive experimental results and performance characteristics of **SpectorIndex (IVF-HNSW-VASQ)**. 
+This page presents the exhaustive experimental results and performance characteristics of **SpectorIndex (IVF-HNSW-SVASQ)**. 
 
 To evaluate the system under realistic production workloads, we benchmarked the index using high-dimensional text embeddings from real-world datasets rather than synthetic structureless Gaussian noise. Additionally, we analyzed the performance and recall characteristics of our adaptive shard promotion system at a scale of 100,000 vectors.
 
@@ -98,7 +98,7 @@ In contrast, real embeddings (e.g., Sentence-BERT, CLIP, Qwen) occupy a much sma
 
 ## ⚡ Part 2: Shard Promotion Benchmark (100K Scale)
 
-To evaluate HNSW promotions at scale, we conducted a benchmark at 100,000 vectors comparing exhaustive **Flat Shard mode** (linear SIMD scan over float32 residuals) vs **Promoted HNSW Shard mode** (pre-calibrated 132-bit VASQ quantized HNSW graph search inside each centroid's shard). 
+To evaluate HNSW promotions at scale, we conducted a benchmark at 100,000 vectors comparing exhaustive **Flat Shard mode** (linear SIMD scan over float32 residuals) vs **Promoted HNSW Shard mode** (pre-calibrated 132-bit SVASQ quantized HNSW graph search inside each centroid's shard). 
 
 A total of 32 coarse centroids were used, resulting in an average of 3,125 vectors per shard. The promotion threshold `shardThreshold` was configured to `1,000`, ensuring all 32 partitions promoted to HNSW graphs during ingestion.
 
@@ -141,7 +141,7 @@ Based on the empirical sweeps above, we recommend the following tuning strategie
 
 ## 🔗 Related Pages
 
-- [VASQ Deep Dive](vasq-deep-dive.md) — The mathematics behind FWHT and affine quantization.
+- [SVASQ Deep Dive](svasq-deep-dive.md) — The mathematics behind FWHT and affine quantization.
 - [SpectorIndex Architecture](spector-index-architecture.md) — The multi-level adaptive IVF-HNSW shard strategy.
-- [Spector + VASQ Whitepaper](vasq-spectorindex-whitepaper.md) — Formal academic whitepaper detailing Spector's mathematical properties.
+- [Spector + SVASQ Whitepaper](svasq-spectorindex-whitepaper.md) — Formal academic whitepaper detailing Spector's mathematical properties.
 - [Performance Tuning Guide](../operations/performance-tuning.md) — Fine-tuning system, SIMD, and index settings.

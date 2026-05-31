@@ -1,9 +1,24 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 
 /**
- * Immutable, precomputed query context for VASQ asymmetric distance computation.
+ * Immutable, precomputed query context for SVASQ asymmetric distance computation.
  *
- * <p>Created once per query by {@link VasqQueryPrep#prepare} and then reused for every
+ * <p>Created once per query by {@link SvasqQueryPrep#prepare} and then reused for every
  * candidate distance evaluation during HNSW/IVF graph traversal. Doing this once per
  * query rather than per candidate is the core efficiency win of the asymmetric approach.</p>
  *
@@ -22,14 +37,14 @@ package com.spectrayan.spector.core.quantization.vasq;
  *
  * <p>Instances are immutable and safe for concurrent use across virtual threads.</p>
  */
-public final class VasqQueryState {
+public final class SvasqQueryState {
 
     private final float[] qTilde;    // q̃ᵢ = q_rot_i × scaleᵢ  [paddedDim]
     private final float constL2Q;    // ‖q‖² - 2·C(q)  (query-side L2 constant)
     private final float dotOffset;   // C(q) = Σ q_rot_i × μᵢ
     private final float qNormSq;     // ‖q‖² (stored for diagnostics)
 
-    VasqQueryState(float[] qTilde, float constL2Q, float dotOffset, float qNormSq) {
+    SvasqQueryState(float[] qTilde, float constL2Q, float dotOffset, float qNormSq) {
         this.qTilde    = qTilde;
         this.constL2Q  = constL2Q;
         this.dotOffset = dotOffset;

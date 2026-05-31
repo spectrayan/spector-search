@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core;
 
 import com.spectrayan.spector.core.quantization.QuantizationType;
@@ -25,8 +40,8 @@ class QuantizationTypeTest {
         QuantizationType.valueOf("SCALAR_INT4");
         QuantizationType.valueOf("SCALAR_INT2");
         QuantizationType.valueOf("TURBO_QUANT");
-        QuantizationType.valueOf("VASQ");
-        QuantizationType.valueOf("VASQ_4");
+        QuantizationType.valueOf("SVASQ");
+        QuantizationType.valueOf("SVASQ_4");
     }
 
     @Test
@@ -77,16 +92,16 @@ class QuantizationTypeTest {
     }
 
     @Test
-    void vasq_bitsPerDimension_is_8() {
-        assertEquals(8, QuantizationType.VASQ.bitsPerDimension());
+    void svasq_bitsPerDimension_is_8() {
+        assertEquals(8, QuantizationType.SVASQ.bitsPerDimension());
     }
 
     @Test
-    void vasq_bytesPerVector_throws() {
-        // VASQ storage size depends on paddedDim = nextPow2(dimensions), not dimensions.
-        // Use VasqEncoder.bytesPerVector() instead.
+    void svasq_bytesPerVector_throws() {
+        // SVASQ storage size depends on paddedDim = nextPow2(dimensions), not dimensions.
+        // Use SvasqEncoder.bytesPerVector() instead.
         org.junit.jupiter.api.Assertions.assertThrows(
                 com.spectrayan.spector.commons.error.SpectorValidationException.class,
-                () -> QuantizationType.VASQ.bytesPerVector(768));
+                () -> QuantizationType.SVASQ.bytesPerVector(768));
     }
 }

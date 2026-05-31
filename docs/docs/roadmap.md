@@ -6,19 +6,19 @@ Spector is under active development. This page details planned improvements, the
 
 ## Compression & Quantization
 
-### ✅ VASQ-4 — Half-Precision VASQ (INT4 Codes) {#vasq-4}
+### ✅ SVASQ-4 — Half-Precision SVASQ (INT4 Codes) {#svasq-4}
 
 !!! success "Completed"
-    Implemented and merged. Available via `SpectorEngine.builder().vasq4()` or `QuantizedHnswIndex.vasq4(...)`.
+    Implemented and merged. Available via `SpectorEngine.builder().svasq4()` or `QuantizedHnswIndex.svasq4(...)`.
 
-Replace INT8 `[-127, 127]` codes with INT4 `[-7, 7]` codes in the VASQ pipeline. The FWHT rotation still equalizes variance, so INT4 quantization error remains uniformly distributed — just at a coarser granularity (15 levels vs 255).
+Replace INT8 `[-127, 127]` codes with INT4 `[-7, 7]` codes in the SVASQ pipeline. The FWHT rotation still equalizes variance, so INT4 quantization error remains uniformly distributed — just at a coarser granularity (15 levels vs 255).
 
 **Memory layout:**
 ```
 [float32 normSq (4 bytes)] [INT4 × paddedDim nibble-packed (paddedDim/2 bytes)]
 ```
 
-| Dims | Current VASQ-8 | VASQ-4 | Compression vs float32 |
+| Dims | Current SVASQ-8 | SVASQ-4 | Compression vs float32 |
 |------|---------------|--------|----------------------|
 | 384 → 512 | 516 B | 260 B | **5.9×** |
 | 768 → 1024 | 1028 B | 516 B | **6.0×** |
@@ -31,7 +31,7 @@ Replace INT8 `[-127, 127]` codes with INT4 `[-7, 7]` codes in the VASQ pipeline.
 
 **Key design decisions:**
 
-- Separate `Vasq4Encoder` / `Vasq4SimdKernel` classes (not parameterizing VASQ-8) to avoid impacting existing code
+- Separate `Svasq4Encoder` / `Svasq4SimdKernel` classes (not parameterizing SVASQ-8) to avoid impacting existing code
 - Offset encoding `[0, 14]` keeps byte values non-negative for correct `castShape` sign extension
 - Deinterleaved hi/lo query arrays match nibble layout for natural SIMD ILP
 - Tighter clipping (2.5σ vs 3.0σ) optimizes for 15 quantization levels
@@ -43,9 +43,9 @@ Replace INT8 `[-127, 127]` codes with INT4 `[-7, 7]` codes in the VASQ pipeline.
 !!! info "Status: Planned (next)"
     Low effort, zero recall loss for L2 distance. Highest ROI pending improvement.
 
-VASQ pads vectors to the next power-of-two dimensionality (e.g., 768 → 1024), adding wasted bytes. The padded dimensions are zero-filled before FWHT, so their rotated codes are predictable. We can **store only the first `originalDim` codes** and reconstruct padded codes at query time.
+SVASQ pads vectors to the next power-of-two dimensionality (e.g., 768 → 1024), adding wasted bytes. The padded dimensions are zero-filled before FWHT, so their rotated codes are predictable. We can **store only the first `originalDim` codes** and reconstruct padded codes at query time.
 
-| Dims | paddedDim | Current VASQ-8 | Padding-Aware | Savings |
+| Dims | paddedDim | Current SVASQ-8 | Padding-Aware | Savings |
 |------|-----------|---------------|---------------|---------|
 | 384 | 512 | 516 B | 388 B | **25%** |
 | 768 | 1024 | 1028 B | 772 B | **25%** |
@@ -59,8 +59,8 @@ VASQ pads vectors to the next power-of-two dimensionality (e.g., 768 → 1024), 
 
 **Changes required:**
 
-- `VasqEncoder` / `Vasq4Encoder`: Store only `originalDim` codes, update `bytesPerVector()`
-- `VasqSimdKernel` / `Vasq4SimdKernel`: Handle non-power-of-2 loop bound (SIMD-aligned padding recommended)
+- `SvasqEncoder` / `Svasq4Encoder`: Store only `originalDim` codes, update `bytesPerVector()`
+- `SvasqSimdKernel` / `Svasq4SimdKernel`: Handle non-power-of-2 loop bound (SIMD-aligned padding recommended)
 
 ---
 
@@ -75,20 +75,20 @@ The 4-byte `float32 exactNormSq` header can be compressed to 2 bytes using `floa
 
 | Combined with | Before | After | Savings |
 |---------------|--------|-------|---------|
-| VASQ-8 (768-dim) | 1028 B | 1026 B | 0.2% |
-| VASQ-4 (768-dim) | 516 B | 514 B | 0.4% |
-| Padding-aware VASQ-8 (768-dim) | 772 B | 770 B | 0.3% |
+| SVASQ-8 (768-dim) | 1028 B | 1026 B | 0.2% |
+| SVASQ-4 (768-dim) | 516 B | 514 B | 0.4% |
+| Padding-aware SVASQ-8 (768-dim) | 772 B | 770 B | 0.3% |
 
 **Recall impact:** < 0.01% — `float16` has ~3 decimal digits of precision. For L2 ranking, the norm header is a per-vector constant that shifts all distances equally.
 
 **Changes required:**
 
-- `VasqEncoder` / `Vasq4Encoder`: Use `Float.floatToFloat16()` for 2-byte header write
-- `VasqSimdKernel` / `Vasq4SimdKernel`: Read with `Float.float16ToFloat(segment.get(JAVA_SHORT, offset))`
+- `SvasqEncoder` / `Svasq4Encoder`: Use `Float.floatToFloat16()` for 2-byte header write
+- `SvasqSimdKernel` / `Svasq4SimdKernel`: Read with `Float.float16ToFloat(segment.get(JAVA_SHORT, offset))`
 
 ---
 
-### 🔬 VASQ-PQ Hybrid — Product Quantization of VASQ Residuals {#vasq-pq}
+### 🔬 SVASQ-PQ Hybrid — Product Quantization of SVASQ Residuals {#svasq-pq}
 
 !!! note "Status: Future Research"
     Very high implementation effort. Most aggressive compression option.
@@ -102,7 +102,7 @@ After FWHT rotation, instead of scalar INT8/INT4 quantization, apply **Product Q
 
 With M=16 subspaces, K=256 centroids:
 
-| Dims | Float32 | VASQ-8 | VASQ-PQ (M=16) | Compression vs float32 |
+| Dims | Float32 | SVASQ-8 | SVASQ-PQ (M=16) | Compression vs float32 |
 |------|---------|--------|----------------|----------------------|
 | 768 | 3,072 B | 1,028 B | 20 B | **154×** |
 | 4096 | 16,384 B | 4,100 B | 68 B | **241×** |
@@ -127,16 +127,16 @@ With M=16 subspaces, K=256 centroids:
 
 ---
 
-### 🔬 Flat-Mode VASQ — Compress Flat-Shard Storage {#flat-vasq}
+### 🔬 Flat-Mode SVASQ — Compress Flat-Shard Storage {#flat-svasq}
 
 !!! note "Status: Future Research"
     Medium effort, good payoff for large flat shards.
 
-In `SpectorShard`'s flat mode, residuals are stored as raw `float32[]`. Since all residuals in a shard share the same centroid, they have similar statistical distributions. **VASQ quantization of flat residuals** could compress flat-mode storage by ~3× without changing the shard architecture.
+In `SpectorShard`'s flat mode, residuals are stored as raw `float32[]`. Since all residuals in a shard share the same centroid, they have similar statistical distributions. **SVASQ quantization of flat residuals** could compress flat-mode storage by ~3× without changing the shard architecture.
 
 **Savings:**
 
-| Scenario | Current (float32) | With VASQ | Savings |
+| Scenario | Current (float32) | With SVASQ | Savings |
 |----------|-------------------|-----------|---------|
 | 10K vectors × 768 dims | 30 MB/shard | 10 MB/shard | **3×** |
 | 50K vectors × 4096 dims | 781 MB/shard | 195 MB/shard | **4×** |
@@ -144,17 +144,17 @@ In `SpectorShard`'s flat mode, residuals are stored as raw `float32[]`. Since al
 **Recall impact:**
 
 - If applied only to storage (decode for search): **None** — search uses decoded float32
-- If applied to search (scan quantized codes directly): Same as VASQ-8 (~99.5%)
+- If applied to search (scan quantized codes directly): Same as SVASQ-8 (~99.5%)
 
 **Implementation scope:**
 
-- Integrate VASQ encoding into the flat-mode ingestion path
-- Modify `SpectorShard.flatScan()` to use the VASQ SIMD kernel directly
+- Integrate SVASQ encoding into the flat-mode ingestion path
+- Modify `SpectorShard.flatScan()` to use the SVASQ SIMD kernel directly
 - Per-shard calibration using the shard's centroid residuals
 
 ---
 
-### 🔴 Adaptive Bit-Width VASQ {#adaptive-bw}
+### 🔴 Adaptive Bit-Width SVASQ {#adaptive-bw}
 
 !!! warning "Status: Not Recommended"
     Very high effort, marginal benefit due to FWHT already equalizing variance.
@@ -252,9 +252,9 @@ Ship actual CUDA compute kernels for batch cosine similarity and HNSW neighbor s
 !!! note "Status: Exploratory"
     Depends on Intel/AMD NPU SDK maturity.
 
-Leverage Intel NPU (via OpenVINO) or AMD XDNA (via DirectML) for INT8 batch operations. NPUs are optimized for low-precision matrix operations, making them ideal for quantized VASQ distance computation.
+Leverage Intel NPU (via OpenVINO) or AMD XDNA (via DirectML) for INT8 batch operations. NPUs are optimized for low-precision matrix operations, making them ideal for quantized SVASQ distance computation.
 
-**Target workloads:** INT8/INT4 batch similarity, VASQ kernel offload.
+**Target workloads:** INT8/INT4 batch similarity, SVASQ kernel offload.
 
 ---
 
@@ -312,13 +312,13 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 
 | # | Improvement | Compression | Recall Impact | Effort | Status |
 |---|------------|-------------|---------------|--------|--------|
-| 1 | **VASQ-4** | 6–8× vs float32 | -2 to -4% (mitigated w/ rescore) | Medium | ✅ Done |
+| 1 | **SVASQ-4** | 6–8× vs float32 | -2 to -4% (mitigated w/ rescore) | Medium | ✅ Done |
 | 2 | **Native MCP Server** | N/A (agent integration) | N/A | Medium | ✅ Done |
 | 3 | **Padding-aware storage** | +25% (non-pow2 dims) | None (L2) | Low | 🔜 Next |
 | 4 | **Norm header f16** | +2 bytes/vec | Negligible | Very Low | 🔜 Next |
 | 5 | **Streamable HTTP transport** | N/A (deployment) | N/A | Medium | 🔜 Planned |
-| 6 | **VASQ-PQ hybrid** | 16–32× vs float32 | -7 to -15% | Very High | 🔬 Research |
-| 7 | **Flat-mode VASQ** | 3× on flat shards | None or -0.5% | Medium | 🔬 Research |
+| 6 | **SVASQ-PQ hybrid** | 16–32× vs float32 | -7 to -15% | Very High | 🔬 Research |
+| 7 | **Flat-mode SVASQ** | 3× on flat shards | None or -0.5% | Medium | 🔬 Research |
 | 8 | **LoRA adapter routing** | N/A (multi-tenant) | N/A | High | 🔬 Research |
 | 9 | **ColBERT late interaction** | N/A (reranking) | N/A | High | 🔬 Research |
 | 10 | **Adaptive bit-width** | ~10–15% | Negligible | Very High | 🔴 Not planned |

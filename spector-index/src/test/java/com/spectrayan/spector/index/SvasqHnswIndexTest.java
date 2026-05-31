@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.index;
 
 
@@ -13,12 +28,12 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * End-to-end recall and correctness tests for VASQ-quantized HNSW index.
+ * End-to-end recall and correctness tests for SVASQ-quantized HNSW index.
  *
  * <p>These tests validate the full pipeline:
  * auto-calibration → retroactive encoding → asymmetric distance traversal → rescore.</p>
  */
-class VasqHnswIndexTest {
+class SvasqHnswIndexTest {
 
     private static final int    DIMS        = 128;
     private static final int    NUM_DOCS    = 1000;
@@ -29,25 +44,25 @@ class VasqHnswIndexTest {
     // ── Smoke tests ───────────────────────────────────────────────────────────
 
     @Test
-    void vasq_factory_creates_correct_type() {
-        var index = QuantizedHnswIndex.vasq(64, 100, SimilarityFunction.COSINE,
+    void svasq_factory_creates_correct_type() {
+        var index = QuantizedHnswIndex.svasq(64, 100, SimilarityFunction.COSINE,
                 HnswParams.DEFAULT, 1);
-        assertEquals(QuantizationType.VASQ, index.quantizationType());
+        assertEquals(QuantizationType.SVASQ, index.quantizationType());
         assertFalse(index.isCalibrated(), "Should not be calibrated before any insertions");
     }
 
     @Test
-    void vasq_emptyIndex_returnsEmpty() {
-        var index = QuantizedHnswIndex.vasq(32, 100, SimilarityFunction.EUCLIDEAN,
+    void svasq_emptyIndex_returnsEmpty() {
+        var index = QuantizedHnswIndex.svasq(32, 100, SimilarityFunction.EUCLIDEAN,
                 HnswParams.DEFAULT, 1);
         ScoredResult[] results = index.search(new float[32], 5);
         assertEquals(0, results.length);
     }
 
     @Test
-    void vasq_autoCalibrates_after_threshold() {
+    void svasq_autoCalibrates_after_threshold() {
         int dims = 32;
-        var index = QuantizedHnswIndex.vasq(dims, 1000, SimilarityFunction.COSINE,
+        var index = QuantizedHnswIndex.svasq(dims, 1000, SimilarityFunction.COSINE,
                 HnswParams.DEFAULT, 1);
 
         assertFalse(index.isCalibrated());
@@ -57,15 +72,15 @@ class VasqHnswIndexTest {
             index.add("doc-" + i, i, randomUnit(rng, dims));
         }
 
-        assertTrue(index.isCalibrated(), "VASQ should auto-calibrate after filling buffer");
+        assertTrue(index.isCalibrated(), "SVASQ should auto-calibrate after filling buffer");
     }
 
     @Test
-    void vasq_basicSearch_returnsAndSorts() {
+    void svasq_basicSearch_returnsAndSorts() {
         int dims = 64;
         // Set capacity == numDocs so calibrationBuffer fills exactly when all docs are inserted
         int numDocs = 150;
-        var index = QuantizedHnswIndex.vasq(dims, numDocs, SimilarityFunction.COSINE,
+        var index = QuantizedHnswIndex.svasq(dims, numDocs, SimilarityFunction.COSINE,
                 HnswParams.DEFAULT, 1);
 
         Random rng = new Random(1L);
@@ -94,42 +109,42 @@ class VasqHnswIndexTest {
     // ── Recall tests ──────────────────────────────────────────────────────────
 
     @Test
-    void vasq_recall_cosine_noRescore() {
+    void svasq_recall_cosine_noRescore() {
         double recall = measureRecall(SimilarityFunction.COSINE, /*oversample=*/1);
         assertTrue(recall >= MIN_RECALL,
-                "VASQ recall@" + K + " (no rescore) should be ≥ " + MIN_RECALL
+                "SVASQ recall@" + K + " (no rescore) should be ≥ " + MIN_RECALL
                 + " but was " + recall);
     }
 
     @Test
-    void vasq_recall_cosine_withRescore3x() {
+    void svasq_recall_cosine_withRescore3x() {
         double recall = measureRecall(SimilarityFunction.COSINE, /*oversample=*/3);
         // With 3× rescore, recall should be significantly better
         assertTrue(recall >= 0.85,
-                "VASQ recall@" + K + " (3× rescore) should be ≥ 0.85 but was " + recall);
+                "SVASQ recall@" + K + " (3× rescore) should be ≥ 0.85 but was " + recall);
     }
 
     @Test
-    void vasq_recall_euclidean_noRescore() {
+    void svasq_recall_euclidean_noRescore() {
         double recall = measureRecall(SimilarityFunction.EUCLIDEAN, /*oversample=*/1);
         assertTrue(recall >= MIN_RECALL,
-                "VASQ L2 recall@" + K + " should be ≥ " + MIN_RECALL
+                "SVASQ L2 recall@" + K + " should be ≥ " + MIN_RECALL
                 + " but was " + recall);
     }
 
     @Test
-    void vasq_recall_euclidean_withRescore() {
+    void svasq_recall_euclidean_withRescore() {
         double recall = measureRecall(SimilarityFunction.EUCLIDEAN, /*oversample=*/3);
         assertTrue(recall >= 0.85,
-                "VASQ L2 recall@" + K + " (3× rescore) should be ≥ 0.85 but was " + recall);
+                "SVASQ L2 recall@" + K + " (3× rescore) should be ≥ 0.85 but was " + recall);
     }
 
     // ── Correctness: same ID never appears twice ───────────────────────────────
 
     @Test
-    void vasq_noDuplicates_inResults() {
+    void svasq_noDuplicates_inResults() {
         int dims = 64;
-        var index = QuantizedHnswIndex.vasq(dims, 200, SimilarityFunction.COSINE,
+        var index = QuantizedHnswIndex.svasq(dims, 200, SimilarityFunction.COSINE,
                 HnswParams.DEFAULT, 3);
 
         Random rng = new Random(2L);
@@ -152,8 +167,8 @@ class VasqHnswIndexTest {
         Random rng = new Random(42L);
         HnswParams params = new HnswParams(16, 128, 64);
 
-        // VASQ index
-        var vasqIndex = QuantizedHnswIndex.vasq(DIMS, NUM_DOCS + 10, fn, params, oversample);
+        // SVASQ index
+        var svasqIndex = QuantizedHnswIndex.svasq(DIMS, NUM_DOCS + 10, fn, params, oversample);
 
         // Exact HNSW for ground truth
         var exactIndex = new HnswIndex(DIMS, NUM_DOCS + 10, fn);
@@ -161,20 +176,20 @@ class VasqHnswIndexTest {
         float[][] vectors = new float[NUM_DOCS][DIMS];
         for (int i = 0; i < NUM_DOCS; i++) {
             vectors[i] = randomUnit(rng, DIMS);
-            vasqIndex.add("doc-" + i, i, vectors[i]);
+            svasqIndex.add("doc-" + i, i, vectors[i]);
             exactIndex.add("doc-" + i, i, vectors[i]);
         }
 
         int totalHits = 0;
         for (int q = 0; q < QUERY_COUNT; q++) {
             float[] query = randomUnit(rng, DIMS);
-            ScoredResult[] vasqResults  = vasqIndex.search(query, K);
+            ScoredResult[] svasqResults  = svasqIndex.search(query, K);
             ScoredResult[] exactResults = exactIndex.search(query, K);
 
             Set<String> exactIds = new HashSet<>();
             for (ScoredResult r : exactResults) exactIds.add(r.id());
 
-            for (ScoredResult r : vasqResults) {
+            for (ScoredResult r : svasqResults) {
                 if (exactIds.contains(r.id())) totalHits++;
             }
         }

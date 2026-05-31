@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.bench;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
@@ -16,13 +31,13 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Measures end-to-end search latency and throughput at various {@code nProbe} values,
  * dataset sizes, and dimensionalities. This is the primary benchmark for evaluating
- * the IVF + adaptive-shard + VASQ pipeline against real workloads.</p>
+ * the IVF + adaptive-shard + SVASQ pipeline against real workloads.</p>
  *
  * <h3>Index configuration</h3>
  * <ul>
  *   <li>Training: K-Means on a 10K vector sample</li>
  *   <li>Shard mode: depends on {@code shardSize} — flat or HNSW</li>
- *   <li>VASQ: per-shard pre-calibration on all residuals at promotion</li>
+ *   <li>SVASQ: per-shard pre-calibration on all residuals at promotion</li>
  * </ul>
  *
  * <p>Run via:</p>

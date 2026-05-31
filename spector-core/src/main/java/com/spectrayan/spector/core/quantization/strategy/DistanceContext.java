@@ -1,7 +1,22 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core.quantization.strategy;
 
-import com.spectrayan.spector.core.quantization.vasq.Vasq4QueryState;
-import com.spectrayan.spector.core.quantization.vasq.VasqQueryState;
+import com.spectrayan.spector.core.quantization.svasq.Svasq4QueryState;
+import com.spectrayan.spector.core.quantization.svasq.SvasqQueryState;
 
 /**
  * Sealed per-query distance context — carries pre-computed state that is
@@ -17,8 +32,8 @@ import com.spectrayan.spector.core.quantization.vasq.VasqQueryState;
  *   <li>{@link Int8Context} — query vector + per-dim min/scale for INT8 ADC</li>
  *   <li>{@link PackedContext} — query vector + global centroids for INT4/INT2 packed dot</li>
  *   <li>{@link TurboContext} — pre-rotated query for TurboQuant distance</li>
- *   <li>{@link VasqCtx} — pre-rotated query state for VASQ-8 SIMD kernel</li>
- *   <li>{@link Vasq4Ctx} — deinterleaved query state for VASQ-4 nibble SIMD kernel</li>
+ *   <li>{@link SvasqCtx} — pre-rotated query state for SVASQ-8 SIMD kernel</li>
+ *   <li>{@link Svasq4Ctx} — deinterleaved query state for SVASQ-4 nibble SIMD kernel</li>
  *   <li>{@link ExactContext} — raw float query for exact float32 fallback</li>
  * </ul>
  */
@@ -26,8 +41,8 @@ public sealed interface DistanceContext
         permits DistanceContext.Int8Context,
                 DistanceContext.PackedContext,
                 DistanceContext.TurboContext,
-                DistanceContext.VasqCtx,
-                DistanceContext.Vasq4Ctx,
+                DistanceContext.SvasqCtx,
+                DistanceContext.Svasq4Ctx,
                 DistanceContext.ExactContext {
 
     /**
@@ -62,27 +77,27 @@ public sealed interface DistanceContext
             implements DistanceContext {}
 
     /**
-     * Context for VASQ SIMD kernel (FWHT-rotated asymmetric distance).
+     * Context for SVASQ SIMD kernel (FWHT-rotated asymmetric distance).
      *
      * <p>Contains the pre-rotated, pre-scaled query tilde and the asymmetric
      * constant for the L2 expansion formula.</p>
      *
-     * @param state     pre-computed VASQ query state (qTilde, constL2Q, dotOffset)
-     * @param paddedDim VASQ padded dimensionality (power-of-two)
+     * @param state     pre-computed SVASQ query state (qTilde, constL2Q, dotOffset)
+     * @param paddedDim SVASQ padded dimensionality (power-of-two)
      */
-    record VasqCtx(VasqQueryState state, int paddedDim)
+    record SvasqCtx(SvasqQueryState state, int paddedDim)
             implements DistanceContext {}
 
     /**
-     * Context for VASQ-4 nibble-packed SIMD kernel (FWHT-rotated asymmetric distance, INT4).
+     * Context for SVASQ-4 nibble-packed SIMD kernel (FWHT-rotated asymmetric distance, INT4).
      *
      * <p>Contains the deinterleaved pre-scaled query arrays (hi/lo) and the
      * adjusted L2 constant with offset-encoding bias absorbed.</p>
      *
-     * @param state   pre-computed VASQ-4 query state (qTildeHi, qTildeLo, constL2Q, dotOffset)
+     * @param state   pre-computed SVASQ-4 query state (qTildeHi, qTildeLo, constL2Q, dotOffset)
      * @param halfDim half of paddedDim (number of nibble-packed code bytes)
      */
-    record Vasq4Ctx(Vasq4QueryState state, int halfDim)
+    record Svasq4Ctx(Svasq4QueryState state, int halfDim)
             implements DistanceContext {}
 
     /**

@@ -1,6 +1,21 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core;
 
-import com.spectrayan.spector.core.quantization.vasq.*;
+import com.spectrayan.spector.core.quantization.svasq.*;
 import com.spectrayan.spector.core.simd.SimdCapability;
 
 import jdk.incubator.vector.VectorSpecies;
@@ -17,9 +32,9 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for {@link VasqSimdKernel} and the full encode → prepare → distance pipeline.
+ * Tests for {@link SvasqSimdKernel} and the full encode → prepare → distance pipeline.
  */
-class VasqKernelTest {
+class SvasqKernelTest {
 
     private static final long   SEED       = 42L;
     private static final int    DIM        = 128;
@@ -27,9 +42,9 @@ class VasqKernelTest {
     private static final float  L2_REL_TOL = 0.05f; // ≤ 5% relative L2 error
     private static final float  DOT_TOL    = 0.10f; // ≤ 10% relative dot error
 
-    private static VasqParams   params;
-    private static VasqEncoder  encoder;
-    private static VasqQueryPrep queryPrep;
+    private static SvasqParams   params;
+    private static SvasqEncoder  encoder;
+    private static SvasqQueryPrep queryPrep;
     private static List<float[]> corpus;
 
     @BeforeAll
@@ -41,9 +56,9 @@ class VasqKernelTest {
             for (int d = 0; d < DIM; d++) v[d] = (float) rng.nextGaussian();
             corpus.add(v);
         }
-        params    = VasqCalibrator.calibrate(corpus, DIM, SEED);
-        encoder   = new VasqEncoder(params);
-        queryPrep = new VasqQueryPrep(params);
+        params    = SvasqCalibrator.calibrate(corpus, DIM, SEED);
+        encoder   = new SvasqEncoder(params);
+        queryPrep = new SvasqQueryPrep(params);
     }
 
     // ── Species safety regression ─────────────────────────────────────────────
@@ -52,8 +67,8 @@ class VasqKernelTest {
     void byteSpecies_laneCount_equals_floatSpecies_laneCount() {
         // This is the regression test for the SPECIES_256 bug from quant.md analysis.
         // B_SPECIES.length() must equal F_SPECIES.length() for the castShape to be valid.
-        int floatLanes = VasqSimdKernel.floatSpecies().length();
-        int byteLanes  = VasqSimdKernel.byteSpecies().length();
+        int floatLanes = SvasqSimdKernel.floatSpecies().length();
+        int byteLanes  = SvasqSimdKernel.byteSpecies().length();
         assertEquals(floatLanes, byteLanes,
                 "B_SPECIES must have the same lane count as F_SPECIES. "
                 + "Got floatLanes=" + floatLanes + " byteLanes=" + byteLanes);
@@ -61,7 +76,7 @@ class VasqKernelTest {
 
     @Test
     void laneCount_is_power_of_two() {
-        int lanes = VasqSimdKernel.laneCount();
+        int lanes = SvasqSimdKernel.laneCount();
         assertTrue(lanes > 0 && (lanes & (lanes - 1)) == 0,
                 "Lane count must be a power of two, got " + lanes);
     }
@@ -90,8 +105,8 @@ class VasqKernelTest {
                 float[] doc    = corpus.get(docIdx);
 
                 float exactL2 = exactL2Sq(query, doc);
-                VasqQueryState qs = queryPrep.prepare(query);
-                float approxL2 = VasqSimdKernel.computeL2(segment, (long) docIdx * bpv, paddedDim, qs);
+                SvasqQueryState qs = queryPrep.prepare(query);
+                float approxL2 = SvasqSimdKernel.computeL2(segment, (long) docIdx * bpv, paddedDim, qs);
 
                 // L2 distances should be non-negative
                 assertTrue(approxL2 >= -0.01f,
@@ -121,8 +136,8 @@ class VasqKernelTest {
             MemorySegment seg = arena.allocate(bpv, 8);
             encoder.encode(doc, seg, 0L);
 
-            VasqQueryState qs = queryPrep.prepare(query);
-            float approxL2 = VasqSimdKernel.computeL2(seg, 0L, params.paddedDim(), qs);
+            SvasqQueryState qs = queryPrep.prepare(query);
+            float approxL2 = SvasqSimdKernel.computeL2(seg, 0L, params.paddedDim(), qs);
 
             // Should approximately equal exactNormSq stored in the header
             float storedNorm = seg.get(java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L);
@@ -141,8 +156,8 @@ class VasqKernelTest {
             MemorySegment seg = arena.allocate(bpv, 8);
             encoder.encode(q, seg, 0L);
 
-            VasqQueryState qs = queryPrep.prepare(q);
-            float l2 = VasqSimdKernel.computeL2(seg, 0L, params.paddedDim(), qs);
+            SvasqQueryState qs = queryPrep.prepare(q);
+            float l2 = SvasqSimdKernel.computeL2(seg, 0L, params.paddedDim(), qs);
 
         // Quantization introduces ~5-10% error, so L2(q,q) won't be exactly 0
             float normSq = exactNormSq(q);
@@ -175,8 +190,8 @@ class VasqKernelTest {
                 float[] doc    = corpus.get(docIdx);
 
                 float exactDot  = exactDot(query, doc);
-                VasqQueryState qs = queryPrep.prepare(query);
-                float approxDot = VasqSimdKernel.computeDot(segment, (long) docIdx * bpv, paddedDim, qs);
+                SvasqQueryState qs = queryPrep.prepare(query);
+                float approxDot = SvasqSimdKernel.computeDot(segment, (long) docIdx * bpv, paddedDim, qs);
 
                 // Normalize by ‖query‖·‖doc‖ to avoid division by near-zero dot products
                 float normProd = (float) Math.sqrt(exactNormSq(query) * exactNormSq(doc)) + 1e-9f;
@@ -195,7 +210,7 @@ class VasqKernelTest {
 
     @Test
     void l2_ranking_mostly_preserved() {
-        // Top-5 by exact L2 should appear in top-10 by VASQ L2 (>= 4 out of 5)
+        // Top-5 by exact L2 should appear in top-10 by SVASQ L2 (>= 4 out of 5)
         float[] query = corpus.get(0);
         int bpv = encoder.bytesPerVector();
 
@@ -210,20 +225,20 @@ class VasqKernelTest {
             for (int i = 0; i < N_SAMPLES; i++) exactL2[i] = exactL2Sq(query, corpus.get(i));
             int[] exactTop5 = topK(exactL2, 6, true, 0); // skip index 0
 
-            // VASQ top-10
-            VasqQueryState qs = queryPrep.prepare(query);
-            float[] vasqL2 = new float[N_SAMPLES];
+            // SVASQ top-10
+            SvasqQueryState qs = queryPrep.prepare(query);
+            float[] svasqL2 = new float[N_SAMPLES];
             for (int i = 0; i < N_SAMPLES; i++) {
-                vasqL2[i] = VasqSimdKernel.computeL2(segment, (long) i * bpv, params.paddedDim(), qs);
+                svasqL2[i] = SvasqSimdKernel.computeL2(segment, (long) i * bpv, params.paddedDim(), qs);
             }
-            int[] vasqTop10 = topK(vasqL2, 11, true, 0); // skip index 0
+            int[] svasqTop10 = topK(svasqL2, 11, true, 0); // skip index 0
 
             int overlap = 0;
             for (int e : exactTop5) {
-                for (int v : vasqTop10) if (e == v) { overlap++; break; }
+                for (int v : svasqTop10) if (e == v) { overlap++; break; }
             }
             assertTrue(overlap >= 3,
-                    "Expected ≥ 3 of top-5 exact to appear in VASQ top-10; overlap=" + overlap);
+                    "Expected ≥ 3 of top-5 exact to appear in SVASQ top-10; overlap=" + overlap);
         }
     }
 

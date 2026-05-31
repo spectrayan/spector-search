@@ -1,10 +1,25 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.index.spectrum;
 
 import com.spectrayan.spector.config.HnswParams;
 import com.spectrayan.spector.index.QuantizedHnswIndex;
-import com.spectrayan.spector.core.quantization.strategy.VasqStrategy;
-import com.spectrayan.spector.core.quantization.vasq.VasqCalibrator;
-import com.spectrayan.spector.core.quantization.vasq.VasqParams;
+import com.spectrayan.spector.core.quantization.strategy.SvasqStrategy;
+import com.spectrayan.spector.core.quantization.svasq.SvasqCalibrator;
+import com.spectrayan.spector.core.quantization.svasq.SvasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.index.ScoredResult;
 
@@ -31,7 +46,7 @@ import com.spectrayan.spector.index.ShardedDiskHnswWriter;
  *       the offset-based {@link SimilarityFunction#compute(float[], int, float[], int, int)}
  *       kernel — no per-vector sub-array extraction.</li>
  *   <li><b>HNSW mode</b> (size ≥ {@code shardThreshold}): A {@link QuantizedHnswIndex} with
- *       per-shard VASQ quantization. The flat buffer is released after promotion.</li>
+ *       per-shard SVASQ quantization. The flat buffer is released after promotion.</li>
  * </ul>
  *
  * <h3>Memory Layout (flat mode)</h3>
@@ -345,7 +360,7 @@ final class SpectorShard {
      * <p><b>Called only under the write-lock</b> (from {@link #add}). No concurrent flat scan
      * or add can be in progress. The sequence is:</p>
      * <ol>
-     *   <li>Calibrate VASQ from the flat buffer (in-place, no copy).</li>
+     *   <li>Calibrate SVASQ from the flat buffer (in-place, no copy).</li>
      *   <li>Build and populate the {@link QuantizedHnswIndex}.</li>
      *   <li>Null the flat buffer arrays to reclaim heap memory.</li>
      *   <li>Write {@code promoted = true} (volatile) — this is the publication fence.
@@ -359,22 +374,22 @@ final class SpectorShard {
     private void promote() {
         int currentSize = count;
 
-        // Step 1: Per-shard VASQ calibration directly on the flat buffer
-        VasqParams vasqParams = VasqCalibrator.calibrate(flatData, currentSize, dimensions);
-        VasqStrategy vasqStrategy = new VasqStrategy(vasqParams, SimilarityFunction.EUCLIDEAN);
+        // Step 1: Per-shard SVASQ calibration directly on the flat buffer
+        SvasqParams svasqParams = SvasqCalibrator.calibrate(flatData, currentSize, dimensions);
+        SvasqStrategy svasqStrategy = new SvasqStrategy(svasqParams, SimilarityFunction.EUCLIDEAN);
 
         log.debug("SpectorShard promoting: size={}, paddedDim={}, bpv={}",
-                currentSize, vasqParams.paddedDim(), vasqStrategy.bytesPerVector());
+                currentSize, svasqParams.paddedDim(), svasqStrategy.bytesPerVector());
 
         // Step 2: Build HNSW with EUCLIDEAN — residual search must use L2
         // (see SpectorIndex.search() for the full rationale).
         int capacity = Math.max(currentSize * 4, 1000);
-        hnswIndex = QuantizedHnswIndex.vasqPreCalibrated(
+        hnswIndex = QuantizedHnswIndex.svasqPreCalibrated(
                 dimensions,
                 capacity,
                 SimilarityFunction.EUCLIDEAN,
                 config.hnswParams(),
-                vasqStrategy,
+                svasqStrategy,
                 config.oversamplingFactor()
         );
 
@@ -483,7 +498,7 @@ final class SpectorShard {
      * Loads the promoted HNSW graph structure and dynamically recalibrates/encodes it.
      *
      * <p>Reads from the sharded HNSW directory {@code shard_N_hnsw/} written by
-     * {@link ShardedDiskHnswWriter}. The graph is reconstructed with fresh VASQ
+     * {@link ShardedDiskHnswWriter}. The graph is reconstructed with fresh SVASQ
      * calibration from the loaded residual vectors.</p>
      */
     void loadPromotedGraph(Path shardsDir, int shardIndex, com.spectrayan.spector.storage.VectorStore vs) throws IOException {
@@ -505,18 +520,18 @@ final class SpectorShard {
                     rawResiduals[i] = diskIndex.readVector(i);
                 }
 
-                // 2. Calibrate VasqParams using the loaded residuals
-                VasqParams vasqParams = VasqCalibrator.calibrate(rawResiduals, nodeCount, dimensions);
-                var vasqStrategy = new com.spectrayan.spector.core.quantization.strategy.VasqStrategy(vasqParams, SimilarityFunction.EUCLIDEAN);
+                // 2. Calibrate SvasqParams using the loaded residuals
+                SvasqParams svasqParams = SvasqCalibrator.calibrate(rawResiduals, nodeCount, dimensions);
+                var svasqStrategy = new com.spectrayan.spector.core.quantization.strategy.SvasqStrategy(svasqParams, SimilarityFunction.EUCLIDEAN);
 
                 // 3. Create pre-calibrated QuantizedHnswIndex
                 int capacity = Math.max(nodeCount * 4, config.shardThreshold() * 2);
-                this.hnswIndex = QuantizedHnswIndex.vasqPreCalibrated(
+                this.hnswIndex = QuantizedHnswIndex.svasqPreCalibrated(
                         dimensions,
                         capacity,
                         SimilarityFunction.EUCLIDEAN,
                         config.hnswParams(),
-                        vasqStrategy,
+                        svasqStrategy,
                         config.oversamplingFactor()
                 );
 

@@ -45,7 +45,7 @@ graph LR
 | **📝 Keyword Search** | BM25 scoring with term frequency saturation | Exact term matching |
 | **🧬 Hybrid Search** | Combines both via Reciprocal Rank Fusion | Best-of-both-worlds |
 | **🤖 RAG Pipeline** | Ingest → chunk → embed → retrieve → context assembly | LLM applications |
-| **🏛️ SpectorIndex** | IVF-HNSW-VASQ adaptive hybrid index | Scale + recall |
+| **🏛️ SpectorIndex** | IVF-HNSW-SVASQ adaptive hybrid index | Scale + recall |
 
 ---
 
@@ -93,7 +93,7 @@ Unlike most vector databases that rely on C++, Rust, or Python bindings, Spector
 | Keyword | **0.98 ms** | 1,019 QPS |
 | Hybrid | **1.01 ms** | 994 QPS |
 
-**SpectorIndex (IVF-HNSW-VASQ)** at 10K documents (4096-dim real Qwen3 embeddings):
+**SpectorIndex (IVF-HNSW-SVASQ)** at 10K documents (4096-dim real Qwen3 embeddings):
 
 | Config | Average Latency | Throughput | Recall@10 |
 |--------|----------------|------------|----------|
@@ -111,15 +111,15 @@ Unlike most vector databases that rely on C++, Rust, or Python bindings, Spector
 | **Embedded** | In-process library, zero network overhead | Microservices, desktop apps, edge |
 | **Server** | REST API with CORS, auth, and metrics | Teams, multi-language clients |
 
-### 🗜️ Advanced Quantization (VASQ + IVF-PQ)
+### 🗜️ Advanced Quantization (SVASQ + IVF-PQ)
 
 Spector offers two quantization paths:
 
-- **VASQ (Vectorized Affine Scalar Quantization):** Uses the Fast Walsh-Hadamard Transform to spread variance before INT8 quantization, achieving **4× compression with near-lossless recall** (~97–99.5%). Used inside SpectorIndex shards.
+- **SVASQ (Vectorized Affine Scalar Quantization):** Uses the Fast Walsh-Hadamard Transform to spread variance before INT8 quantization, achieving **4× compression with near-lossless recall** (~97–99.5%). Used inside SpectorIndex shards.
 - **IVF-PQ (Product Quantization):** Provides **32× memory compression** for billion-scale datasets.
 
 > [!IMPORTANT]
-> VASQ gives INT8 the precision of INT12–16 by rotating vectors before quantization. See the [VASQ Deep Dive](deep-dives/vasq-deep-dive.md) for the full theory.
+> SVASQ gives INT8 the precision of INT12–16 by rotating vectors before quantization. See the [SVASQ Deep Dive](deep-dives/svasq-deep-dive.md) for the full theory.
 
 ---
 

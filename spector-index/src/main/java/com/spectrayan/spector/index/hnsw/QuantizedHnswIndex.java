@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.index;
 
 
@@ -16,18 +31,18 @@ import com.spectrayan.spector.core.quantization.ScalarQuantizer;
 import com.spectrayan.spector.core.quantization.strategy.DistanceContext;
 import com.spectrayan.spector.core.quantization.strategy.QuantizationStrategy;
 import com.spectrayan.spector.core.quantization.strategy.QuantizationStrategyFactory;
-import com.spectrayan.spector.core.quantization.strategy.Vasq4Strategy;
-import com.spectrayan.spector.core.quantization.strategy.VasqStrategy;
-import com.spectrayan.spector.core.quantization.vasq.Vasq4Encoder;
-import com.spectrayan.spector.core.quantization.vasq.VasqCalibrator;
-import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
-import com.spectrayan.spector.core.quantization.vasq.VasqParams;
+import com.spectrayan.spector.core.quantization.strategy.Svasq4Strategy;
+import com.spectrayan.spector.core.quantization.strategy.SvasqStrategy;
+import com.spectrayan.spector.core.quantization.svasq.Svasq4Encoder;
+import com.spectrayan.spector.core.quantization.svasq.SvasqCalibrator;
+import com.spectrayan.spector.core.quantization.svasq.SvasqEncoder;
+import com.spectrayan.spector.core.quantization.svasq.SvasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * HNSW vector index with scalar quantization (INT8, INT4, INT2, VASQ) support.
+ * HNSW vector index with scalar quantization (INT8, INT4, INT2, SVASQ) support.
  *
  * <p>Uses a two-phase search strategy for optimal speed/recall tradeoff:</p>
  * <ol>
@@ -49,8 +64,8 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *   <li><b>INT8</b> — one byte per dimension, auto-calibrated after first N vectors (4× compression)</li>
  *   <li><b>INT4</b> — nibble-packed, calibrated from NonUniformQuantizer (8× compression)</li>
  *   <li><b>INT2</b> — crumb-packed, calibrated from NonUniformQuantizer (16× compression)</li>
- *   <li><b>VASQ</b> — FWHT-rotated INT8, off-heap Panama SIMD kernel, auto-calibrated</li>
- *   <li><b>VASQ-4</b> — FWHT-rotated INT4 (nibble-packed), 2× more compressed than VASQ, auto-calibrated</li>
+ *   <li><b>SVASQ</b> — FWHT-rotated INT8, off-heap Panama SIMD kernel, auto-calibrated</li>
+ *   <li><b>SVASQ-4</b> — FWHT-rotated INT4 (nibble-packed), 2× more compressed than SVASQ, auto-calibrated</li>
  * </ul>
  *
  * <h3>Rescore Strategy</h3>
@@ -59,7 +74,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * then rescores them with exact float32 distances to return the true top-K.</p>
  *
  * <h3>Calibration</h3>
- * <p>For INT8 and VASQ: calibration is deferred. Vectors inserted before calibration
+ * <p>For INT8 and SVASQ: calibration is deferred. Vectors inserted before calibration
  * are buffered and retroactively encoded after auto-calibration triggers at
  * {@link #CALIBRATION_SAMPLE_SIZE} vectors. For INT4/INT2: the NonUniformQuantizer
  * must be pre-calibrated and provided at construction time.</p>
@@ -90,7 +105,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
 
     /**
      * The active quantization strategy. Null before calibration completes (for auto-calibrate types).
-     * Set atomically after calibration by {@link #calibrate()} or {@link #calibrateVasq()}.
+     * Set atomically after calibration by {@link #calibrate()} or {@link #calibrateSvasq()}.
      * For pre-calibrated types (INT4/INT2), set at construction.
      */
     private volatile QuantizationStrategy strategy;
@@ -110,9 +125,9 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
     // ── Retained for backward-compat accessors ──
     private volatile ScalarQuantizer quantizer;
     private final NonUniformQuantizer nonUniformQuantizer;
-    private volatile VasqEncoder vasqEncoder;
-    private volatile Vasq4Encoder vasq4Encoder;
-    private final long vasqSeed;
+    private volatile SvasqEncoder svasqEncoder;
+    private volatile Svasq4Encoder svasq4Encoder;
+    private final long svasqSeed;
 
     // ─────────────── Constructors ───────────────
 
@@ -142,9 +157,9 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
     }
 
     /**
-     * Creates a VASQ HNSW index with auto-calibration.
+     * Creates a SVASQ HNSW index with auto-calibration.
      *
-     * <p>VASQ calibration happens automatically when the first {@link #CALIBRATION_SAMPLE_SIZE}
+     * <p>SVASQ calibration happens automatically when the first {@link #CALIBRATION_SAMPLE_SIZE}
      * vectors are inserted. All vectors (including those inserted before calibration) are
      * retroactively encoded after calibration.</p>
      *
@@ -152,21 +167,21 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
      * @param capacity             max vectors
      * @param similarityFunction   distance metric
      * @param params               HNSW parameters
-     * @param oversamplingFactor   rescore oversampling (1 = no rescore, 3 = recommended for VASQ)
+     * @param oversamplingFactor   rescore oversampling (1 = no rescore, 3 = recommended for SVASQ)
      */
-    public static QuantizedHnswIndex vasq(int dimensions, int capacity,
+    public static QuantizedHnswIndex svasq(int dimensions, int capacity,
                                            SimilarityFunction similarityFunction,
                                            HnswParams params, int oversamplingFactor) {
         return new QuantizedHnswIndex(dimensions, capacity, similarityFunction, params,
-                null, QuantizationType.VASQ, null, oversamplingFactor);
+                null, QuantizationType.SVASQ, null, oversamplingFactor);
     }
 
     /**
-     * Creates a VASQ-quantized HNSW index with a <em>pre-calibrated</em> {@link VasqStrategy}.
+     * Creates a SVASQ-quantized HNSW index with a <em>pre-calibrated</em> {@link SvasqStrategy}.
      *
-     * <p>Unlike {@link #vasq} (which auto-calibrates on the first
+     * <p>Unlike {@link #svasq} (which auto-calibrates on the first
      * {@link #CALIBRATION_SAMPLE_SIZE} inserted vectors), this variant accepts a
-     * {@link VasqStrategy} calibrated externally — typically on the full residual buffer
+     * {@link SvasqStrategy} calibrated externally — typically on the full residual buffer
      * of a {@link com.spectrayan.spector.index.spectrum.SpectorShard} at promotion time.
      * This gives tighter quantization bounds because all residuals participate in
      * calibration, not just the first 10K.</p>
@@ -178,24 +193,24 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
      * @param capacity             max vectors
      * @param similarityFunction   distance metric
      * @param params               HNSW parameters
-     * @param preCalibrated        a fully built {@link VasqStrategy} (non-null)
+     * @param preCalibrated        a fully built {@link SvasqStrategy} (non-null)
      * @param oversamplingFactor   rescore oversampling (1 = no rescore, 3 = recommended)
      * @throws SpectorValidationException if {@code preCalibrated} is null
      */
-    public static QuantizedHnswIndex vasqPreCalibrated(int dimensions, int capacity,
+    public static QuantizedHnswIndex svasqPreCalibrated(int dimensions, int capacity,
                                                         SimilarityFunction similarityFunction,
                                                         HnswParams params,
-                                                        VasqStrategy preCalibrated,
+                                                        SvasqStrategy preCalibrated,
                                                         int oversamplingFactor) {
-        if (preCalibrated == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "preCalibrated VasqStrategy");
+        if (preCalibrated == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "preCalibrated SvasqStrategy");
         return new QuantizedHnswIndex(dimensions, capacity, similarityFunction, params,
-                preCalibrated, QuantizationType.VASQ, oversamplingFactor);
+                preCalibrated, QuantizationType.SVASQ, oversamplingFactor);
     }
 
     /**
-     * Creates a VASQ-4 HNSW index with auto-calibration.
+     * Creates a SVASQ-4 HNSW index with auto-calibration.
      *
-     * <p>VASQ-4 uses INT4 nibble-packed codes (2× smaller than VASQ-8).
+     * <p>SVASQ-4 uses INT4 nibble-packed codes (2× smaller than SVASQ-8).
      * Calibration happens automatically when the first {@link #CALIBRATION_SAMPLE_SIZE}
      * vectors are inserted, using 4-bit scales and tighter clipping (2.5σ).</p>
      *
@@ -203,37 +218,37 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
      * @param capacity           max vectors
      * @param similarityFunction distance metric
      * @param params             HNSW parameters
-     * @param oversamplingFactor rescore oversampling (3 = recommended for VASQ-4)
+     * @param oversamplingFactor rescore oversampling (3 = recommended for SVASQ-4)
      */
-    public static QuantizedHnswIndex vasq4(int dimensions, int capacity,
+    public static QuantizedHnswIndex svasq4(int dimensions, int capacity,
                                             SimilarityFunction similarityFunction,
                                             HnswParams params, int oversamplingFactor) {
         return new QuantizedHnswIndex(dimensions, capacity, similarityFunction, params,
-                null, QuantizationType.VASQ_4, null, oversamplingFactor);
+                null, QuantizationType.SVASQ_4, null, oversamplingFactor);
     }
 
     /**
-     * Creates a VASQ-4 HNSW index with a pre-calibrated {@link Vasq4Strategy}.
+     * Creates a SVASQ-4 HNSW index with a pre-calibrated {@link Svasq4Strategy}.
      *
      * @param dimensions         vector dimensionality
      * @param capacity           max vectors
      * @param similarityFunction distance metric
      * @param params             HNSW parameters
-     * @param preCalibrated      a fully built {@link Vasq4Strategy} (non-null)
+     * @param preCalibrated      a fully built {@link Svasq4Strategy} (non-null)
      * @param oversamplingFactor rescore oversampling
      */
-    public static QuantizedHnswIndex vasq4PreCalibrated(int dimensions, int capacity,
+    public static QuantizedHnswIndex svasq4PreCalibrated(int dimensions, int capacity,
                                                          SimilarityFunction similarityFunction,
                                                          HnswParams params,
-                                                         Vasq4Strategy preCalibrated,
+                                                         Svasq4Strategy preCalibrated,
                                                          int oversamplingFactor) {
-        if (preCalibrated == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "preCalibrated Vasq4Strategy");
+        if (preCalibrated == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "preCalibrated Svasq4Strategy");
         return new QuantizedHnswIndex(dimensions, capacity, similarityFunction, params,
-                preCalibrated, QuantizationType.VASQ_4, oversamplingFactor);
+                preCalibrated, QuantizationType.SVASQ_4, oversamplingFactor);
     }
 
     /**
-     * Creates a quantized HNSW index supporting INT8, INT4, INT2, or VASQ quantization
+     * Creates a quantized HNSW index supporting INT8, INT4, INT2, or SVASQ quantization
      * with configurable rescore oversampling.
      *
      * @param dimensions           vector dimensionality
@@ -242,7 +257,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
      * @param params               HNSW parameters
      * @param quantizer            pre-calibrated INT8 quantizer (null for auto-calibrate; ignored for INT4/INT2)
      * @param quantizationType     quantization type
-     * @param nonUniformQuantizer  calibrated non-uniform quantizer (required for INT4/INT2, null for INT8/VASQ)
+     * @param nonUniformQuantizer  calibrated non-uniform quantizer (required for INT4/INT2, null for INT8/SVASQ)
      * @param oversamplingFactor   rescore oversampling factor (1 = no rescore, &gt;1 = oversample and rescore)
      */
     public QuantizedHnswIndex(int dimensions, int capacity,
@@ -258,11 +273,11 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
         this.nonUniformQuantizer = nonUniformQuantizer;
         this.oversamplingFactor = Math.max(1, oversamplingFactor);
         this.floatVectors = new float[capacity][];
-        this.vasqSeed = VasqParams.DEFAULT_SEED;
+        this.svasqSeed = SvasqParams.DEFAULT_SEED;
 
         // For INT4/INT2: strategy is ready immediately (pre-calibrated quantizer required)
         // For INT8: strategy is ready if quantizer is provided; otherwise null until auto-calibrate
-        // For VASQ: strategy is null until auto-calibrate
+        // For SVASQ: strategy is null until auto-calibrate
         if (this.quantizationType == QuantizationType.SCALAR_INT4
                 || this.quantizationType == QuantizationType.SCALAR_INT2) {
             if (nonUniformQuantizer == null) {
@@ -271,7 +286,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
             this.strategy = QuantizationStrategyFactory.create(
                     this.quantizationType, null, nonUniformQuantizer, null, null, similarityFunction);
             this.quantizer = null;
-            this.vasqEncoder = null;
+            this.svasqEncoder = null;
             this.calibrationBuffer = null;
             this.calibrationCount = 0;
             // Allocate unified storage segment for packed INT4/INT2
@@ -281,16 +296,16 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
             this.strategy = QuantizationStrategyFactory.create(
                     this.quantizationType, quantizer, null, null, null, similarityFunction);
             this.quantizer = quantizer;
-            this.vasqEncoder = null;
+            this.svasqEncoder = null;
             this.calibrationBuffer = null;
             this.calibrationCount = 0;
             allocateStorageSegment(capacity, strategy.bytesPerVector());
         } else {
-            // Auto-calibrate (INT8 or VASQ) — strategy and segment are null until calibration
+            // Auto-calibrate (INT8 or SVASQ) — strategy and segment are null until calibration
             this.strategy = null;
             this.quantizer = null;
-            this.vasqEncoder = null;
-            this.vasq4Encoder = null;
+            this.svasqEncoder = null;
+            this.svasq4Encoder = null;
             this.calibrationBuffer = new float[Math.min(CALIBRATION_SAMPLE_SIZE, capacity)][];
             this.calibrationCount = 0;
             this.storageSegment = null;
@@ -303,7 +318,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
     }
 
     /**
-     * Private constructor for pre-calibrated VASQ or VASQ-4.
+     * Private constructor for pre-calibrated SVASQ or SVASQ-4.
      * The strategy is immediately active; no calibration buffer is allocated.
      */
     private QuantizedHnswIndex(int dimensions, int capacity,
@@ -317,19 +332,19 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
         this.nonUniformQuantizer = null;
         this.oversamplingFactor = Math.max(1, oversamplingFactor);
         this.floatVectors = new float[capacity][];
-        this.vasqSeed = VasqParams.DEFAULT_SEED;
+        this.svasqSeed = SvasqParams.DEFAULT_SEED;
         this.strategy = preCalibrated;
 
         // Set the appropriate encoder accessor based on the strategy type
-        if (preCalibrated instanceof VasqStrategy vs) {
-            this.vasqEncoder = vs.encoder();
-            this.vasq4Encoder = null;
-        } else if (preCalibrated instanceof Vasq4Strategy v4s) {
-            this.vasqEncoder = null;
-            this.vasq4Encoder = v4s.encoder();
+        if (preCalibrated instanceof SvasqStrategy vs) {
+            this.svasqEncoder = vs.encoder();
+            this.svasq4Encoder = null;
+        } else if (preCalibrated instanceof Svasq4Strategy v4s) {
+            this.svasqEncoder = null;
+            this.svasq4Encoder = v4s.encoder();
         } else {
-            this.vasqEncoder = null;
-            this.vasq4Encoder = null;
+            this.svasqEncoder = null;
+            this.svasq4Encoder = null;
         }
         this.quantizer = null;
         this.calibrationBuffer = null;
@@ -364,7 +379,7 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
         floatVectors[nodeIdx] = skipCopy.get()[0] ? vector : Arrays.copyOf(vector, vector.length);
 
         if (strategy == null) {
-            // Pre-calibration buffer phase (INT8 auto or VASQ auto)
+            // Pre-calibration buffer phase (INT8 auto or SVASQ auto)
             bufferForCalibration(vector, nodeIdx);
         } else {
             // Strategy is ready — encode directly into the off-heap segment
@@ -413,11 +428,11 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
         }
         if (calibrationCount >= calibrationBuffer.length
                 || calibrationCount >= CALIBRATION_SAMPLE_SIZE) {
-            // Trigger calibration for INT8, VASQ, or VASQ_4
-            if (quantizationType == QuantizationType.VASQ) {
-                calibrateVasq();
-            } else if (quantizationType == QuantizationType.VASQ_4) {
-                calibrateVasq4();
+            // Trigger calibration for INT8, SVASQ, or SVASQ_4
+            if (quantizationType == QuantizationType.SVASQ) {
+                calibrateSvasq();
+            } else if (quantizationType == QuantizationType.SVASQ_4) {
+                calibrateSvasq4();
             } else {
                 calibrate();
             }
@@ -590,23 +605,23 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
     }
 
     /**
-     * Auto-calibrates the VASQ encoder from buffered vectors, builds the strategy,
+     * Auto-calibrates the SVASQ encoder from buffered vectors, builds the strategy,
      * allocates the off-heap segment, and retroactively encodes all buffered vectors.
      *
-     * <p>Uses {@link VasqCalibrator#calibrate(float[][], int, int, long)} to avoid
+     * <p>Uses {@link SvasqCalibrator#calibrate(float[][], int, int, long)} to avoid
      * the previous {@code Arrays.copyOf} + {@code Arrays.asList} wrapper.
      */
-    private synchronized void calibrateVasq() {
+    private synchronized void calibrateSvasq() {
         if (strategy != null) return; // already calibrated
-        VasqParams vParams = VasqCalibrator.calibrate(
-                calibrationBuffer, calibrationCount, dimensions, vasqSeed);
-        VasqEncoder enc = new VasqEncoder(vParams);
-        this.vasqEncoder = enc;
+        SvasqParams vParams = SvasqCalibrator.calibrate(
+                calibrationBuffer, calibrationCount, dimensions, svasqSeed);
+        SvasqEncoder enc = new SvasqEncoder(vParams);
+        this.svasqEncoder = enc;
 
-        this.strategy = new VasqStrategy(enc, similarityFunction);
+        this.strategy = new SvasqStrategy(enc, similarityFunction);
         allocateStorageSegment(capacity, strategy.bytesPerVector());
 
-        log.info("QuantizedHnswIndex VASQ auto-calibrated: {} sample vectors, paddedDim={}, bpv={}",
+        log.info("QuantizedHnswIndex SVASQ auto-calibrated: {} sample vectors, paddedDim={}, bpv={}",
                 calibrationCount, vParams.paddedDim(), strategy.bytesPerVector());
 
         // Retroactively encode all vectors inserted before calibration
@@ -622,23 +637,23 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
     }
 
     /**
-     * Auto-calibrates the VASQ-4 (INT4) encoder from buffered vectors, builds the strategy,
+     * Auto-calibrates the SVASQ-4 (INT4) encoder from buffered vectors, builds the strategy,
      * allocates the off-heap segment, and retroactively encodes all buffered vectors.
      *
-     * <p>Uses {@link VasqCalibrator#calibrate4bit} with tighter clipping (2.5σ) for optimal
+     * <p>Uses {@link SvasqCalibrator#calibrate4bit} with tighter clipping (2.5σ) for optimal
      * use of the 15 available INT4 quantization levels.</p>
      */
-    private synchronized void calibrateVasq4() {
+    private synchronized void calibrateSvasq4() {
         if (strategy != null) return;
-        VasqParams vParams = VasqCalibrator.calibrate4bit(
-                calibrationBuffer, calibrationCount, dimensions, vasqSeed);
-        Vasq4Encoder enc = new Vasq4Encoder(vParams);
-        this.vasq4Encoder = enc;
+        SvasqParams vParams = SvasqCalibrator.calibrate4bit(
+                calibrationBuffer, calibrationCount, dimensions, svasqSeed);
+        Svasq4Encoder enc = new Svasq4Encoder(vParams);
+        this.svasq4Encoder = enc;
 
-        this.strategy = new Vasq4Strategy(enc, similarityFunction);
+        this.strategy = new Svasq4Strategy(enc, similarityFunction);
         allocateStorageSegment(capacity, strategy.bytesPerVector());
 
-        log.info("QuantizedHnswIndex VASQ-4 auto-calibrated: {} sample vectors, paddedDim={}, bpv={}",
+        log.info("QuantizedHnswIndex SVASQ-4 auto-calibrated: {} sample vectors, paddedDim={}, bpv={}",
                 calibrationCount, vParams.paddedDim(), strategy.bytesPerVector());
 
         // Retroactively encode all vectors inserted before calibration
@@ -672,14 +687,14 @@ public class QuantizedHnswIndex extends AbstractHnswIndex {
     /** Returns the INT8 quantizer (may be null if not INT8 or not yet calibrated). */
     public ScalarQuantizer quantizer() { return quantizer; }
 
-    /** Returns the non-uniform quantizer (INT4/INT2), or null if INT8/VASQ. */
+    /** Returns the non-uniform quantizer (INT4/INT2), or null if INT8/SVASQ. */
     public NonUniformQuantizer nonUniformQuantizer() { return nonUniformQuantizer; }
 
-    /** Returns the VASQ encoder, or null if not VASQ or not yet calibrated. */
-    public VasqEncoder vasqEncoder() { return vasqEncoder; }
+    /** Returns the SVASQ encoder, or null if not SVASQ or not yet calibrated. */
+    public SvasqEncoder svasqEncoder() { return svasqEncoder; }
 
-    /** Returns the VASQ-4 encoder, or null if not VASQ-4 or not yet calibrated. */
-    public Vasq4Encoder vasq4Encoder() { return vasq4Encoder; }
+    /** Returns the SVASQ-4 encoder, or null if not SVASQ-4 or not yet calibrated. */
+    public Svasq4Encoder svasq4Encoder() { return svasq4Encoder; }
 
     /** Returns the configured oversampling factor. */
     public int oversamplingFactor() { return oversamplingFactor; }

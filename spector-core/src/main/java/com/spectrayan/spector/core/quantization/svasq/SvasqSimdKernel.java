@@ -1,4 +1,19 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 
 import com.spectrayan.spector.core.simd.SimdCapability;
 
@@ -13,7 +28,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 
 /**
- * SIMD-accelerated VASQ distance kernel using Java Panama Vector API.
+ * SIMD-accelerated SVASQ distance kernel using Java Panama Vector API.
  *
  * <h3>The Hot Loop (L2 Distance)</h3>
  * <pre>
@@ -55,11 +70,11 @@ import java.nio.ByteOrder;
  * <h3>Signed INT8 Widening</h3>
  * <p>{@code ByteVector.castShape(F_SPECIES, 0)} performs a <em>signed</em> widening
  * from INT8 to INT32 to float32, mapping to {@code vpmovsxbd} + {@code vcvtdq2ps}
- * on AVX2. This is correct for VASQ's signed [-127, 127] codes.</p>
+ * on AVX2. This is correct for SVASQ's signed [-127, 127] codes.</p>
  *
  * <p>All methods are stateless and safe for concurrent use.</p>
  */
-public final class VasqSimdKernel {
+public final class SvasqSimdKernel {
 
     // Preferred float species: AVX2 → 8 lanes (256-bit), AVX-512 → 16 lanes (512-bit)
     private static final VectorSpecies<Float> F_SPECIES = SimdCapability.PREFERRED_SPECIES;
@@ -78,11 +93,11 @@ public final class VasqSimdKernel {
                 : "B_SPECIES lanes must equal F_SPECIES lanes";
     }
 
-    private VasqSimdKernel() {}
+    private SvasqSimdKernel() {}
 
     /**
      * Computes the approximate squared L2 distance between a prepared query and an
-     * encoded VASQ vector stored in a {@link MemorySegment}.
+     * encoded SVASQ vector stored in a {@link MemorySegment}.
      *
      * <p>Formula: {@code L2 ≈ exactNormSq + constL2Q - 2 × Σᵢ(q̃ᵢ × zᵢ)}</p>
      *
@@ -92,11 +107,11 @@ public final class VasqSimdKernel {
      * @param segment    off-heap memory segment containing the encoded vector database
      * @param offset     byte offset of the target vector's 4-byte norm header
      * @param paddedDim  padded dimensionality (must be power-of-two ≥ {@code F_SPECIES.length()})
-     * @param qs         pre-prepared query state (from {@link VasqQueryPrep#prepare})
+     * @param qs         pre-prepared query state (from {@link SvasqQueryPrep#prepare})
      * @return approximate squared L2 distance (non-negative)
      */
     public static float computeL2(MemorySegment segment, long offset,
-                                   int paddedDim, VasqQueryState qs) {
+                                   int paddedDim, SvasqQueryState qs) {
         float exactNormSq = segment.get(ValueLayout.JAVA_FLOAT, offset);
         long  codeOffset  = offset + 4L;
         float[] qTilde    = qs.qTilde();
@@ -139,7 +154,7 @@ public final class VasqSimdKernel {
     }
 
     /**
-     * Computes the approximate inner product between a prepared query and a VASQ vector.
+     * Computes the approximate inner product between a prepared query and a SVASQ vector.
      *
      * <p>Formula: {@code IP ≈ Σᵢ(q̃ᵢ × zᵢ) + C(q)}</p>
      *
@@ -152,7 +167,7 @@ public final class VasqSimdKernel {
      * @return approximate inner product (asymmetric: query in float32, corpus in INT8)
      */
     public static float computeDot(MemorySegment segment, long offset,
-                                    int paddedDim, VasqQueryState qs) {
+                                    int paddedDim, SvasqQueryState qs) {
         long    codeOffset = offset + 4L;
         float[] qTilde     = qs.qTilde();
 

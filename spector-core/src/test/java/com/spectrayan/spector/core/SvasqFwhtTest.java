@@ -1,8 +1,23 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.core;
 
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 
-import com.spectrayan.spector.core.quantization.vasq.VasqFwht;
+import com.spectrayan.spector.core.quantization.svasq.SvasqFwht;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
@@ -10,9 +25,9 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for {@link VasqFwht} — FWHT rotation correctness and orthogonality.
+ * Tests for {@link SvasqFwht} — FWHT rotation correctness and orthogonality.
  */
-class VasqFwhtTest {
+class SvasqFwhtTest {
 
     private static final long SEED = 42L;
     private static final float NORM_TOLERANCE    = 1e-4f;
@@ -22,39 +37,39 @@ class VasqFwhtTest {
 
     @Test
     void nextPowerOfTwo_exactPower() {
-        assertEquals(1,    VasqFwht.nextPowerOfTwo(1));
-        assertEquals(2,    VasqFwht.nextPowerOfTwo(2));
-        assertEquals(4,    VasqFwht.nextPowerOfTwo(4));
-        assertEquals(256,  VasqFwht.nextPowerOfTwo(256));
-        assertEquals(1024, VasqFwht.nextPowerOfTwo(1024));
+        assertEquals(1,    SvasqFwht.nextPowerOfTwo(1));
+        assertEquals(2,    SvasqFwht.nextPowerOfTwo(2));
+        assertEquals(4,    SvasqFwht.nextPowerOfTwo(4));
+        assertEquals(256,  SvasqFwht.nextPowerOfTwo(256));
+        assertEquals(1024, SvasqFwht.nextPowerOfTwo(1024));
     }
 
     @Test
     void nextPowerOfTwo_nonExactPower() {
-        assertEquals(4,    VasqFwht.nextPowerOfTwo(3));
-        assertEquals(128,  VasqFwht.nextPowerOfTwo(100));
-        assertEquals(512,  VasqFwht.nextPowerOfTwo(385));
-        assertEquals(1024, VasqFwht.nextPowerOfTwo(769));
-        assertEquals(2048, VasqFwht.nextPowerOfTwo(1537)); // 1536-dim embeddings
+        assertEquals(4,    SvasqFwht.nextPowerOfTwo(3));
+        assertEquals(128,  SvasqFwht.nextPowerOfTwo(100));
+        assertEquals(512,  SvasqFwht.nextPowerOfTwo(385));
+        assertEquals(1024, SvasqFwht.nextPowerOfTwo(769));
+        assertEquals(2048, SvasqFwht.nextPowerOfTwo(1537)); // 1536-dim embeddings
     }
 
     @Test
     void paddedDim_768_is_1024() {
-        VasqFwht fwht = new VasqFwht(768, SEED);
+        SvasqFwht fwht = new SvasqFwht(768, SEED);
         assertEquals(1024, fwht.paddedDim());
         assertEquals(768,  fwht.originalDim());
     }
 
     @Test
     void paddedDim_384_is_512() {
-        VasqFwht fwht = new VasqFwht(384, SEED);
+        SvasqFwht fwht = new SvasqFwht(384, SEED);
         assertEquals(512,  fwht.paddedDim());
     }
 
     @Test
     void paddedDim_128_is_128() {
         // 128 is already a power-of-two — no padding
-        VasqFwht fwht = new VasqFwht(128, SEED);
+        SvasqFwht fwht = new SvasqFwht(128, SEED);
         assertEquals(128, fwht.paddedDim());
     }
 
@@ -62,7 +77,7 @@ class VasqFwhtTest {
 
     @Test
     void normPreserved_randomVector_128dims() {
-        VasqFwht fwht = new VasqFwht(128, SEED);
+        SvasqFwht fwht = new SvasqFwht(128, SEED);
         Random rng = new Random(1L);
 
         for (int trial = 0; trial < 50; trial++) {
@@ -78,7 +93,7 @@ class VasqFwhtTest {
 
     @Test
     void normPreserved_randomVector_768dims() {
-        VasqFwht fwht = new VasqFwht(768, SEED);
+        SvasqFwht fwht = new SvasqFwht(768, SEED);
         Random rng = new Random(2L);
 
         for (int trial = 0; trial < 20; trial++) {
@@ -94,7 +109,7 @@ class VasqFwhtTest {
 
     @Test
     void normPreserved_zeroVector() {
-        VasqFwht fwht = new VasqFwht(128, SEED);
+        SvasqFwht fwht = new SvasqFwht(128, SEED);
         float[] zero   = new float[128];
         float[] rotated = fwht.rotate(zero);
         assertEquals(0f, norm(rotated), 1e-10f, "Zero vector must stay zero after rotation");
@@ -104,7 +119,7 @@ class VasqFwhtTest {
 
     @Test
     void innerProductPreserved_randomPairs_128dims() {
-        VasqFwht fwht = new VasqFwht(128, SEED);
+        SvasqFwht fwht = new SvasqFwht(128, SEED);
         Random rng = new Random(3L);
 
         for (int trial = 0; trial < 30; trial++) {
@@ -125,8 +140,8 @@ class VasqFwhtTest {
 
     @Test
     void deterministic_sameSeed() {
-        VasqFwht fwht1 = new VasqFwht(64, SEED);
-        VasqFwht fwht2 = new VasqFwht(64, SEED);
+        SvasqFwht fwht1 = new SvasqFwht(64, SEED);
+        SvasqFwht fwht2 = new SvasqFwht(64, SEED);
         float[] v = randomVector(64, new Random(99L));
 
         float[] r1 = fwht1.rotate(v);
@@ -137,8 +152,8 @@ class VasqFwhtTest {
 
     @Test
     void different_seeds_produce_different_rotations() {
-        VasqFwht fwht1 = new VasqFwht(64, 10L);
-        VasqFwht fwht2 = new VasqFwht(64, 20L);
+        SvasqFwht fwht1 = new SvasqFwht(64, 10L);
+        SvasqFwht fwht2 = new SvasqFwht(64, 20L);
         float[] v = randomVector(64, new Random(99L));
 
         float[] r1 = fwht1.rotate(v);
@@ -156,7 +171,7 @@ class VasqFwhtTest {
 
     @Test
     void rotateAllocating_returns_paddedDim_array() {
-        VasqFwht fwht = new VasqFwht(100, SEED);
+        SvasqFwht fwht = new SvasqFwht(100, SEED);
         assertEquals(128, fwht.paddedDim());
         float[] v = randomVector(100, new Random(5L));
         float[] r = fwht.rotate(v);
@@ -165,7 +180,7 @@ class VasqFwhtTest {
 
     @Test
     void rotateInPlace_writes_to_dst_buffer() {
-        VasqFwht fwht = new VasqFwht(4, SEED);
+        SvasqFwht fwht = new SvasqFwht(4, SEED);
         float[] src = {1f, 2f, 3f, 4f};
         float[] dst = new float[4];
         fwht.rotate(src, dst);
@@ -178,13 +193,13 @@ class VasqFwhtTest {
 
     @Test
     void wrongDimThrows() {
-        VasqFwht fwht = new VasqFwht(128, SEED);
+        SvasqFwht fwht = new SvasqFwht(128, SEED);
         assertThrows(SpectorValidationException.class, () -> fwht.rotate(new float[64]));
     }
 
     @Test
     void invalidDimThrows() {
-        assertThrows(SpectorValidationException.class, () -> new VasqFwht(0, SEED));
+        assertThrows(SpectorValidationException.class, () -> new SvasqFwht(0, SEED));
     }
 
     // ── FWHT butterfly correctness (known output) ─────────────────────────────
@@ -193,7 +208,7 @@ class VasqFwhtTest {
     void applyFwht_knownInput() {
         // For input [1, 0, 0, 0], FWHT gives [1, 1, 1, 1]
         float[] data = {1f, 0f, 0f, 0f};
-        VasqFwht.applyFwht(data);
+        SvasqFwht.applyFwht(data);
         assertArrayEquals(new float[]{1f, 1f, 1f, 1f}, data, 1e-6f);
     }
 
@@ -201,7 +216,7 @@ class VasqFwhtTest {
     void applyFwht_knownInput2() {
         // For input [1, 1, 1, 1], FWHT gives [4, 0, 0, 0]
         float[] data = {1f, 1f, 1f, 1f};
-        VasqFwht.applyFwht(data);
+        SvasqFwht.applyFwht(data);
         assertArrayEquals(new float[]{4f, 0f, 0f, 0f}, data, 1e-6f);
     }
 

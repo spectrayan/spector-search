@@ -1,9 +1,24 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.bench;
 
-import com.spectrayan.spector.core.quantization.strategy.VasqStrategy;
-import com.spectrayan.spector.core.quantization.vasq.VasqCalibrator;
-import com.spectrayan.spector.core.quantization.vasq.VasqEncoder;
-import com.spectrayan.spector.core.quantization.vasq.VasqParams;
+import com.spectrayan.spector.core.quantization.strategy.SvasqStrategy;
+import com.spectrayan.spector.core.quantization.svasq.SvasqCalibrator;
+import com.spectrayan.spector.core.quantization.svasq.SvasqEncoder;
+import com.spectrayan.spector.core.quantization.svasq.SvasqParams;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import org.openjdk.jmh.annotations.*;
@@ -17,7 +32,7 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JMH benchmarks for VASQ encode throughput.
+ * JMH benchmarks for SVASQ encode throughput.
  *
  * <p>Measures the full encode pipeline: FWHT rotation → per-dimension INT8 quantization →
  * off-heap {@link MemorySegment} write. This is the hot path on every {@code add()} call
@@ -25,7 +40,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Run via:</p>
  * <pre>
- *   java -jar spector-bench/target/benchmarks.jar VasqEncodeBenchmark
+ *   java -jar spector-bench/target/benchmarks.jar SvasqEncodeBenchmark
  * </pre>
  */
 @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
@@ -38,7 +53,7 @@ import java.util.concurrent.TimeUnit;
         "--enable-native-access=ALL-UNNAMED",
         "-Xmx2g"
 })
-public class VasqEncodeBenchmark {
+public class SvasqEncodeBenchmark {
 
     @Param({"128", "768"})
     int dims;
@@ -47,8 +62,8 @@ public class VasqEncodeBenchmark {
     @Param({"1000", "10000"})
     int batchSize;
 
-    private VasqEncoder encoder;
-    private VasqStrategy strategy;
+    private SvasqEncoder encoder;
+    private SvasqStrategy strategy;
     private float[] singleVector;
     private float[][] batchVectors;
     private MemorySegment segment;
@@ -66,9 +81,9 @@ public class VasqEncodeBenchmark {
             sample.add(v);
         }
 
-        VasqParams params = VasqCalibrator.calibrate(sample, dims);
-        encoder = new VasqEncoder(params);
-        strategy = new VasqStrategy(params, SimilarityFunction.COSINE);
+        SvasqParams params = SvasqCalibrator.calibrate(sample, dims);
+        encoder = new SvasqEncoder(params);
+        strategy = new SvasqStrategy(params, SimilarityFunction.COSINE);
         bpv = strategy.bytesPerVector();
 
         // Off-heap segment big enough for batchSize vectors

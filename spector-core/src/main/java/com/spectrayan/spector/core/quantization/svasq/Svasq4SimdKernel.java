@@ -1,4 +1,19 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 
 import com.spectrayan.spector.core.simd.SimdCapability;
 
@@ -13,7 +28,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 
 /**
- * SIMD-accelerated VASQ-4 distance kernel for nibble-packed INT4 codes.
+ * SIMD-accelerated SVASQ-4 distance kernel for nibble-packed INT4 codes.
  *
  * <h3>Nibble Packing Format</h3>
  * <p>Each stored byte contains two offset-encoded unsigned 4-bit values [0, 14]:</p>
@@ -44,15 +59,15 @@ import java.nio.ByteOrder;
  * <h3>ILP via High/Low Split</h3>
  * <p>Processing high and low nibbles independently exposes instruction-level parallelism:
  * the CPU can pipeline the high-nibble FMA while loading/masking the low nibble from
- * the same byte vector. This is analogous to the 2× unrolling in {@link VasqSimdKernel}.</p>
+ * the same byte vector. This is analogous to the 2× unrolling in {@link SvasqSimdKernel}.</p>
  *
  * <p>All methods are stateless and safe for concurrent use.</p>
  *
- * @see Vasq4QueryState
- * @see Vasq4QueryPrep
- * @see VasqSimdKernel
+ * @see Svasq4QueryState
+ * @see Svasq4QueryPrep
+ * @see SvasqSimdKernel
  */
-public final class Vasq4SimdKernel {
+public final class Svasq4SimdKernel {
 
     // Preferred float species: AVX2 → 8 lanes (256-bit), AVX-512 → 16 lanes (512-bit)
     private static final VectorSpecies<Float> F_SPECIES = SimdCapability.PREFERRED_SPECIES;
@@ -73,10 +88,10 @@ public final class Vasq4SimdKernel {
                 : "B_SPECIES lanes must equal F_SPECIES lanes";
     }
 
-    private Vasq4SimdKernel() {}
+    private Svasq4SimdKernel() {}
 
     /**
-     * Computes the approximate squared L2 distance between a prepared VASQ-4 query
+     * Computes the approximate squared L2 distance between a prepared SVASQ-4 query
      * and a nibble-packed encoded vector in a {@link MemorySegment}.
      *
      * <p>Formula: {@code L2 ≈ exactNormSq + constL2Q − 2 × dotUnsigned}</p>
@@ -87,11 +102,11 @@ public final class Vasq4SimdKernel {
      * @param segment    off-heap memory segment containing the encoded vector database
      * @param offset     byte offset of the target vector's 4-byte float32 norm header
      * @param halfDim    half of paddedDim (= number of nibble-packed bytes to process)
-     * @param qs         pre-prepared VASQ-4 query state (from {@link Vasq4QueryPrep#prepare})
+     * @param qs         pre-prepared SVASQ-4 query state (from {@link Svasq4QueryPrep#prepare})
      * @return approximate squared L2 distance (non-negative)
      */
     public static float computeL2(MemorySegment segment, long offset,
-                                   int halfDim, Vasq4QueryState qs) {
+                                   int halfDim, Svasq4QueryState qs) {
         float exactNormSq = segment.get(ValueLayout.JAVA_FLOAT, offset);
         long  codeOffset  = offset + 4L;
         float[] qTildeHi  = qs.qTildeHi();
@@ -135,7 +150,7 @@ public final class Vasq4SimdKernel {
     }
 
     /**
-     * Computes the approximate inner product between a prepared VASQ-4 query
+     * Computes the approximate inner product between a prepared SVASQ-4 query
      * and a nibble-packed encoded vector.
      *
      * <p>Formula: {@code IP ≈ dotUnsigned + dotOffset}</p>
@@ -143,11 +158,11 @@ public final class Vasq4SimdKernel {
      * @param segment    off-heap memory segment
      * @param offset     byte offset of the target vector's norm header
      * @param halfDim    half of paddedDim (number of nibble-packed bytes)
-     * @param qs         pre-prepared VASQ-4 query state
+     * @param qs         pre-prepared SVASQ-4 query state
      * @return approximate inner product
      */
     public static float computeDot(MemorySegment segment, long offset,
-                                    int halfDim, Vasq4QueryState qs) {
+                                    int halfDim, Svasq4QueryState qs) {
         long    codeOffset = offset + 4L;
         float[] qTildeHi   = qs.qTildeHi();
         float[] qTildeLo   = qs.qTildeLo();

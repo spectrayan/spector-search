@@ -16,7 +16,7 @@ Implements Hierarchical Navigable Small World (HNSW) graphs. Supports:
 ### 2. `com.spectrayan.spector.index.spectrum` 🌀
 Home of **SpectorIndex**, our flagship adaptive shard index. It implements a multi-level coarse-routing structure:
 - **Level 1 (IVF):** centoids learned via K-Means++. Routings computed in absolute coordinate space.
-- **Level 2 (SpectorShard):** Each Voronoi cell is flat when small, automatically promoted to a local quantized HNSW graph once it exceeds a size threshold. Stores vectors as tight high-precision residual coordinates (`r = x - c`) quantized with 132-bit VASQ.
+- **Level 2 (SpectorShard):** Each Voronoi cell is flat when small, automatically promoted to a local quantized HNSW graph once it exceeds a size threshold. Stores vectors as tight high-precision residual coordinates (`r = x - c`) quantized with 132-bit SVASQ.
 
 ### 3. `com.spectrayan.spector.index.ivf` & `pq` 🗜️
 Product Quantization algorithms that divide vector dimensions into orthogonal subspaces and learn codebooks via K-Means++, enabling **32× memory compression** for billion-scale datasets.
@@ -37,7 +37,7 @@ index.add("doc-123", 123, vector);
 ScoredResult[] results = index.search(queryVector, 10);
 ```
 
-### SpectorIndex (IVF-HNSW-VASQ) builder
+### SpectorIndex (IVF-HNSW-SVASQ) builder
 ```java
 SpectorIndex spector = SpectorIndex.builder()
     .dimensions(384)

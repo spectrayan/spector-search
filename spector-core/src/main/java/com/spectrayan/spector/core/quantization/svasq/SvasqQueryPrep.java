@@ -1,15 +1,30 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 import com.spectrayan.spector.commons.error.SpectorException;
 
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Prepares a {@link VasqQueryState} from a raw float32 query vector.
+ * Prepares a {@link SvasqQueryState} from a raw float32 query vector.
  *
  * <p>Call {@link #prepare(float[])} exactly <em>once per query</em> before the
- * HNSW/IVF graph traversal loop. The resulting {@link VasqQueryState} is then
- * passed to {@link VasqSimdKernel} for every candidate distance evaluation.</p>
+ * HNSW/IVF graph traversal loop. The resulting {@link SvasqQueryState} is then
+ * passed to {@link SvasqSimdKernel} for every candidate distance evaluation.</p>
  *
  * <h3>Preparation Steps</h3>
  * <ol>
@@ -30,8 +45,8 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * SIMD kernel). Both are allocated once per thread on first use and reused across
  * all subsequent calls, eliminating the per-query allocation that previously occurred.</p>
  *
- * <h3>Contract: VasqQueryState Lifetime</h3>
- * <p>The returned {@link VasqQueryState} holds a direct reference to the thread-local
+ * <h3>Contract: SvasqQueryState Lifetime</h3>
+ * <p>The returned {@link SvasqQueryState} holds a direct reference to the thread-local
  * {@code qTilde} buffer. It must <em>not</em> be stored beyond the current search call —
  * reuse of the buffer by a subsequent {@link #prepare} call on the same thread would
  * silently corrupt the stale state. In practice, the state is always consumed within
@@ -40,33 +55,33 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * <p>Instances are immutable after construction and safe for concurrent use
  * (each thread has its own scratch buffers via ThreadLocal).</p>
  */
-public final class VasqQueryPrep {
+public final class SvasqQueryPrep {
 
-    private final VasqParams params;
+    private final SvasqParams params;
 
     /**
      * Per-thread scratch: [0] = qRot (paddedDim), [1] = qTilde (paddedDim).
-     * The qTilde array is directly referenced by the returned VasqQueryState.
+     * The qTilde array is directly referenced by the returned SvasqQueryState.
      */
     private final ThreadLocal<float[][]> queryScratch;
 
     /**
      * Creates a query preparer backed by the given calibration parameters.
      *
-     * @param params calibrated VASQ parameters (non-null)
+     * @param params calibrated SVASQ parameters (non-null)
      */
-    public VasqQueryPrep(VasqParams params) {
+    public SvasqQueryPrep(SvasqParams params) {
         if (params == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "params");
         this.params = params;
         final int paddedDim = params.paddedDim();
         this.queryScratch   = ThreadLocal.withInitial(() -> new float[][] {
                 new float[paddedDim],   // [0] qRot
-                new float[paddedDim]    // [1] qTilde — referenced by VasqQueryState
+                new float[paddedDim]    // [1] qTilde — referenced by SvasqQueryState
         });
     }
 
     /**
-     * Prepares a {@link VasqQueryState} from a float32 query vector.
+     * Prepares a {@link SvasqQueryState} from a float32 query vector.
      *
      * <p>Uses thread-local scratch buffers for both the rotate step and the scaled
      * query vector — zero per-call heap allocations on the hot path.</p>
@@ -75,10 +90,10 @@ public final class VasqQueryPrep {
      * and must not be stored beyond the current search call.</p>
      *
      * @param query the float32 query vector (length must equal {@code params.originalDim()})
-     * @return an immutable-by-contract {@link VasqQueryState} ready for {@link VasqSimdKernel}
+     * @return an immutable-by-contract {@link SvasqQueryState} ready for {@link SvasqSimdKernel}
      * @throws SpectorValidationException if query.length ≠ originalDim
      */
-    public VasqQueryState prepare(float[] query) {
+    public SvasqQueryState prepare(float[] query) {
         int originalDim = params.originalDim();
         int paddedDim   = params.paddedDim();
         float[] means   = params.means();
@@ -110,17 +125,17 @@ public final class VasqQueryPrep {
         float constL2Q  = qNormSq - 2f * (float) cQ;
         float dotOffset = (float) cQ;
 
-        // qTilde is the thread-local array — referenced (not copied) by VasqQueryState.
+        // qTilde is the thread-local array — referenced (not copied) by SvasqQueryState.
         // Safe because the state is only used within the current search call.
-        return new VasqQueryState(qTilde, constL2Q, dotOffset, qNormSq);
+        return new SvasqQueryState(qTilde, constL2Q, dotOffset, qNormSq);
     }
 
     /**
      * Returns the calibration parameters backing this query preparer.
      *
-     * @return VASQ params
+     * @return SVASQ params
      */
-    public VasqParams params() {
+    public SvasqParams params() {
         return params;
     }
 }

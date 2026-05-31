@@ -205,7 +205,7 @@ var config = SpectorConfig.DEFAULT
 | 16 | ~92% | 16× |
 | 32 | ~97% | 32× |
 
-### SpectorIndex (IVF-HNSW-VASQ): nCentroids vs nProbe
+### SpectorIndex (IVF-HNSW-SVASQ): nCentroids vs nProbe
 
 SpectorIndex uses IVF partitioning with adaptive HNSW shards. The two key parameters are:
 
@@ -297,11 +297,11 @@ java \
 
 - [Core Concepts](../architecture/core-concepts.md) — How algorithms affect performance
 
-- [SpectorIndex Architecture](../deep-dives/spector-index-architecture.md) — IVF-HNSW-VASQ design and tuning
+- [SpectorIndex Architecture](../deep-dives/spector-index-architecture.md) — IVF-HNSW-SVASQ design and tuning
 
 - [Large-Scale Benchmarks](../deep-dives/real-embedding-benchmarks.md) — Empirical sweeps for real embeddings and shard promotions
 
-- [VASQ Quantization](../deep-dives/vasq-deep-dive.md) — How VASQ compression works
+- [SVASQ Quantization](../deep-dives/svasq-deep-dive.md) — How SVASQ compression works
 
 - [GPU Acceleration](../architecture/gpu-acceleration.md) — GPU-specific performance
 

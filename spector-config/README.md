@@ -39,7 +39,7 @@ Immutable configuration record with fluent `with*()` builder methods:
 var config = SpectorConfig.DEFAULT
     .withDimensions(384)
     .withCapacity(100_000)
-    .withQuantization(QuantizationType.VASQ)
+    .withQuantization(QuantizationType.SVASQ)
     .withRescore(3)
     .withGpu(true);
 ```
@@ -87,7 +87,7 @@ SpectorConfig config = SpectorConfigFactory.toEngineConfig(props);
 | `capacity` | 100,000 | Max documents |
 | `similarity` | COSINE | Similarity function (COSINE, DOT_PRODUCT, EUCLIDEAN) |
 | `indexType` | HNSW | Index type (HNSW, IVF_PQ, FLAT) |
-| `quantization` | NONE | Quantization (NONE, SCALAR_INT8, SCALAR_INT4, VASQ, VASQ_4) |
+| `quantization` | NONE | Quantization (NONE, SCALAR_INT8, SCALAR_INT4, SVASQ, SVASQ_4) |
 | `persistenceMode` | MEMORY | Persistence (MEMORY, DISK) |
 
 ---

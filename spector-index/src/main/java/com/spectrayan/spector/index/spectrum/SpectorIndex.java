@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.index.spectrum;
 
 import com.spectrayan.spector.core.cluster.KMeans;
@@ -33,8 +48,8 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *       small (&lt; {@code shardThreshold}), automatically promoted to a local HNSW graph
  *       when large. SIMD flat scans beat HNSW pointer-chasing for small partitions; for
  *       large partitions the graph wins decisively.</li>
- *   <li><b>VASQ Residual Quantization</b> — vectors are stored as residuals
- *       ({@code r = x − centroid}) quantized with VASQ (FWHT-rotated INT8). Residual
+ *   <li><b>SVASQ Residual Quantization</b> — vectors are stored as residuals
+ *       ({@code r = x − centroid}) quantized with SVASQ (FWHT-rotated INT8). Residual
  *       variance is 10–100× lower than absolute coordinates, giving INT8 residuals the
  *       spatial precision of INT12–INT16 absolute quantization.</li>
  * </ol>
@@ -56,7 +71,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  *       centroid assignment would break the spatial clustering.</li>
  *   <li><b>nProbe ≥ 16 for 95%+ recall</b> — boundary vectors near Voronoi boundaries
  *       may be missed if too few cells are probed. The default {@code nProbe = 16} is
- *       cheap (VASQ makes each shard scan ~200 ns) and ensures excellent recall.</li>
+ *       cheap (SVASQ makes each shard scan ~200 ns) and ensures excellent recall.</li>
  *   <li><b>ADC for graph construction</b> — when promoting a shard, each float32 residual
  *       is inserted into the local HNSW using Asymmetric Distance Computation (ADC):
  *       exact query state vs. already-quantized nodes. This is the correct approach;

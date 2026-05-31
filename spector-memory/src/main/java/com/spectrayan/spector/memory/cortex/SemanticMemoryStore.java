@@ -1,3 +1,15 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Business Source License 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://github.com/spectrayan/spector/blob/main/spector-memory/LICENSE
+ *
+ * Change Date: May 27, 2030
+ * Change License: Apache License, Version 2.0
+ */
 package com.spectrayan.spector.memory.cortex;
 
 import com.spectrayan.spector.memory.MemoryType;
@@ -15,7 +27,7 @@ import com.spectrayan.spector.memory.error.SpectorMemoryTierFullException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Permanent factual knowledge store delegating to existing HNSW/VASQ index infrastructure.
+ * Permanent factual knowledge store delegating to existing HNSW/SVASQ index infrastructure.
  *
  * <h3>Biological Analog: Neocortex</h3>
  * <p>The neocortex stores permanent, deduplicated facts — consolidated from episodic
@@ -29,9 +41,9 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * <h3>Design</h3>
  * <ul>
  *   <li>Extends {@link AbstractTierStore} for common Arena/layout/segment lifecycle</li>
- *   <li>Header-only store — vectors go through SpectorIndex's HNSW/VASQ pipeline</li>
+ *   <li>Header-only store — vectors go through SpectorIndex's HNSW/SVASQ pipeline</li>
  *   <li>Maintains a parallel off-heap slab for synaptic headers (size depends on layout version)</li>
- *   <li>On search: reads header for scoring, delegates vector distance to VASQ kernel</li>
+ *   <li>On search: reads header for scoring, delegates vector distance to SVASQ kernel</li>
  *   <li>Deduplication check before insert (via {@code SemanticDeduplicator})</li>
  * </ul>
  */
@@ -92,7 +104,7 @@ public final class SemanticMemoryStore extends AbstractTierStore {
     /**
      * Stores a new semantic memory header.
      *
-     * <p>The actual vector is stored via SpectorIndex's existing HNSW/VASQ pipeline.
+     * <p>The actual vector is stored via SpectorIndex's existing HNSW/SVASQ pipeline.
      * This method only writes the cognitive header to the parallel slab.</p>
      *
      * @param header cognitive header

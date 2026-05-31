@@ -1,3 +1,18 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.spectrayan.spector.engine;
 
 import com.spectrayan.spector.config.IndexType;
@@ -454,10 +469,10 @@ public class DefaultSpectorEngine implements SpectorEngine {
         public Builder capacity(int capacity) { this.config = config.withCapacity(capacity); return this; }
         public Builder similarity(SimilarityFunction sf) { this.config = config.withSimilarityFunction(sf); return this; }
         public Builder quantization(com.spectrayan.spector.core.quantization.QuantizationType qt) { this.config = config.withQuantization(qt); return this; }
-        public Builder vasq() { this.config = config.withVasq(); return this; }
-        public Builder vasq(int oversamplingFactor) { this.config = config.withVasq(oversamplingFactor); return this; }
-        public Builder vasq4() { this.config = config.withVasq4(); return this; }
-        public Builder vasq4(int oversamplingFactor) { this.config = config.withVasq4(oversamplingFactor); return this; }
+        public Builder svasq() { this.config = config.withSvasq(); return this; }
+        public Builder svasq(int oversamplingFactor) { this.config = config.withSvasq(oversamplingFactor); return this; }
+        public Builder svasq4() { this.config = config.withSvasq4(); return this; }
+        public Builder svasq4(int oversamplingFactor) { this.config = config.withSvasq4(oversamplingFactor); return this; }
         public Builder persistence(PersistenceMode mode, Path directory) { this.config = config.withPersistence(mode, directory); return this; }
         public Builder ivfPq() { this.config = config.withIvfPq(); return this; }
         public Builder ivfPq(int nlist, int nprobe, int subspaces) { this.config = config.withIvfPq(nlist, nprobe, subspaces); return this; }

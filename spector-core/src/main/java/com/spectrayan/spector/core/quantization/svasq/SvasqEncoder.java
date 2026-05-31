@@ -1,4 +1,19 @@
-package com.spectrayan.spector.core.quantization.vasq;
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.spectrayan.spector.core.quantization.svasq;
 import com.spectrayan.spector.commons.error.SpectorException;
 
 import java.lang.foreign.MemorySegment;
@@ -7,7 +22,7 @@ import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
 
 /**
- * Encodes float32 vectors into the VASQ off-heap binary format.
+ * Encodes float32 vectors into the SVASQ off-heap binary format.
  *
  * <h3>Memory Layout (per vector)</h3>
  * <pre>
@@ -34,9 +49,9 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * <p>Instances are immutable after construction and safe for concurrent use
  * (each thread gets its own scratch buffer via ThreadLocal).</p>
  */
-public final class VasqEncoder {
+public final class SvasqEncoder {
 
-    private final VasqParams params;
+    private final SvasqParams params;
 
     /**
      * Per-thread scratch buffer for the FWHT rotate step.
@@ -47,9 +62,9 @@ public final class VasqEncoder {
     /**
      * Creates an encoder backed by the given calibration parameters.
      *
-     * @param params calibrated VASQ parameters (non-null)
+     * @param params calibrated SVASQ parameters (non-null)
      */
-    public VasqEncoder(VasqParams params) {
+    public SvasqEncoder(SvasqParams params) {
         if (params == null) throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "params");
         this.params = params;
         final int paddedDim = params.paddedDim();
@@ -64,7 +79,7 @@ public final class VasqEncoder {
      * <p>Uses a thread-local scratch buffer for the FWHT rotate step — zero per-call
      * heap allocations on the hot path.</p>
      *
-     * @param vector  the float32 input vector (length must equal {@link VasqParams#originalDim()})
+     * @param vector  the float32 input vector (length must equal {@link SvasqParams#originalDim()})
      * @param segment the off-heap memory segment to write into
      * @param offset  byte offset within the segment for this vector's header
      * @throws SpectorValidationException if vector.length ≠ originalDim
@@ -110,9 +125,9 @@ public final class VasqEncoder {
     /**
      * Returns the calibration parameters backing this encoder.
      *
-     * @return VASQ params
+     * @return SVASQ params
      */
-    public VasqParams params() {
+    public SvasqParams params() {
         return params;
     }
 }
