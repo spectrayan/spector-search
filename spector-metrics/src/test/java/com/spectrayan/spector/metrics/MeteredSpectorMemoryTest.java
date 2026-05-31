@@ -86,6 +86,8 @@ class MeteredSpectorMemoryTest {
         @Override public void suppress(String memoryId, String reason) {}
         @Override public void suppress(String memoryId) {}
         @Override public void unsuppress(String memoryId) {}
+        @Override public void markResolved(String memoryId) {}
+        @Override public void markUnresolved(String memoryId) {}
         @Override public MemoryInsight introspect(String topic) { return null; }
         @Override public Reminder scheduleReminder(String text, Instant triggerAt, String... tags) { return null; }
         @Override public Reminder scheduleReminder(String text, Duration delay, String... tags) { return null; }
