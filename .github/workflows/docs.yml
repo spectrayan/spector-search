@@ -91,121 +91,15 @@ jobs:
 
       - name: Sync docs to wiki
         run: |
-          set -euo pipefail
-          cd wiki
-
-          # ─── 1. Clean existing wiki content ─────────────────────────
-          # Remove all .md files except _Footer.md (which may have custom content)
-          find . -maxdepth 1 -name '*.md' ! -name '_Footer.md' -delete
-          # Remove any existing image directories
-          rm -rf images screenshots
-
-          # ─── 2. Page name mapping ───────────────────────────────────
-          # Maps docs/docs/<path>.md → Wiki-Page-Name.md
-          # Convention: directory/file.md → Directory-File.md
-          # Special cases: index.md → Directory.md (section overview)
-          declare -A PAGE_MAP
-
-          # Build the mapping from all .md files under docs/docs/
-          while IFS= read -r -d '' mdfile; do
-            # Strip the prefix to get the relative path
-            relpath="${mdfile#../main/docs/docs/}"
-
-            # Determine wiki page name
-            dir="$(dirname "$relpath")"
-            base="$(basename "$relpath" .md)"
-
-            if [ "$dir" = "." ]; then
-              # Top-level files
-              case "$base" in
-                index)   wiki_name="Home" ;;
-                about)   wiki_name="About" ;;
-                faq)     wiki_name="FAQ" ;;
-                roadmap) wiki_name="Roadmap" ;;
-                *)       wiki_name="$(echo "$base" | sed 's/-/ /g' | sed 's/\b\(.\)/\u\1/g' | sed 's/ /-/g')" ;;
-              esac
-            elif [ "$base" = "index" ]; then
-              # Section index → use directory name
-              wiki_name="$(echo "$dir" | sed 's/\//-/g; s/-/ /g' | sed 's/\b\(.\)/\u\1/g' | sed 's/ /-/g')"
-            else
-              # Regular file → Directory-Filename
-              wiki_name="$(echo "${dir}/${base}" | sed 's/\//-/g; s/-/ /g' | sed 's/\b\(.\)/\u\1/g' | sed 's/ /-/g')"
-            fi
-
-            PAGE_MAP["$relpath"]="$wiki_name"
-          done < <(find ../main/docs/docs/ -name '*.md' -print0)
-
-          # ─── 3. Copy files with mapped names ───────────────────────
-          for relpath in "${!PAGE_MAP[@]}"; do
-            wiki_name="${PAGE_MAP[$relpath]}"
-            src="../main/docs/docs/$relpath"
-
-            if [ -f "$src" ]; then
-              cp "$src" "${wiki_name}.md"
-            fi
-          done
-
-          # ─── 4. Copy images and screenshots ────────────────────────
-          # Copy any images referenced in docs
-          if [ -d "../main/docs/screenshots" ]; then
-            mkdir -p screenshots
-            cp -r ../main/docs/screenshots/* screenshots/ 2>/dev/null || true
-          fi
-
-          # Copy images from within docs directories (e.g., cortex/screenshot.png)
-          find ../main/docs/docs/ -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.svg' -o -name '*.webp' \) -print0 | while IFS= read -r -d '' imgfile; do
-            imgrel="${imgfile#../main/docs/docs/}"
-            mkdir -p "images/$(dirname "$imgrel")"
-            cp "$imgfile" "images/$imgrel"
-          done
-
-          # ─── 5. Fix links in wiki pages ─────────────────────────────
-          # Convert MkDocs-style relative links to wiki-style [[links]]
-          # Strategy: find markdown links [text](relative-path.md) and convert
-          # to [[Wiki-Page-Name|text]] using our PAGE_MAP
-
-          for wikifile in *.md; do
-            [ -f "$wikifile" ] || continue
-
-            # Fix image paths:
-            # - ../screenshots/file.png → screenshots/file.png
-            # - ./file.png or file.png (from subdir) → images/subdir/file.png
-            sed -i 's|](\.\.\/screenshots/|](screenshots/|g' "$wikifile"
-            sed -i 's|](\.\.\/\.\.\/screenshots/|](screenshots/|g' "$wikifile"
-
-            # Remove MkDocs-specific frontmatter (---\ntitle:...\n---)
-            # Only remove if the file starts with ---
-            if head -1 "$wikifile" | grep -q '^---$'; then
-              sed -i '1{/^---$/d}; /^---$/,/^---$/d' "$wikifile" 2>/dev/null || true
-            fi
-
-            # Remove MkDocs-specific admonition syntax that GitHub wiki doesn't support
-            # Convert !!! note "Title" → **Note: Title**
-            sed -i 's/^!!! \(note\|tip\|warning\|danger\|info\|important\|caution\) "\([^"]*\)"/> **\u\1:** \2/g' "$wikifile"
-            # Convert !!! quote "Title" → > **Title**
-            sed -i 's/^!!! quote "\([^"]*\)"/> **\1**/g' "$wikifile"
-
-            # Convert === "Tab Title" to ### Tab Title (GitHub wiki has no tabs)
-            sed -i 's/^=== "\([^"]*\)"/### \1/g' "$wikifile"
-
-            # Convert MkDocs snippets --8<-- "file" to a note
-            sed -i 's/^--8<-- "\([^"]*\)"/> *See: \1*/g' "$wikifile"
-          done
-
-          # ─── 6. Generate _Sidebar.md from mkdocs nav ───────────────
-          cat > _Sidebar.md << 'SIDEBAR_HEADER'
-          **[🏠 Home](Home)**
-
-          ---
-
-          SIDEBAR_HEADER
-
-          # Parse mkdocs.yml nav and generate sidebar
           python3 << 'PYSCRIPT'
-          import yaml, re, sys
+          import yaml, os, shutil, glob, re
 
-          # MkDocs uses !!python/name: tags that SafeLoader can't handle.
-          # Register a constructor that simply ignores them.
+          DOCS_DIR = 'main/docs/docs'
+          WIKI_DIR = 'wiki'
+          MKDOCS_YML = 'main/docs/mkdocs.yml'
+          SCREENSHOTS_DIR = 'main/docs/screenshots'
+
+          # ── MkDocs YAML loader (ignores !!python/name: tags) ────────
           class MkDocsLoader(yaml.SafeLoader):
               pass
 
@@ -216,47 +110,162 @@ jobs:
               'tag:yaml.org,2002:python/', _ignore_python_tags
           )
 
-          with open('../main/docs/mkdocs.yml', 'r') as f:
+          # ── Single source of truth: path → wiki page name ──────────
+          SPECIAL_NAMES = {
+              'index.md': 'Home',
+              'about.md': 'About',
+              'faq.md': 'FAQ',
+              'roadmap.md': 'Roadmap',
+          }
+
+          def path_to_wiki_name(rel_path):
+              """Convert a docs-relative path to a wiki page name.
+              
+              Examples:
+                index.md                        → Home
+                about.md                        → About
+                getting-started/quickstart.md   → Getting-Started--Quickstart
+                architecture/overview.md        → Architecture--Overview
+                memory/index.md                 → Memory
+                cortex/index.md                 → Cortex
+              """
+              if rel_path in SPECIAL_NAMES:
+                  return SPECIAL_NAMES[rel_path]
+
+              path = rel_path.replace('.md', '')
+              parts = path.split('/')
+
+              # index.md in a subdirectory → use directory name only
+              if parts[-1] == 'index':
+                  parts = parts[:-1]
+
+              if not parts:
+                  return 'Home'
+
+              # Title-case each segment, join with '--' (double hyphen)
+              # to separate directory from filename.
+              # Within each segment, hyphens become spaces for title-casing,
+              # then go back to hyphens.
+              def title_case_segment(seg):
+                  return '-'.join(
+                      word.capitalize()
+                      for word in seg.replace('-', ' ').split()
+                  )
+
+              return '--'.join(title_case_segment(s) for s in parts)
+
+          # ── 1. Clean wiki directory ─────────────────────────────────
+          for f in glob.glob(os.path.join(WIKI_DIR, '*.md')):
+              basename = os.path.basename(f)
+              if basename != '_Footer.md':
+                  os.remove(f)
+
+          for d in ['images', 'screenshots']:
+              p = os.path.join(WIKI_DIR, d)
+              if os.path.isdir(p):
+                  shutil.rmtree(p)
+
+          # ── 2. Copy all .md files with wiki names ───────────────────
+          page_map = {}  # rel_path → wiki_name (for link fixing)
+
+          for root, dirs, files in os.walk(DOCS_DIR):
+              for fname in files:
+                  full_path = os.path.join(root, fname)
+                  rel_path = os.path.relpath(full_path, DOCS_DIR)
+
+                  if fname.endswith('.md'):
+                      wiki_name = path_to_wiki_name(rel_path)
+                      page_map[rel_path] = wiki_name
+                      dest = os.path.join(WIKI_DIR, f'{wiki_name}.md')
+                      shutil.copy2(full_path, dest)
+                      print(f'  📄 {rel_path} → {wiki_name}.md')
+
+                  elif fname.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')):
+                      dest_dir = os.path.join(WIKI_DIR, 'images', os.path.dirname(rel_path))
+                      os.makedirs(dest_dir, exist_ok=True)
+                      shutil.copy2(full_path, os.path.join(dest_dir, fname))
+
+          # Copy top-level screenshots
+          if os.path.isdir(SCREENSHOTS_DIR):
+              dest = os.path.join(WIKI_DIR, 'screenshots')
+              shutil.copytree(SCREENSHOTS_DIR, dest, dirs_exist_ok=True)
+
+          print(f'\n✅ Copied {len(page_map)} pages')
+
+          # ── 3. Fix content in wiki pages ────────────────────────────
+          for wiki_file in glob.glob(os.path.join(WIKI_DIR, '*.md')):
+              basename = os.path.basename(wiki_file)
+              if basename.startswith('_'):
+                  continue
+
+              with open(wiki_file, 'r', encoding='utf-8') as f:
+                  content = f.read()
+
+              # Remove YAML frontmatter
+              content = re.sub(r'^---\n.*?\n---\n', '', content, count=1, flags=re.DOTALL)
+
+              # Fix image paths
+              content = content.replace('](../screenshots/', '](screenshots/')
+              content = content.replace('](../../screenshots/', '](screenshots/')
+
+              # Convert MkDocs admonitions to blockquotes
+              content = re.sub(
+                  r'^!!! (\w+) "([^"]*)"',
+                  r'> **\1:** \2',
+                  content, flags=re.MULTILINE
+              )
+              content = re.sub(
+                  r'^!!! quote "([^"]*)"',
+                  r'> **\1**',
+                  content, flags=re.MULTILINE
+              )
+
+              # Convert tabs to headings
+              content = re.sub(r'^=== "([^"]*)"', r'### \1', content, flags=re.MULTILINE)
+
+              # Convert snippets
+              content = re.sub(r'^--8<-- "([^"]*)"', r'> *See: \1*', content, flags=re.MULTILINE)
+
+              with open(wiki_file, 'w', encoding='utf-8') as f:
+                  f.write(content)
+
+          # ── 4. Generate _Sidebar.md from mkdocs nav ─────────────────
+          with open(MKDOCS_YML, 'r') as f:
               config = yaml.load(f, Loader=MkDocsLoader)
 
           nav = config.get('nav', [])
 
-          def path_to_wiki_name(path):
-              """Convert docs path to wiki page name."""
-              path = path.replace('.md', '')
-              parts = path.split('/')
-              if parts[-1] == 'index':
-                  parts = parts[:-1]
-              if not parts:
-                  return 'Home'
-              name = '-'.join(parts)
-              # Title case with hyphens
-              return '-'.join(word.capitalize() for word in name.replace('-', ' ').split())
-
-          def write_nav(items, depth=0, f=None):
+          def write_nav(items, depth, out):
               indent = '  ' * depth
               for item in items:
                   if isinstance(item, str):
-                      # Direct page reference
                       wiki_name = path_to_wiki_name(item)
-                      f.write(f'{indent}- [[{wiki_name}]]\n')
+                      out.append(f'{indent}- [[{wiki_name}]]')
                   elif isinstance(item, dict):
                       for title, value in item.items():
                           if isinstance(value, str):
-                              # Leaf: title → path
                               wiki_name = path_to_wiki_name(value)
-                              f.write(f'{indent}- [[{wiki_name}|{title}]]\n')
+                              out.append(f'{indent}- [[{wiki_name}|{title}]]')
                           elif isinstance(value, list):
-                              # Section with children
-                              f.write(f'{indent}- **{title}**\n')
-                              write_nav(value, depth + 1, f)
+                              out.append(f'{indent}- **{title}**')
+                              write_nav(value, depth + 1, out)
 
-          with open('_Sidebar.md', 'a') as f:
-              write_nav(nav, f=f)
+          sidebar_lines = [
+              '**[🏠 Home](Home)**',
+              '',
+              '---',
+              '',
+          ]
+          write_nav(nav, 0, sidebar_lines)
 
+          sidebar_path = os.path.join(WIKI_DIR, '_Sidebar.md')
+          with open(sidebar_path, 'w', encoding='utf-8') as f:
+              f.write('\n'.join(sidebar_lines) + '\n')
+
+          print(f'✅ Generated _Sidebar.md with {len(sidebar_lines)} lines')
           PYSCRIPT
 
-          echo "✅ Wiki sync complete: $(ls -1 *.md | wc -l) pages, $(find images screenshots -type f 2>/dev/null | wc -l) assets"
+          echo "✅ Wiki sync complete: $(ls -1 wiki/*.md | wc -l) pages"
 
       - name: Push wiki changes
         run: |
