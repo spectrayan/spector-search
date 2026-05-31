@@ -133,6 +133,7 @@ nav:
           - spector-metrics: modules/spector-metrics.md
           - spector-bench: modules/spector-bench.md
           - spector-dist: modules/spector-dist.md
+          - spector-cortex: modules/spector-cortex.md
   - Deep Dives:
       - ANN Search Primer: deep-dives/ann-search-primer.md
       - HNSW Explained: deep-dives/hnsw-explained.md
@@ -173,6 +174,9 @@ nav:
           - "Off-Heap Panama Design": memory/panama-design.md
           - "WAL Design": memory/wal-design.md
       - API Reference: memory/api-reference.md
+
+  - "🧬 Cortex Dashboard":
+      - Overview: cortex/index.md
 
   - Reference:
       - REST API: api-reference/rest-endpoints.md
