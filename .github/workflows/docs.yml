@@ -35,7 +35,7 @@ jobs:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.wiki_only == 'true') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0    # Full history — needed to access labs/* branches
 
@@ -78,12 +78,12 @@ jobs:
     if: ${{ always() && (needs.deploy.result == 'success' || needs.deploy.result == 'skipped') }}
     steps:
       - name: Checkout main repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: main
 
       - name: Checkout wiki
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.repository }}.wiki
           path: wiki
