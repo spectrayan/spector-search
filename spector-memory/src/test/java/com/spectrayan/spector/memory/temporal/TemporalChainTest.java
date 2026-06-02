@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,7 +64,7 @@ class TemporalChainTest {
         chain.link(2, 1, 1);
         chain.link(3, 2, 1);
 
-        List<Integer> forward = chain.followForward(0, 10);
+        int[] forward = chain.followForward(0, 10);
         assertThat(forward).containsExactly(1, 2, 3);
     }
 
@@ -75,7 +74,7 @@ class TemporalChainTest {
         chain.link(2, 1, 1);
         chain.link(3, 2, 1);
 
-        List<Integer> backward = chain.followBackward(3, 10);
+        int[] backward = chain.followBackward(3, 10);
         assertThat(backward).containsExactly(2, 1, 0);
     }
 
@@ -86,7 +85,7 @@ class TemporalChainTest {
         chain.link(3, 2, 1);
         chain.link(4, 3, 1);
 
-        List<Integer> limited = chain.followForward(0, 2);
+        int[] limited = chain.followForward(0, 2);
         assertThat(limited).hasSize(2);
         assertThat(limited).containsExactly(1, 2);
     }

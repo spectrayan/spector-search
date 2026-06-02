@@ -14,6 +14,8 @@ package com.spectrayan.spector.memory.pipeline;
 
 import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.events.GraphPulseTelemetry;
+import com.spectrayan.spector.events.TelemetryScope;
 
 import com.spectrayan.spector.memory.error.SpectorEntityGraphException;
 import com.spectrayan.spector.memory.error.SpectorHebbianException;
@@ -113,9 +115,7 @@ public final class RecallPipeline {
     private final float[] calibrationScales;
     private final SemanticRecallStrategy semanticRecallStrategy; // nullable
     private final CoActivationTracker coActivationTracker; // nullable — for STDP causal boost
-
-    /** STDP causal boost weight applied to predictive strength. */
-    private static final float CAUSAL_BOOST_WEIGHT = 0.3f;
+    private final GraphScoringPolicy graphScoringPolicy;
 
     private final List<RecallListener> listeners = new ArrayList<>();
 
@@ -160,7 +160,8 @@ public final class RecallPipeline {
                            float[] calibrationMins,
                            float[] calibrationScales) {
         this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
-                prospectiveScheduler, wal, calibrationMins, calibrationScales, null, null);
+                prospectiveScheduler, wal, calibrationMins, calibrationScales, null, null,
+                null, null, null, null, GraphScoringPolicy.DEFAULT);
     }
 
     /**
@@ -181,7 +182,8 @@ public final class RecallPipeline {
                            SemanticRecallStrategy semanticRecallStrategy) {
         this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
                 prospectiveScheduler, wal, calibrationMins, calibrationScales,
-                semanticRecallStrategy, null);
+                semanticRecallStrategy, null,
+                null, null, null, null, GraphScoringPolicy.DEFAULT);
     }
 
     /**
@@ -205,7 +207,7 @@ public final class RecallPipeline {
         this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
                 prospectiveScheduler, wal, calibrationMins, calibrationScales,
                 semanticRecallStrategy, coActivationTracker,
-                null, null, null, null);
+                null, null, null, null, GraphScoringPolicy.DEFAULT);
     }
 
     /**
@@ -225,7 +227,8 @@ public final class RecallPipeline {
                            HebbianGraph hebbianGraph,
                            TemporalChain temporalChain,
                            EntityGraph entityGraph,
-                           EntityExtractor entityExtractor) {
+                           EntityExtractor entityExtractor,
+                           GraphScoringPolicy graphScoringPolicy) {
         this.embeddingProvider = embeddingProvider;
         this.tierRouter = tierRouter;
         this.index = index;
@@ -241,6 +244,7 @@ public final class RecallPipeline {
         this.temporalChain = temporalChain;
         this.entityGraph = entityGraph;
         this.entityExtractor = entityExtractor;
+        this.graphScoringPolicy = graphScoringPolicy != null ? graphScoringPolicy : GraphScoringPolicy.DEFAULT;
     }
 
     /**
@@ -331,14 +335,19 @@ public final class RecallPipeline {
         // This promotes memories that form causal chains.
         if (coActivationTracker != null && allResults.size() >= 2) {
             // Use tags from the first few results as "context tags" to boost subsequent results
-            List<String> contextTags = allResults.stream()
-                    .limit(3)
-                    .filter(r -> r.synapticTags() != null)
-                    .flatMap(r -> java.util.Arrays.stream(r.synapticTags()))
-                    .distinct()
-                    .toList();
+            // (imperative loop — avoids Stream API allocation overhead in hot path)
+            Set<String> contextTagSet = new HashSet<>();
+            int contextLimit = Math.min(3, allResults.size());
+            for (int cl = 0; cl < contextLimit; cl++) {
+                String[] ctxTags = allResults.get(cl).synapticTags();
+                if (ctxTags != null) {
+                    for (String t : ctxTags) contextTagSet.add(t);
+                }
+            }
 
-            if (!contextTags.isEmpty()) {
+            if (!contextTagSet.isEmpty()) {
+                // Convert to list once for getPredictiveStrength API
+                List<String> contextTags = new ArrayList<>(contextTagSet);
                 for (int i = 0; i < allResults.size(); i++) {
                     CognitiveResult r = allResults.get(i);
                     if (r.synapticTags() == null || r.synapticTags().length == 0) continue;
@@ -346,7 +355,7 @@ public final class RecallPipeline {
                     float predictive = coActivationTracker.getPredictiveStrength(
                             contextTags, r.synapticTags());
                     if (predictive > 0) {
-                        float boostedScore = r.score() * (1.0f + predictive * CAUSAL_BOOST_WEIGHT);
+                        float boostedScore = r.score() * (1.0f + predictive * graphScoringPolicy.causalBoostWeight());
                         allResults.set(i, new CognitiveResult(
                                 r.id(), r.text(), boostedScore, r.importance(), r.ageDays(),
                                 r.recallCount(), r.valence(), r.memoryType(), r.source(),
@@ -356,14 +365,31 @@ public final class RecallPipeline {
             }
         }
 
-        // Step 5c: Hebbian spreading activation — follow memory-to-memory associations
-        if (hebbianGraph != null && !allResults.isEmpty()) {
-            try {
-                Set<String> existingIds = new HashSet<>();
-                for (CognitiveResult r : allResults) {
-                    if (r.id() != null) existingIds.add(r.id());
-                }
+        // Build existingIds ONCE for graph expansion steps 5c/5d/5e
+        // (previously rebuilt 3 times — eliminated 2 redundant full-list scans)
+        boolean needsGraphExpansion = (hebbianGraph != null || temporalChain != null
+                || (entityGraph != null && entityExtractor != null && entityExtractor.isAvailable()))
+                && !allResults.isEmpty();
+        Set<String> existingIds = needsGraphExpansion ? new HashSet<>(allResults.size()) : null;
+        if (existingIds != null) {
+            for (CognitiveResult r : allResults) {
+                if (r.id() != null) existingIds.add(r.id());
+            }
+        }
 
+        // ── Graph telemetry tracking ──
+        // NOTE: Manual nanoTime is intentional here. This times a *sub-phase* of recall
+        // (graph expansion only). The overall recall() is already timed by MeteredSpectorMemory's
+        // Micrometer Timer. We can't add a Micrometer timer here because spector-memory does
+        // not depend on Micrometer — that coupling lives in the spector-metrics decorator layer.
+        long graphStartNanos = needsGraphExpansion && TelemetryScope.isActive() ? System.nanoTime() : 0;
+        int graphNodesVisited = 0;
+        int graphEdgesTraversed = 0;
+        int graphMaxDepth = 0;
+
+        // Step 5c: Hebbian spreading activation — follow memory-to-memory associations
+        if (hebbianGraph != null && existingIds != null) {
+            try {
                 // Use top 3 results as seeds for spreading activation
                 int seeds = Math.min(3, allResults.size());
                 for (int s = 0; s < seeds; s++) {
@@ -373,8 +399,11 @@ public final class RecallPipeline {
                     if (loc == null) continue;
 
                     int memIdx = (int) (loc.offset() / 164); // approximate index from offset
-                    var activated = hebbianGraph.activateNeighbors(memIdx, 2);
+                    var activated = hebbianGraph.activateNeighbors(memIdx, graphScoringPolicy.hebbianMaxDepth());
+                    graphEdgesTraversed += activated.size();
+                    graphMaxDepth = Math.max(graphMaxDepth, graphScoringPolicy.hebbianMaxDepth());
                     for (var edge : activated) {
+                        graphNodesVisited++;
                         // Find the memory at this graph index
                         String neighborId = findMemoryByApproximateIndex(edge.neighborIndex());
                         if (neighborId != null && !existingIds.contains(neighborId)) {
@@ -382,7 +411,7 @@ public final class RecallPipeline {
                             String text = index.text(neighborId);
                             MemorySource source = index.source(neighborId);
                             String[] tags = index.tags(neighborId);
-                            float graphScore = seed.score() * edge.weight() * 0.3f; // attenuated
+                            float graphScore = seed.score() * edge.weight() * graphScoringPolicy.hebbianBoostFactor(); // attenuated
                             allResults.add(new CognitiveResult(
                                     neighborId, text, graphScore, seed.importance(), 0f,
                                     (short) 0, (byte) 0, seed.memoryType(), source,
@@ -397,13 +426,8 @@ public final class RecallPipeline {
         }
 
         // Step 5d: Temporal chain extension — follow session-linked sequences
-        if (temporalChain != null && !allResults.isEmpty()) {
+        if (temporalChain != null && existingIds != null) {
             try {
-                Set<String> existingIds = new HashSet<>();
-                for (CognitiveResult r : allResults) {
-                    if (r.id() != null) existingIds.add(r.id());
-                }
-
                 int seeds = Math.min(3, allResults.size());
                 for (int s = 0; s < seeds; s++) {
                     CognitiveResult seed = allResults.get(s);
@@ -412,11 +436,11 @@ public final class RecallPipeline {
 
                     int memIdx = (int) (loc.offset() / 164);
                     // Follow forward and backward
-                    for (int chainIdx : temporalChain.followForward(memIdx, 3)) {
-                        addChainResult(chainIdx, seed, existingIds, allResults, 0.8f);
+                    for (int chainIdx : temporalChain.followForward(memIdx, graphScoringPolicy.temporalMaxHops())) {
+                        addChainResult(chainIdx, seed, existingIds, allResults, graphScoringPolicy.temporalForwardFactor());
                     }
-                    for (int chainIdx : temporalChain.followBackward(memIdx, 3)) {
-                        addChainResult(chainIdx, seed, existingIds, allResults, 0.7f);
+                    for (int chainIdx : temporalChain.followBackward(memIdx, graphScoringPolicy.temporalMaxHops())) {
+                        addChainResult(chainIdx, seed, existingIds, allResults, graphScoringPolicy.temporalBackwardFactor());
                     }
                 }
             } catch (RuntimeException e) {
@@ -427,12 +451,7 @@ public final class RecallPipeline {
 
         // Step 5e: Entity graph traversal — multi-hop knowledge discovery
         if (entityGraph != null && entityExtractor != null
-                && entityExtractor.isAvailable() && !allResults.isEmpty()) {
-            Set<String> existingIds = new HashSet<>();
-            for (CognitiveResult r : allResults) {
-                if (r.id() != null) existingIds.add(r.id());
-            }
-
+                && entityExtractor.isAvailable() && existingIds != null) {
             // Extract entities from the query
             try {
                 var queryEntities = entityExtractor.extract("query", queryText);
@@ -442,7 +461,7 @@ public final class RecallPipeline {
 
                     // Collect memories reachable within 2 hops
                     Set<Integer> reachableMemories = entityGraph.collectMemories(
-                            entityId, null, 2);
+                            entityId, null, graphScoringPolicy.entityMaxHops());
                     for (int memIdx : reachableMemories) {
                         String memId = findMemoryByApproximateIndex(memIdx);
                         if (memId != null && !existingIds.contains(memId)) {
@@ -450,7 +469,7 @@ public final class RecallPipeline {
                             String text = index.text(memId);
                             MemorySource source = index.source(memId);
                             String[] tags = index.tags(memId);
-                            float entityScore = allResults.getFirst().score() * 0.25f;
+                            float entityScore = allResults.getFirst().score() * graphScoringPolicy.entityHopAttenuation();
                             allResults.add(new CognitiveResult(
                                     memId, text, entityScore, 0.5f, 0f,
                                     (short) 0, (byte) 0, MemoryType.SEMANTIC, source,
@@ -462,6 +481,13 @@ public final class RecallPipeline {
                 SpectorEntityGraphException ex = new SpectorEntityGraphException("graph traversal", e);
                 log.debug(ex.getMessage());
             }
+        }
+
+        // ── Report graph telemetry (if enabled) ──
+        if (graphStartNanos > 0) {
+            long graphElapsed = System.nanoTime() - graphStartNanos;
+            TelemetryScope.publish(new GraphPulseTelemetry(
+                    graphNodesVisited, graphEdgesTraversed, graphMaxDepth, graphElapsed));
         }
 
         // Step 6: Sort by score descending, limit to topK

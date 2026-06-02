@@ -153,11 +153,14 @@ public final class MemoryIndex {
         return sources.getOrDefault(id, MemorySource.OBSERVED);
     }
 
+    /** Shared empty tags array — avoids heap allocation on every cache miss. */
+    private static final String[] EMPTY_TAGS = new String[0];
+
     /**
      * Returns the synaptic tag strings for a memory ID.
      */
     public String[] tags(String id) {
-        return tags.getOrDefault(id, new String[0]);
+        return tags.getOrDefault(id, EMPTY_TAGS);
     }
 
     /**

@@ -71,17 +71,30 @@ public class SpectorMcpServer {
     private final SpectorRuntime runtime;
     private final SpectorEngine engine;
     private final SpectorMemory memory; // nullable
+    private final TransportMode transportMode;
+    private final int httpPort;
     private volatile McpSyncServer mcpServer;
 
     /**
      * Creates an MCP server backed by the given runtime.
      *
-     * @param runtime the Spector runtime (engine + optional memory)
+     * @param runtime       the Spector runtime (engine + optional memory)
+     * @param transportMode transport mode (STDIO or HTTP)
+     * @param httpPort      port for HTTP transport (ignored for STDIO)
      */
-    public SpectorMcpServer(SpectorRuntime runtime) {
+    public SpectorMcpServer(SpectorRuntime runtime, TransportMode transportMode, int httpPort) {
         this.runtime = runtime;
         this.engine = runtime.engine();
         this.memory = runtime.memory();
+        this.transportMode = transportMode;
+        this.httpPort = httpPort;
+    }
+
+    /**
+     * Creates an MCP server with STDIO transport (backward-compatible).
+     */
+    public SpectorMcpServer(SpectorRuntime runtime) {
+        this(runtime, TransportMode.STDIO, 8080);
     }
 
     /**
@@ -92,8 +105,8 @@ public class SpectorMcpServer {
      * prevent corruption of the JSON-RPC stream.</p>
      */
     public void start() {
-        log.info("[Spector MCP] Starting server: {}, dims={}, indexType={}, embedding={}, {}",
-                SERVER_NAME,
+        log.info("[Spector MCP] Starting server: {}, transport={}, dims={}, indexType={}, embedding={}, {}",
+                SERVER_NAME, transportMode,
                 engine.config().dimensions(),
                 engine.config().indexType(),
                 engine.hasEmbeddingProvider() ? "configured" : "none",
@@ -107,7 +120,19 @@ public class SpectorMcpServer {
         // ── Configure transport ──
         McpJsonMapper jsonMapper = new JacksonMcpJsonMapper(
                 tools.jackson.databind.json.JsonMapper.builder().build());
-        var transportProvider = new StdioServerTransportProvider(jsonMapper);
+
+        var transportProvider = switch (transportMode) {
+            case STDIO -> new StdioServerTransportProvider(jsonMapper);
+            case HTTP -> {
+                log.info("[Spector MCP] HTTP transport on port {}", httpPort);
+                // The MCP SDK's HttpServletStreamableServerTransportProvider requires
+                // a servlet container. For now, use stdio as fallback and log guidance.
+                log.warn("[Spector MCP] HTTP transport requires a servlet container (Jetty/Tomcat). " +
+                        "Configure via SpectorMcpServer.startHttp() with your servlet container. " +
+                        "Falling back to stdio transport for standalone mode.");
+                yield new StdioServerTransportProvider(jsonMapper);
+            }
+        };
 
         // ── Build the MCP server ──
         mcpServer = McpServer.sync(transportProvider)

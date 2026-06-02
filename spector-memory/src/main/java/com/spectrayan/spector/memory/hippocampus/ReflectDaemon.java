@@ -308,7 +308,7 @@ public final class ReflectDaemon {
             }
 
             return new ReflectReport(totalConsolidated, totalTombstoned,
-                    totalCompacted, elapsed);
+                    totalCompacted, 0, elapsed);
 
         } finally {
             running.set(false);

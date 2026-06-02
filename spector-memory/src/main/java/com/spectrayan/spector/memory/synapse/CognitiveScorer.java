@@ -16,7 +16,6 @@ import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.memory.RecallOptions;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 
-
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,9 +25,11 @@ import java.util.PriorityQueue;
 import static com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.*;
 
 /**
- * Fused SIMD cognitive scoring loop — the heart of Spector Memory's performance.
+ * Fused SIMD cognitive scoring loop — the heart of Spector Memory's
+ * performance.
  *
  * <h3>6-Phase Pipeline</h3>
+ * 
  * <pre>
  *   Phase 1: Tombstone check          (~1 cycle)   — skip deleted records
  *   Phase 2: Synaptic tag gating      (~1 cycle)   — Bloom filter pre-screen
@@ -39,33 +40,56 @@ import static com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.*;
  * </pre>
  *
  * <h3>Biological Analog: Sensory Gating + Fused Retrieval</h3>
- * <p>The brain doesn't consider every memory for every retrieval. It gates early —
- * suppressing irrelevant memories before the expensive associative search begins.
+ * <p>
+ * The brain doesn't consider every memory for every retrieval. It gates early —
+ * suppressing irrelevant memories before the expensive associative search
+ * begins.
  * This scorer replicates that: phases 1–4 eliminate 99% of records before the
- * expensive vector distance computation in phase 5.</p>
+ * expensive vector distance computation in phase 5.
+ * </p>
  *
  * <h3>Distance Computation</h3>
- * <p>Phase 5 delegates to {@link SimilarityFunction#computeQuantizedFromSegment},
+ * <p>
+ * Phase 5 delegates to {@link SimilarityFunction#computeQuantizedFromSegment},
  * the same zero-copy off-heap SIMD kernel used by {@code spector-storage} and
- * {@code spector-index}. When calibration parameters ({@code mins[]}/{@code scales[]})
- * are provided (from {@link com.spectrayan.spector.core.quantization.ScalarQuantizer}),
+ * {@code spector-index}. When calibration parameters
+ * ({@code mins[]}/{@code scales[]})
+ * are provided (from
+ * {@link com.spectrayan.spector.core.quantization.ScalarQuantizer}),
  * the distance computation uses proper per-dimension affine dequantization.
- * In uncalibrated mode, identity transform ({@code min=0, scale=1/255}) is used.</p>
+ * In uncalibrated mode, identity transform ({@code min=0, scale=1/255}) is
+ * used.
+ * </p>
  *
  * <h3>Performance</h3>
- * <p>With 1M episodic memories and 1% tag match rate:
+ * <p>
+ * With 1M episodic memories and 1% tag match rate:
  * Phases 1-4 eliminate 990K records in ~1ms → Phase 5 computes distance on ~10K
- * → Total ~2ms (vs ~200ms without gating).</p>
+ * → Total ~2ms (vs ~200ms without gating).
+ * </p>
  */
 public final class CognitiveScorer {
 
-    private CognitiveScorer() {}
+    private CognitiveScorer() {
+    }
 
     /**
      * Represents a scored record for the priority queue.
      *
-     * <p>Carries the full {@link CognitiveHeader} to avoid a second off-heap read
-     * during result assembly (P8 performance optimization).</p>
+     * <p>
+     * Carries the full {@link CognitiveHeader} to avoid a second off-heap read
+     * during result assembly (P8 performance optimization).
+     * </p>
+     *
+     * <p>
+     * <b>TODO (JDK 28+ / Project Valhalla):</b> Convert to {@code value record}
+     * once
+     * JEP 401 (Value Classes) and JEP 402 (Specialized Generics) are available.
+     * As a value class, ScoredRecord would be scalarized by the JIT in the scorer
+     * loop — zero heap allocation for the ~10K candidates that don't enter the
+     * PriorityQueue. Combined with specialized generics, the PriorityQueue backing
+     * array would store flattened values instead of boxed pointers.
+     * </p>
      *
      * @param lateral true if this record came from the lateral retrieval heap
      */
@@ -83,22 +107,62 @@ public final class CognitiveScorer {
         }
     }
 
+    // ── Precomputed Storage Boost LUT ─────────────────────────────────────
+    // Replaces Math.pow(storageStrength, 0.3) in the hot loop (~150 cycles → ~3
+    // cycles).
+    // Maps S ∈ [1.0, 5.0] to S^0.3 via 64-entry linear interpolation.
+    // Max error: < 0.2% within the [1.0, 5.0] range.
+    private static final int STORAGE_BOOST_LUT_SIZE = 64;
+    private static final float STORAGE_BOOST_LUT_MIN = 1.0f;
+    private static final float STORAGE_BOOST_LUT_MAX = 5.0f;
+    private static final float STORAGE_BOOST_LUT_RANGE = STORAGE_BOOST_LUT_MAX - STORAGE_BOOST_LUT_MIN;
+    private static final float[] STORAGE_BOOST_LUT = new float[STORAGE_BOOST_LUT_SIZE];
+    static {
+        for (int i = 0; i < STORAGE_BOOST_LUT_SIZE; i++) {
+            float s = STORAGE_BOOST_LUT_MIN + (i / (float) (STORAGE_BOOST_LUT_SIZE - 1)) * STORAGE_BOOST_LUT_RANGE;
+            STORAGE_BOOST_LUT[i] = (float) Math.pow(s, 0.3);
+        }
+    }
+
+    /**
+     * Fast approximation of {@code S^exponent} using precomputed LUT.
+     * Falls back to {@link Math#pow} for exponents other than 0.3 or
+     * storage strengths outside [1.0, 5.0].
+     */
+    private static float fastStorageBoost(float storageStrength, float exponent) {
+        // Fast path: use LUT for default exponent and in-range values
+        if (exponent == 0.3f && storageStrength >= STORAGE_BOOST_LUT_MIN
+                && storageStrength <= STORAGE_BOOST_LUT_MAX) {
+            float normalized = (storageStrength - STORAGE_BOOST_LUT_MIN)
+                    * ((STORAGE_BOOST_LUT_SIZE - 1) / STORAGE_BOOST_LUT_RANGE);
+            int idx = (int) normalized;
+            if (idx >= STORAGE_BOOST_LUT_SIZE - 1)
+                return STORAGE_BOOST_LUT[STORAGE_BOOST_LUT_SIZE - 1];
+            // Linear interpolation between adjacent entries
+            float frac = normalized - idx;
+            return STORAGE_BOOST_LUT[idx] + frac * (STORAGE_BOOST_LUT[idx + 1] - STORAGE_BOOST_LUT[idx]);
+        }
+        // Slow path: arbitrary exponent or out-of-range
+        return (float) Math.pow(storageStrength, exponent);
+    }
+
     /**
      * Scans a memory segment and returns the top-K scored records.
-     * Uses uncalibrated identity quantization (for backward compatibility and tests).
+     * Uses uncalibrated identity quantization (for backward compatibility and
+     * tests).
      *
-     * @param segment       off-heap segment containing cognitive records
-     * @param recordCount   number of records in the segment
-     * @param layout        cognitive record layout
-     * @param queryVector   the query vector (float32)
-     * @param options       recall options (topK, filters, weights)
-     * @param nowMs         current time in epoch millis
+     * @param segment     off-heap segment containing cognitive records
+     * @param recordCount number of records in the segment
+     * @param layout      cognitive record layout
+     * @param queryVector the query vector (float32)
+     * @param options     recall options (topK, filters, weights)
+     * @param nowMs       current time in epoch millis
      * @return top-K scored records sorted by descending score
      */
     public static List<ScoredRecord> score(MemorySegment segment, int recordCount,
-                                            CognitiveRecordLayout layout,
-                                            float[] queryVector, RecallOptions options,
-                                            long nowMs) {
+            CognitiveRecordLayout layout,
+            float[] queryVector, RecallOptions options,
+            long nowMs) {
         return score(segment, recordCount, layout, queryVector, options, nowMs, 0L, null, null);
     }
 
@@ -106,47 +170,56 @@ public final class CognitiveScorer {
      * Scans a memory segment and returns the top-K scored records.
      * Uses uncalibrated identity quantization with a base offset.
      *
-     * @param segment       off-heap segment containing cognitive records
-     * @param recordCount   number of records in the segment
-     * @param layout        cognitive record layout
-     * @param queryVector   the query vector (float32)
-     * @param options       recall options (topK, filters, weights)
-     * @param nowMs         current time in epoch millis
-     * @param baseOffset    byte offset where records begin (e.g., metadata header size for mmap partitions)
+     * @param segment     off-heap segment containing cognitive records
+     * @param recordCount number of records in the segment
+     * @param layout      cognitive record layout
+     * @param queryVector the query vector (float32)
+     * @param options     recall options (topK, filters, weights)
+     * @param nowMs       current time in epoch millis
+     * @param baseOffset  byte offset where records begin (e.g., metadata header
+     *                    size for mmap partitions)
      * @return top-K scored records sorted by descending score
      */
     public static List<ScoredRecord> score(MemorySegment segment, int recordCount,
-                                            CognitiveRecordLayout layout,
-                                            float[] queryVector, RecallOptions options,
-                                            long nowMs, long baseOffset) {
+            CognitiveRecordLayout layout,
+            float[] queryVector, RecallOptions options,
+            long nowMs, long baseOffset) {
         return score(segment, recordCount, layout, queryVector, options, nowMs, baseOffset, null, null);
     }
 
     /**
      * Scans a memory segment and returns the top-K scored records using calibrated
-     * {@link SimilarityFunction#computeQuantizedFromSegment} for distance computation.
+     * {@link SimilarityFunction#computeQuantizedFromSegment} for distance
+     * computation.
      *
-     * <p>When {@code mins} and {@code scales} are provided (from
-     * {@link com.spectrayan.spector.core.quantization.ScalarQuantizer}), the distance
-     * uses proper per-dimension affine dequantization: {@code value = unsigned_byte * scale[i] + min[i]}.
-     * When null, falls back to identity transform for backward compatibility.</p>
+     * <p>
+     * When {@code mins} and {@code scales} are provided (from
+     * {@link com.spectrayan.spector.core.quantization.ScalarQuantizer}), the
+     * distance
+     * uses proper per-dimension affine dequantization:
+     * {@code value = unsigned_byte * scale[i] + min[i]}.
+     * When null, falls back to identity transform for backward compatibility.
+     * </p>
      *
-     * @param segment       off-heap segment containing cognitive records
-     * @param recordCount   number of records in the segment
-     * @param layout        cognitive record layout
-     * @param queryVector   the query vector (float32)
-     * @param options       recall options (topK, filters, weights)
-     * @param nowMs         current time in epoch millis
-     * @param baseOffset    byte offset where records begin (e.g., metadata header size for mmap partitions)
-     * @param mins          per-dimension minimum values from ScalarQuantizer calibration (null = identity)
-     * @param scales        per-dimension scale values from ScalarQuantizer calibration (null = identity)
+     * @param segment     off-heap segment containing cognitive records
+     * @param recordCount number of records in the segment
+     * @param layout      cognitive record layout
+     * @param queryVector the query vector (float32)
+     * @param options     recall options (topK, filters, weights)
+     * @param nowMs       current time in epoch millis
+     * @param baseOffset  byte offset where records begin (e.g., metadata header
+     *                    size for mmap partitions)
+     * @param mins        per-dimension minimum values from ScalarQuantizer
+     *                    calibration (null = identity)
+     * @param scales      per-dimension scale values from ScalarQuantizer
+     *                    calibration (null = identity)
      * @return top-K scored records sorted by descending score
      */
     public static List<ScoredRecord> score(MemorySegment segment, int recordCount,
-                                            CognitiveRecordLayout layout,
-                                            float[] queryVector, RecallOptions options,
-                                            long nowMs, long baseOffset,
-                                            float[] mins, float[] scales) {
+            CognitiveRecordLayout layout,
+            float[] queryVector, RecallOptions options,
+            long nowMs, long baseOffset,
+            float[] mins, float[] scales) {
         int topK = options.topK();
         long queryTagMask = options.synapticTagMask();
         float minImportance = options.minImportance();
@@ -176,23 +249,27 @@ public final class CognitiveScorer {
         float[] effectiveMins = mins != null ? mins : IdentityCalibration.mins(dims);
         float[] effectiveScales = scales != null ? scales : IdentityCalibration.scales(dims);
 
-        // Min-heap for top-K tracking (standard results)
-        PriorityQueue<ScoredRecord> heap = new PriorityQueue<>(topK + 1);
+        int stride = layout.stride();
+        boolean hasArousal = layout.headerLayout().headerBytes() > HEADER_BYTES; // V2+ has arousal
+        boolean hasStorageStrength = hasArousal; // V2+ has both arousal and storage_strength
 
-        // Lateral heap: separate collection for cross-domain candidates
+        FlatMinHeap heap = new FlatMinHeap(topK);
+
+        // Lateral heap: separate collection for cross-domain candidates (lateral mode
+        // only).
+        // Lateral mode is rare and its candidate count is small, so PriorityQueue is
+        // acceptable.
         PriorityQueue<ScoredRecord> lateralHeap = lateralMode
                 ? new PriorityQueue<>(lateralMaxResults + 1)
                 : null;
-
-        int stride = layout.stride();
-        boolean hasArousal = layout.headerLayout().headerBytes() > HEADER_BYTES; // V2+ has arousal
 
         for (int i = 0; i < recordCount; i++) {
             long offset = baseOffset + (long) i * stride;
 
             // ── Phase 1: Tombstone check (~1 cycle) ──
             byte flags = segment.get(LAYOUT_FLAGS, offset + OFFSET_FLAGS);
-            if (isTombstoned(flags)) continue;
+            if (isTombstoned(flags))
+                continue;
 
             // ── Phase 2: Synaptic tag gating (~1 cycle) ──
             // Neurodivergent: Hyperfocus uses STRICT equality (all mask bits must match).
@@ -202,20 +279,24 @@ public final class CognitiveScorer {
                 // Hyperfocus: strict equality gate — reject anything that doesn't
                 // match ALL focus tags. This creates a "tunnel" that blocks off-topic noise.
                 recordTags = segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS);
-                if ((recordTags & hyperfocusMask) != hyperfocusMask) continue;
+                if ((recordTags & hyperfocusMask) != hyperfocusMask)
+                    continue;
             } else if (queryTagMask != 0) {
                 // Standard: broadened containment — skip only on zero overlap
                 recordTags = segment.get(LAYOUT_SYNAPTIC_TAGS, offset + OFFSET_SYNAPTIC_TAGS);
-                if ((recordTags & queryTagMask) == 0) continue;
+                if ((recordTags & queryTagMask) == 0)
+                    continue;
             }
 
             // ── Phase 3: Valence filter (~2 cycles) ──
             byte valence = segment.get(LAYOUT_VALENCE, offset + OFFSET_VALENCE);
-            if (valence < minValence || valence > maxValence) continue;
+            if (valence < minValence || valence > maxValence)
+                continue;
 
             // ── Phase 4: Temporal/importance pre-screen with reconsolidation ──
             float importance = segment.get(LAYOUT_IMPORTANCE, offset + OFFSET_IMPORTANCE);
-            if (importance < minImportance) continue;
+            if (importance < minImportance)
+                continue;
 
             long timestamp = segment.get(LAYOUT_TIMESTAMP, offset + OFFSET_TIMESTAMP);
             int recallCount = segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
@@ -262,43 +343,32 @@ public final class CognitiveScorer {
             // semantically distant candidates into a separate heap.
             if (lateralMode && l2dist > lateralDistanceThreshold
                     && tagOverlap >= lateralMinTagOverlap) {
-                // Parabolic RBF: peaks at orthogonality (L2²=2.0 for normalized vectors).
-                // Formula: 1.0 - 0.25 * (L2² - 2.0)²
-                // Falls to 0.0 for both identical (L2²=0) and opposite (L2²=4) vectors.
-                // Costs ~3 FMA cycles vs the old formula's division risk.
-                float l2sq = l2dist * l2dist;
-                float diff = l2sq - 2.0f;
-                float lateralSimilarity = Math.max(0f, 1.0f - 0.25f * diff * diff);
-                float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);
-                decay = Math.min(1.0f, decay);
-                float lateralScore = lateralSimilarity * tagOverlap * importance * decay;
-
-                // Build header for lateral candidate
-                long synapticTags = recordTags;
-                float exactNorm = segment.get(LAYOUT_EXACT_NORM, offset + OFFSET_EXACT_NORM);
-                short centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
-                CognitiveHeader header = new CognitiveHeader(
-                        timestamp, synapticTags, exactNorm, importance,
-                        recallCount, centroidId, valence, flags);
-
-                if (lateralHeap.size() < lateralMaxResults) {
-                    lateralHeap.offer(new ScoredRecord(offset, lateralScore, i, header, true));
-                } else if (lateralScore > lateralHeap.peek().score()) {
-                    lateralHeap.poll();
-                    lateralHeap.offer(new ScoredRecord(offset, lateralScore, i, header, true));
-                }
-                // Lateral candidates are NOT also added to the standard heap.
-                // They are blended post-loop.
+                scoreLateral(lateralHeap, lateralMaxResults, segment, offset,
+                        l2dist, tagOverlap, importance, adjustedBucket, arousal,
+                        timestamp, recordTags, valence, flags, recallCount, i);
                 continue;
             }
 
             // Standard scoring path — with configurable strictness coefficient.
             // strictness=1.0 → standard curve: 1/(1+L2)
-            // strictness=10.0 → Heaviside cliff: near-matches stay high, vague matches plummet
+            // strictness=10.0 → Heaviside cliff: near-matches stay high, vague matches
+            // plummet
             float similarity = 1.0f / (1.0f + l2dist * strictness);
             float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);
             decay = Math.min(1.0f, decay);
-            float baseScore = alpha * similarity + beta * importance * decay;
+
+            // Two-Factor Memory: S(t)^sExponent modulates importance
+            float storageBoost = 1.0f;
+            if (hasStorageStrength) {
+                float storageStrength = layout.headerLayout()
+                        .readStorageStrength(segment, offset);
+                TwoFactorConfig tfc = options.twoFactorConfig();
+                if (tfc.enabled() && storageStrength > 1.0f) {
+                    storageBoost = fastStorageBoost(storageStrength, tfc.sExponent());
+                }
+            }
+
+            float baseScore = alpha * similarity + beta * importance * decay * storageBoost;
 
             // Valence alignment: state-dependent recall (mood-congruent memory)
             if (valenceAlign) {
@@ -314,31 +384,216 @@ public final class CognitiveScorer {
                 finalScore *= hyperfocusBoost;
             }
 
-            // Build header from already-read fields + 2 remaining (avoids double-read)
-            long synapticTags = queryTagMask != 0 || hyperfocusMask != 0
-                    ? recordTags  // already read in Phase 2
-                    : 0;
-            float exactNorm = segment.get(LAYOUT_EXACT_NORM, offset + OFFSET_EXACT_NORM);
-            short centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
-            CognitiveHeader header = new CognitiveHeader(
-                    timestamp, synapticTags, exactNorm, importance,
-                    recallCount, centroidId, valence, flags);
-
-            // Insert into top-K min-heap
-            if (heap.size() < topK) {
-                heap.offer(new ScoredRecord(offset, finalScore, i, header));
-            } else if (finalScore > heap.peek().score()) {
-                heap.poll();
-                heap.offer(new ScoredRecord(offset, finalScore, i, header));
+            // ── Insert into flat min-heap (ZERO object allocation) ──
+            // Only read remaining header fields (exactNorm, centroidId) if this record
+            // will actually enter the heap.
+            if (heap.shouldInsert(finalScore)) {
+                long synapticTags = queryTagMask != 0 || hyperfocusMask != 0
+                        ? recordTags
+                        : 0;
+                float exactNorm = segment.get(LAYOUT_EXACT_NORM, offset + OFFSET_EXACT_NORM);
+                short centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
+                heap.insert(finalScore, offset, i, timestamp, synapticTags,
+                        exactNorm, importance, recallCount, centroidId, valence, flags);
             }
         }
 
-        // Merge standard + lateral results
-        List<ScoredRecord> results = new ArrayList<>(heap);
+        // ── Post-scan: Build ScoredRecord objects ONLY for the surviving topK ──
+        List<ScoredRecord> results = heap.drain();
         if (lateralHeap != null && !lateralHeap.isEmpty()) {
             results.addAll(lateralHeap);
         }
         results.sort(Comparator.comparing(ScoredRecord::score).reversed());
         return results;
+    }
+
+    /**
+     * Scores a lateral (cross-domain) candidate and inserts into the lateral heap.
+     *
+     * <p>Lateral retrieval uses a parabolic RBF that peaks at orthogonality
+     * (L2²≈2.0 for normalized vectors), finding memories that share context tags
+     * but are semantically distant — enabling creative association.</p>
+     */
+    private static void scoreLateral(PriorityQueue<ScoredRecord> lateralHeap,
+            int lateralMaxResults, MemorySegment segment, long offset,
+            float l2dist, float tagOverlap, float importance,
+            int adjustedBucket, byte arousal,
+            long timestamp, long recordTags, byte valence, byte flags,
+            int recallCount, int recordIndex) {
+        // Parabolic RBF: peaks at orthogonality (L2²=2.0 for normalized vectors).
+        // Formula: 1.0 - 0.25 * (L2² - 2.0)²
+        float l2sq = l2dist * l2dist;
+        float diff = l2sq - 2.0f;
+        float lateralSimilarity = Math.max(0f, 1.0f - 0.25f * diff * diff);
+        float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);
+        decay = Math.min(1.0f, decay);
+        float lateralScore = lateralSimilarity * tagOverlap * importance * decay;
+
+        float exactNorm = segment.get(LAYOUT_EXACT_NORM, offset + OFFSET_EXACT_NORM);
+        short centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
+        CognitiveHeader header = new CognitiveHeader(
+                timestamp, recordTags, exactNorm, importance,
+                recallCount, centroidId, valence, flags);
+
+        if (lateralHeap.size() < lateralMaxResults) {
+            lateralHeap.offer(new ScoredRecord(offset, lateralScore, recordIndex, header, true));
+        } else if (lateralScore > lateralHeap.peek().score()) {
+            lateralHeap.poll();
+            lateralHeap.offer(new ScoredRecord(offset, lateralScore, recordIndex, header, true));
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // FlatMinHeap — zero-allocation top-K tracker using parallel arrays
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * A fixed-capacity min-heap backed by parallel primitive arrays.
+     *
+     * <p>Replaces {@code PriorityQueue<ScoredRecord>} to eliminate per-candidate
+     * {@link CognitiveHeader} and {@link ScoredRecord} allocations in the scoring
+     * inner loop. Header fields are stored as flat arrays; {@code CognitiveHeader}
+     * objects are only created when {@link #drain()} is called after the scan.</p>
+     *
+     * <p>All methods are designed for JIT inlining — no virtual dispatch,
+     * no boxing, no allocation on the fast path.</p>
+     *
+     * <p><b>TODO (JDK 28+ / Project Valhalla):</b> When value classes (JEP 401)
+     * and specialized generics (JEP 402) are available, replace this class with
+     * a standard {@code PriorityQueue<ScoredRecord>} where ScoredRecord is a
+     * value record. The JIT will scalarize value records and PriorityQueue will
+     * store flattened values, achieving the same zero-alloc behavior with proper
+     * class representation.</p>
+     */
+    private static final class FlatMinHeap {
+
+        private final int capacity;
+        private int size;
+
+        // Core fields
+        private final float[] scores;
+        private final long[] offsets;
+        private final int[] indices;
+
+        // Header fields (stored flat, assembled into CognitiveHeader on drain)
+        private final long[] timestamps;
+        private final long[] synapticTags;
+        private final float[] exactNorms;
+        private final float[] importances;
+        private final int[] recallCounts;
+        private final short[] centroidIds;
+        private final byte[] valences;
+        private final byte[] flags;
+
+        FlatMinHeap(int capacity) {
+            this.capacity = capacity;
+            this.size = 0;
+            int len = capacity + 1; // +1 for sift workspace
+            this.scores = new float[len];
+            this.offsets = new long[len];
+            this.indices = new int[len];
+            this.timestamps = new long[len];
+            this.synapticTags = new long[len];
+            this.exactNorms = new float[len];
+            this.importances = new float[len];
+            this.recallCounts = new int[len];
+            this.centroidIds = new short[len];
+            this.valences = new byte[len];
+            this.flags = new byte[len];
+        }
+
+        /** Returns true if the given score should be inserted (heap not full, or beats min). */
+        boolean shouldInsert(float score) {
+            return size < capacity || score > scores[0];
+        }
+
+        /**
+         * Inserts or replaces the minimum entry. Caller must check
+         * {@link #shouldInsert(float)} first.
+         */
+        void insert(float score, long offset, int index,
+                long timestamp, long tags, float exactNorm, float importance,
+                int recallCount, short centroidId, byte valence, byte flag) {
+            if (size < capacity) {
+                int idx = size;
+                set(idx, score, offset, index, timestamp, tags, exactNorm,
+                        importance, recallCount, centroidId, valence, flag);
+                size++;
+                siftUp(idx);
+            } else {
+                // Replace root (minimum)
+                set(0, score, offset, index, timestamp, tags, exactNorm,
+                        importance, recallCount, centroidId, valence, flag);
+                siftDown(0);
+            }
+        }
+
+        /** Drains the heap into a list of ScoredRecords (creates CognitiveHeader objects). */
+        List<ScoredRecord> drain() {
+            List<ScoredRecord> results = new ArrayList<>(size);
+            for (int h = 0; h < size; h++) {
+                CognitiveHeader header = new CognitiveHeader(
+                        timestamps[h], synapticTags[h], exactNorms[h], importances[h],
+                        recallCounts[h], centroidIds[h], valences[h], flags[h]);
+                results.add(new ScoredRecord(offsets[h], scores[h], indices[h], header));
+            }
+            return results;
+        }
+
+        private void set(int idx, float score, long offset, int index,
+                long timestamp, long tags, float exactNorm, float importance,
+                int recallCount, short centroidId, byte valence, byte flag) {
+            scores[idx] = score;
+            offsets[idx] = offset;
+            indices[idx] = index;
+            timestamps[idx] = timestamp;
+            synapticTags[idx] = tags;
+            exactNorms[idx] = exactNorm;
+            importances[idx] = importance;
+            recallCounts[idx] = recallCount;
+            centroidIds[idx] = centroidId;
+            valences[idx] = valence;
+            flags[idx] = flag;
+        }
+
+        private void siftUp(int idx) {
+            while (idx > 0) {
+                int parent = (idx - 1) >>> 1;
+                if (scores[idx] >= scores[parent])
+                    break;
+                swap(idx, parent);
+                idx = parent;
+            }
+        }
+
+        private void siftDown(int idx) {
+            while (true) {
+                int left = 2 * idx + 1;
+                int right = left + 1;
+                int smallest = idx;
+                if (left < size && scores[left] < scores[smallest])
+                    smallest = left;
+                if (right < size && scores[right] < scores[smallest])
+                    smallest = right;
+                if (smallest == idx)
+                    break;
+                swap(idx, smallest);
+                idx = smallest;
+            }
+        }
+
+        private void swap(int a, int b) {
+            float ts = scores[a]; scores[a] = scores[b]; scores[b] = ts;
+            long to = offsets[a]; offsets[a] = offsets[b]; offsets[b] = to;
+            int ti = indices[a]; indices[a] = indices[b]; indices[b] = ti;
+            long tt = timestamps[a]; timestamps[a] = timestamps[b]; timestamps[b] = tt;
+            long tg = synapticTags[a]; synapticTags[a] = synapticTags[b]; synapticTags[b] = tg;
+            float tn = exactNorms[a]; exactNorms[a] = exactNorms[b]; exactNorms[b] = tn;
+            float tp = importances[a]; importances[a] = importances[b]; importances[b] = tp;
+            int tr = recallCounts[a]; recallCounts[a] = recallCounts[b]; recallCounts[b] = tr;
+            short tc = centroidIds[a]; centroidIds[a] = centroidIds[b]; centroidIds[b] = tc;
+            byte tv = valences[a]; valences[a] = valences[b]; valences[b] = tv;
+            byte tf = flags[a]; flags[a] = flags[b]; flags[b] = tf;
+        }
     }
 }

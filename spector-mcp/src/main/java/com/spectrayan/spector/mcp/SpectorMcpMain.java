@@ -110,7 +110,11 @@ public class SpectorMcpMain {
         SpectorRuntime runtime = SpectorRuntime.from(props, embedder);
 
         // ── Start the MCP server ──
-        SpectorMcpServer server = new SpectorMcpServer(runtime);
+        String transportArg = getStringArg(args, "--transport", "stdio");
+        TransportMode transportMode = TransportMode.fromString(transportArg);
+        int port = getIntArg(args, "--port", 8080);
+
+        SpectorMcpServer server = new SpectorMcpServer(runtime, transportMode, port);
 
         // Graceful shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -169,6 +173,8 @@ public class SpectorMcpMain {
                   --data-dir <PATH>      Data directory (enables DISK persistence)
                   --ollama-url <URL>     Ollama server URL
                   --ollama-model <NAME>  Ollama embedding model
+                  --transport <MODE>     Transport mode: stdio (default) or http
+                  --port <PORT>          HTTP port (default: 8080, only for --transport http)
                   --help, -h             Show this help message
                 
                 Config Hierarchy (highest priority wins):

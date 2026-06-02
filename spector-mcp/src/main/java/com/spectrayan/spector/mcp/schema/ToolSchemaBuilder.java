@@ -87,6 +87,32 @@ public final class ToolSchemaBuilder {
         return this;
     }
 
+    /**
+     * Adds a required boolean parameter.
+     *
+     * @param name        parameter name
+     * @param description human-readable description
+     * @return this builder
+     */
+    public ToolSchemaBuilder requiredBoolean(String name, String description) {
+        properties.put(name, propertyOf("boolean", description));
+        required.add(name);
+        return this;
+    }
+
+    /**
+     * Adds a required number parameter (floating-point).
+     *
+     * @param name        parameter name
+     * @param description human-readable description
+     * @return this builder
+     */
+    public ToolSchemaBuilder requiredNumber(String name, String description) {
+        properties.put(name, propertyOf("number", description));
+        required.add(name);
+        return this;
+    }
+
     // ─────────────── Optional Parameters ───────────────
 
     /**
@@ -114,6 +140,21 @@ public final class ToolSchemaBuilder {
      */
     public ToolSchemaBuilder optionalInt(String name, String description, int defaultValue) {
         Map<String, Object> prop = propertyOf("integer", description);
+        prop.put("default", defaultValue);
+        properties.put(name, prop);
+        return this;
+    }
+
+    /**
+     * Adds an optional number (floating-point) parameter with a default value.
+     *
+     * @param name         parameter name
+     * @param description  human-readable description
+     * @param defaultValue default value
+     * @return this builder
+     */
+    public ToolSchemaBuilder optionalNumber(String name, String description, double defaultValue) {
+        Map<String, Object> prop = propertyOf("number", description);
         prop.put("default", defaultValue);
         properties.put(name, prop);
         return this;

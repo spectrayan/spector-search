@@ -211,6 +211,11 @@ public final class HebbianGraph implements AutoCloseable {
     /**
      * Immutable Hebbian edge record.
      *
+     * <p><b>TODO (JDK 28+ / Project Valhalla):</b> Convert to {@code value record}.
+     * As a value class, HebbianEdge would be scalarized in the caller's stack frame
+     * instead of heap-allocated. With specialized generics, {@code List<HebbianEdge>}
+     * would store flattened values instead of boxed pointers.</p>
+     *
      * @param neighborIndex index of the connected memory
      * @param weight        association strength
      */
@@ -303,19 +308,21 @@ public final class HebbianGraph implements AutoCloseable {
     public List<HebbianEdge> activateNeighbors(int node, int depth) {
         if (node < 0 || node >= capacity) return List.of();
         List<HebbianEdge> activated = new ArrayList<>();
-        activateRecursive(node, depth, 1.0f, activated, new java.util.HashSet<>());
+        // Use boolean[] instead of HashSet<Integer> — eliminates autoboxing overhead
+        boolean[] visited = new boolean[capacity];
+        activateRecursive(node, depth, 1.0f, activated, visited);
         activated.sort((a, b) -> Float.compare(b.weight(), a.weight()));
         return activated;
     }
 
     private void activateRecursive(int node, int depth, float attenuation,
-                                    List<HebbianEdge> activated, java.util.Set<Integer> visited) {
-        if (depth <= 0 || visited.contains(node)) return;
-        visited.add(node);
+                                    List<HebbianEdge> activated, boolean[] visited) {
+        if (depth <= 0 || visited[node]) return;
+        visited[node] = true;
 
         for (HebbianEdge edge : neighbors(node)) {
             float compoundWeight = edge.weight() * attenuation;
-            if (compoundWeight > 0.01f && !visited.contains(edge.neighborIndex())) {
+            if (compoundWeight > 0.01f && !visited[edge.neighborIndex()]) {
                 activated.add(new HebbianEdge(edge.neighborIndex(), compoundWeight));
                 activateRecursive(edge.neighborIndex(), depth - 1, compoundWeight * 0.5f,
                         activated, visited);

@@ -251,6 +251,15 @@ public record CognitiveRecordLayout(int quantizedVecBytes, HeaderLayout headerLa
      * <p>V1-only code can use the 8-arg constructor; the extended fields
      * default to {@code arousal=0} and {@code storageStrength=1.0f}.</p>
      *
+     * <p><b>TODO (JDK 28+ / Project Valhalla):</b> Convert to {@code value record} once
+     * JEP 401 (Value Classes) is available. As a value class, CognitiveHeader would
+     * be identity-free and scalarizable by the JIT — the 30 bytes of payload would
+     * live in CPU registers instead of as a 48-byte heap object. When nested inside
+     * {@code ScoredRecord} (also a value class), both would be flattened inline,
+     * eliminating pointer indirection and reducing per-candidate cost from ~96B
+     * heap to 0B (scalarized). Specialized generics (JEP 402) would further enable
+     * flat storage in generic collections like {@code PriorityQueue}.</p>
+     *
      * @param timestampMs     when the memory was formed (epoch millis)
      * @param synapticTags    64-bit Bloom filter of contextual markers
      * @param exactNorm       L2 norm for SIMD distance computation

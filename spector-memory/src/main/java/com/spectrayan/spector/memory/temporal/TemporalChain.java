@@ -26,8 +26,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Off-heap temporal causal chain linking memories within a session.
@@ -54,10 +52,10 @@ public final class TemporalChain implements AutoCloseable {
 
     /** File magic: "TPCH" in ASCII. */
     private static final int FILE_MAGIC = 0x54504348;
-    private static final int FILE_VERSION = 1;
+    private static final int FILE_VERSION = 2;
     private static final int FILE_HEADER_BYTES = 16;
 
-    /** Bytes per node: prevIdx(4) + nextIdx(4) + sessionId(4) + pad(4). */
+    /** Bytes per node: prevIdx(4) + nextIdx(4) + sessionId(4) + epochSec(4). */
     static final int NODE_BYTES = 16;
 
     /** Sentinel value for "no link". */
@@ -67,6 +65,7 @@ public final class TemporalChain implements AutoCloseable {
     private static final long OFF_PREV = 0;
     private static final long OFF_NEXT = 4;
     private static final long OFF_SESSION = 8;
+    private static final long OFF_EPOCH_SEC = 12;
 
     private final Arena arena;
     private final MemorySegment segment;
@@ -123,9 +122,16 @@ public final class TemporalChain implements AutoCloseable {
         // currentIdx.prev = previousIdx
         segment.set(ValueLayout.JAVA_INT, currentOffset + OFF_PREV, previousIdx);
         segment.set(ValueLayout.JAVA_INT, currentOffset + OFF_SESSION, sessionId);
+        segment.set(ValueLayout.JAVA_INT, currentOffset + OFF_EPOCH_SEC,
+                (int) (System.currentTimeMillis() / 1000));
 
         // previousIdx.next = currentIdx
         segment.set(ValueLayout.JAVA_INT, previousOffset + OFF_NEXT, currentIdx);
+        // Also stamp previousIdx epoch if it was never set (backfill for first node)
+        if (segment.get(ValueLayout.JAVA_INT, previousOffset + OFF_EPOCH_SEC) == 0) {
+            segment.set(ValueLayout.JAVA_INT, previousOffset + OFF_EPOCH_SEC,
+                    (int) (System.currentTimeMillis() / 1000));
+        }
     }
 
     /**
@@ -133,20 +139,21 @@ public final class TemporalChain implements AutoCloseable {
      *
      * @param startIdx the starting memory index
      * @param maxHops  maximum number of hops to follow
-     * @return list of memory indices in temporal order (excludes startIdx)
+     * @return array of memory indices in temporal order (excludes startIdx)
      */
-    public List<Integer> followForward(int startIdx, int maxHops) {
-        if (startIdx < 0 || startIdx >= capacity) return List.of();
-        List<Integer> chain = new ArrayList<>();
+    public int[] followForward(int startIdx, int maxHops) {
+        if (startIdx < 0 || startIdx >= capacity) return new int[0];
+        int[] chain = new int[maxHops];
+        int count = 0;
         int current = startIdx;
         for (int hop = 0; hop < maxHops; hop++) {
             long offset = (long) current * NODE_BYTES;
             int next = segment.get(ValueLayout.JAVA_INT, offset + OFF_NEXT);
             if (next == NO_LINK || next < 0 || next >= capacity) break;
-            chain.add(next);
+            chain[count++] = next;
             current = next;
         }
-        return chain;
+        return count == maxHops ? chain : java.util.Arrays.copyOf(chain, count);
     }
 
     /**
@@ -154,20 +161,21 @@ public final class TemporalChain implements AutoCloseable {
      *
      * @param startIdx the starting memory index
      * @param maxHops  maximum number of hops to follow
-     * @return list of memory indices in reverse temporal order (excludes startIdx)
+     * @return array of memory indices in reverse temporal order (excludes startIdx)
      */
-    public List<Integer> followBackward(int startIdx, int maxHops) {
-        if (startIdx < 0 || startIdx >= capacity) return List.of();
-        List<Integer> chain = new ArrayList<>();
+    public int[] followBackward(int startIdx, int maxHops) {
+        if (startIdx < 0 || startIdx >= capacity) return new int[0];
+        int[] chain = new int[maxHops];
+        int count = 0;
         int current = startIdx;
         for (int hop = 0; hop < maxHops; hop++) {
             long offset = (long) current * NODE_BYTES;
             int prev = segment.get(ValueLayout.JAVA_INT, offset + OFF_PREV);
             if (prev == NO_LINK || prev < 0 || prev >= capacity) break;
-            chain.add(prev);
+            chain[count++] = prev;
             current = prev;
         }
-        return chain;
+        return count == maxHops ? chain : java.util.Arrays.copyOf(chain, count);
     }
 
     /**
@@ -194,6 +202,69 @@ public final class TemporalChain implements AutoCloseable {
      */
     public int capacity() {
         return capacity;
+    }
+
+    /**
+     * Returns the epoch-second timestamp for a memory node.
+     *
+     * @param idx the memory index
+     * @return epoch seconds (0 if unlinked or from a V1 file)
+     */
+    public int epochSecOf(int idx) {
+        if (idx < 0 || idx >= capacity) return 0;
+        return segment.get(ValueLayout.JAVA_INT, (long) idx * NODE_BYTES + OFF_EPOCH_SEC);
+    }
+
+    /**
+     * Prunes temporal chain nodes older than the given cutoff.
+     *
+     * <p>For each linked node whose {@code epochSec * 1000L < cutoffEpochMs},
+     * the node is unlinked by re-stitching its neighbors' prev/next pointers.
+     * Nodes with {@code epochSec == 0} (unknown age, e.g., from V1 files) are
+     * never pruned.</p>
+     *
+     * @param cutoffEpochMs cutoff timestamp in milliseconds
+     * @return number of nodes pruned
+     */
+    public int pruneOlderThan(long cutoffEpochMs) {
+        int cutoffEpochSec = (int) (cutoffEpochMs / 1000);
+        int pruned = 0;
+
+        for (int i = 0; i < capacity; i++) {
+            long offset = (long) i * NODE_BYTES;
+            int prev = segment.get(ValueLayout.JAVA_INT, offset + OFF_PREV);
+            int next = segment.get(ValueLayout.JAVA_INT, offset + OFF_NEXT);
+
+            // Skip unlinked nodes
+            if (prev == NO_LINK && next == NO_LINK) continue;
+
+            int epochSec = segment.get(ValueLayout.JAVA_INT, offset + OFF_EPOCH_SEC);
+            // Never prune nodes with unknown age (epochSec=0, from V1 migration)
+            if (epochSec == 0) continue;
+            if (epochSec >= cutoffEpochSec) continue;
+
+            // Unlink: re-stitch neighbors
+            if (prev >= 0 && prev < capacity) {
+                long prevOffset = (long) prev * NODE_BYTES;
+                segment.set(ValueLayout.JAVA_INT, prevOffset + OFF_NEXT, next);
+            }
+            if (next >= 0 && next < capacity) {
+                long nextOffset = (long) next * NODE_BYTES;
+                segment.set(ValueLayout.JAVA_INT, nextOffset + OFF_PREV, prev);
+            }
+
+            // Clear this node
+            segment.set(ValueLayout.JAVA_INT, offset + OFF_PREV, NO_LINK);
+            segment.set(ValueLayout.JAVA_INT, offset + OFF_NEXT, NO_LINK);
+            segment.set(ValueLayout.JAVA_INT, offset + OFF_SESSION, 0);
+            segment.set(ValueLayout.JAVA_INT, offset + OFF_EPOCH_SEC, 0);
+            pruned++;
+        }
+
+        if (pruned > 0) {
+            log.info("TemporalChain pruned {} nodes older than {}s", pruned, cutoffEpochSec);
+        }
+        return pruned;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -275,8 +346,8 @@ public final class TemporalChain implements AutoCloseable {
             int capacity = header.getInt();
             header.getInt();
 
-            if (magic != FILE_MAGIC || version != FILE_VERSION) {
-                log.warn("Invalid TemporalChain file, creating fresh");
+            if (magic != FILE_MAGIC || (version != FILE_VERSION && version != 1)) {
+                log.warn("Invalid TemporalChain file (magic={}, version={}), creating fresh", magic, version);
                 return new TemporalChain(defaultCapacity);
             }
 

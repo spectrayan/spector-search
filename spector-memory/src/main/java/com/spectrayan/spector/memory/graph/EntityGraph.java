@@ -26,9 +26,9 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -315,6 +315,33 @@ public final class EntityGraph implements AutoCloseable {
     }
 
     /**
+     * Returns the number of memory references for an entity.
+     * Zero-alloc alternative to {@link #memoriesForEntity(int)}.length.
+     */
+    public int memoryRefCount(int entityId) {
+        if (entityId < 0 || entityId >= entityCount) return 0;
+        return entitySegment.get(ValueLayout.JAVA_INT,
+                (long) entityId * ENTITY_NODE_BYTES + ENT_OFF_REF_COUNT);
+    }
+
+    /**
+     * Returns the memory reference at the given index for an entity.
+     * Zero-alloc alternative to {@code memoriesForEntity(id)[index]}.
+     *
+     * @param entityId entity ID
+     * @param refIndex reference index (0-based, must be < memoryRefCount)
+     * @return memory index, or -1 if out of bounds
+     */
+    public int memoryRefAt(int entityId, int refIndex) {
+        if (entityId < 0 || entityId >= entityCount) return -1;
+        long offset = (long) entityId * ENTITY_NODE_BYTES;
+        int refCount = entitySegment.get(ValueLayout.JAVA_INT, offset + ENT_OFF_REF_COUNT);
+        if (refIndex < 0 || refIndex >= refCount) return -1;
+        return entitySegment.get(ValueLayout.JAVA_INT,
+                offset + ENT_OFF_MEM_REFS + (long) refIndex * 4);
+    }
+
+    /**
      * Returns the entity type for an entity ID.
      */
     public EntityType entityType(int entityId) {
@@ -365,15 +392,18 @@ public final class EntityGraph implements AutoCloseable {
         if (startEntity < 0 || startEntity >= entityCount) return List.of();
 
         List<TraversalResult> results = new ArrayList<>();
-        Set<Integer> visited = new HashSet<>();
-        Queue<int[]> queue = new LinkedList<>(); // [entityId, depth]
-        queue.add(new int[]{startEntity, 0});
-        visited.add(startEntity);
+        // boolean[] instead of HashSet<Integer> — eliminates autoboxing overhead
+        boolean[] visited = new boolean[entityCount];
+        // ArrayDeque instead of LinkedList — better cache locality, fewer allocations
+        // Pack (entityId, depth) into a single long to avoid int[] allocations per BFS node
+        ArrayDeque<Long> queue = new ArrayDeque<>();
+        queue.add(packBfsNode(startEntity, 0));
+        visited[startEntity] = true;
 
         while (!queue.isEmpty()) {
-            int[] current = queue.poll();
-            int entityId = current[0];
-            int depth = current[1];
+            long packed = queue.poll();
+            int entityId = (int) (packed >>> 32);
+            int depth = (int) packed;
 
             if (depth > 0) {
                 results.add(new TraversalResult(entityId, depth));
@@ -383,13 +413,20 @@ public final class EntityGraph implements AutoCloseable {
 
             for (EntityEdge edge : edges(entityId)) {
                 if (filter != null && edge.relationType() != filter) continue;
-                if (visited.contains(edge.targetEntityId())) continue;
-                visited.add(edge.targetEntityId());
-                queue.add(new int[]{edge.targetEntityId(), depth + 1});
+                int target = edge.targetEntityId();
+                if (target >= 0 && target < entityCount && !visited[target]) {
+                    visited[target] = true;
+                    queue.add(packBfsNode(target, depth + 1));
+                }
             }
         }
 
         return results;
+    }
+
+    /** Packs entityId and depth into a single long to avoid int[] allocation per BFS node. */
+    private static long packBfsNode(int entityId, int depth) {
+        return ((long) entityId << 32) | (depth & 0xFFFFFFFFL);
     }
 
     /**
@@ -418,6 +455,177 @@ public final class EntityGraph implements AutoCloseable {
         return memories;
     }
 
+    // ── Decay & Merge Operations (for reflect() sleep cycle) ──
+
+    /**
+     * Decays all entity edge weights by the given factor and prunes edges below a minimum weight.
+     *
+     * <p>Analogous to {@link com.spectrayan.spector.memory.hebbian.HebbianGraph#decayEdges(float)}
+     * but operates on the entity-relationship graph. Weak relations (e.g., promoted via
+     * cross-layer from Hebbian but never reinforced) naturally fade over reflection cycles.</p>
+     *
+     * @param decayFactor multiplicative factor (e.g., 0.9 = 10% decay per cycle)
+     * @param minWeight   edges with weight below this after decay are pruned (e.g., 0.5)
+     * @return number of edges pruned
+     */
+    public synchronized int decayEdges(float decayFactor, float minWeight) {
+        int pruned = 0;
+        for (int e = 0; e < entityCount; e++) {
+            long entOffset = (long) e * ENTITY_NODE_BYTES;
+            int degree = entitySegment.get(ValueLayout.JAVA_INT, entOffset + ENT_OFF_DEGREE);
+            int edgeStart = entitySegment.get(ValueLayout.JAVA_INT, entOffset + ENT_OFF_EDGE_START);
+            if (edgeStart < 0 || degree == 0) continue;
+
+            int newDegree = 0;
+            for (int i = 0; i < degree; i++) {
+                long edgeOffset = (long) (edgeStart + i) * EDGE_BYTES;
+                float weight = edgeSegment.get(ValueLayout.JAVA_FLOAT, edgeOffset + EDGE_OFF_WEIGHT);
+                float decayed = weight * decayFactor;
+
+                if (decayed >= minWeight) {
+                    // Keep edge: compact if needed
+                    if (newDegree < i) {
+                        long destOffset = (long) (edgeStart + newDegree) * EDGE_BYTES;
+                        int target = edgeSegment.get(ValueLayout.JAVA_INT, edgeOffset + EDGE_OFF_TARGET);
+                        int relType = edgeSegment.get(ValueLayout.JAVA_INT, edgeOffset + EDGE_OFF_REL_TYPE);
+                        edgeSegment.set(ValueLayout.JAVA_INT, destOffset + EDGE_OFF_TARGET, target);
+                        edgeSegment.set(ValueLayout.JAVA_INT, destOffset + EDGE_OFF_REL_TYPE, relType);
+                        edgeSegment.set(ValueLayout.JAVA_FLOAT, destOffset + EDGE_OFF_WEIGHT, decayed);
+                    } else {
+                        edgeSegment.set(ValueLayout.JAVA_FLOAT, edgeOffset + EDGE_OFF_WEIGHT, decayed);
+                    }
+                    newDegree++;
+                } else {
+                    pruned++;
+                }
+            }
+            entitySegment.set(ValueLayout.JAVA_INT, entOffset + ENT_OFF_DEGREE, newDegree);
+        }
+        if (pruned > 0) {
+            log.info("EntityGraph decayed edges: {} pruned below threshold {}", pruned, minWeight);
+        }
+        return pruned;
+    }
+
+    /**
+     * Merges entities with similar names using Levenshtein distance.
+     *
+     * <p>Entities whose names are within {@code maxEditDistance} edits of each other
+     * (and share the same EntityType) are merged. The shorter name is kept as the
+     * canonical entity. All edges and memory refs from the duplicate are redirected
+     * to the canonical entity.</p>
+     *
+     * <p>This addresses typos and near-duplicates like "kubernetes" / "kubernets"
+     * that arise from NER over noisy text.</p>
+     *
+     * @param maxEditDistance maximum Levenshtein distance for merge (e.g., 2)
+     * @return number of entities merged
+     */
+    public synchronized int mergeSimilarEntities(int maxEditDistance) {
+        if (maxEditDistance <= 0 || entityCount < 2) return 0;
+
+        Set<Integer> merged = new HashSet<>();
+        int mergeCount = 0;
+        List<Map.Entry<String, Integer>> entries = new ArrayList<>(nameIndex.entrySet());
+
+        for (int i = 0; i < entries.size(); i++) {
+            if (merged.contains(entries.get(i).getValue())) continue;
+            String nameA = entries.get(i).getKey();
+            int idA = entries.get(i).getValue();
+
+            for (int j = i + 1; j < entries.size(); j++) {
+                if (merged.contains(entries.get(j).getValue())) continue;
+                String nameB = entries.get(j).getKey();
+                int idB = entries.get(j).getValue();
+
+                // Only merge same-type entities
+                if (entityType(idA) != entityType(idB)) continue;
+
+                int dist = levenshteinDistance(nameA, nameB);
+                if (dist > 0 && dist <= maxEditDistance) {
+                    // Keep the shorter name as canonical
+                    int canonical = nameA.length() <= nameB.length() ? idA : idB;
+                    int duplicate = canonical == idA ? idB : idA;
+
+                    redirectEntity(duplicate, canonical);
+                    merged.add(duplicate);
+                    mergeCount++;
+
+                    log.debug("EntityGraph merged '{}' → '{}' (edit distance={})",
+                            canonical == idA ? nameB : nameA,
+                            canonical == idA ? nameA : nameB, dist);
+                }
+            }
+        }
+
+        if (mergeCount > 0) {
+            log.info("EntityGraph merged {} similar entities", mergeCount);
+        }
+        return mergeCount;
+    }
+
+    /**
+     * Redirects all edges and memory refs from {@code from} to {@code to}.
+     */
+    private void redirectEntity(int from, int to) {
+        // Move memory refs from 'from' to 'to'
+        int[] fromMemRefs = memoriesForEntity(from);
+        for (int memIdx : fromMemRefs) {
+            linkEntityToMemory(to, memIdx);
+        }
+        // Clear 'from' memory refs
+        long fromOffset = (long) from * ENTITY_NODE_BYTES;
+        entitySegment.set(ValueLayout.JAVA_INT, fromOffset + ENT_OFF_REF_COUNT, 0);
+
+        // Move edges from 'from' to 'to'
+        for (EntityEdge edge : edges(from)) {
+            if (edge.targetEntityId() != to) {
+                addRelation(to, edge.targetEntityId(), edge.relationType());
+            }
+        }
+        // Clear 'from' edges
+        entitySegment.set(ValueLayout.JAVA_INT, fromOffset + ENT_OFF_DEGREE, 0);
+    }
+
+    /**
+     * Computes Levenshtein edit distance between two strings.
+     *
+     * <p>Uses thread-local reusable arrays to avoid heap allocation per call.
+     * The previous implementation allocated two {@code int[]} arrays per call,
+     * which at O(n²) merge comparisons caused significant GC pressure.</p>
+     */
+    private static final ThreadLocal<int[]> LEV_PREV = ThreadLocal.withInitial(() -> new int[256]);
+    private static final ThreadLocal<int[]> LEV_CURR = ThreadLocal.withInitial(() -> new int[256]);
+
+    static int levenshteinDistance(String a, String b) {
+        int lenA = a.length(), lenB = b.length();
+        if (lenA == 0) return lenB;
+        if (lenB == 0) return lenA;
+        // Quick reject: if length difference exceeds max realistic distance, skip
+        if (Math.abs(lenA - lenB) > 5) return Math.abs(lenA - lenB);
+
+        // Reuse thread-local arrays (grow if needed)
+        int[] prev = LEV_PREV.get();
+        int[] curr = LEV_CURR.get();
+        if (prev.length <= lenB) {
+            prev = new int[lenB + 1];
+            curr = new int[lenB + 1];
+            LEV_PREV.set(prev);
+            LEV_CURR.set(curr);
+        }
+
+        for (int j = 0; j <= lenB; j++) prev[j] = j;
+        for (int i = 1; i <= lenA; i++) {
+            curr[0] = i;
+            for (int j = 1; j <= lenB; j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                curr[j] = Math.min(Math.min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            int[] tmp = prev; prev = curr; curr = tmp;
+        }
+        return prev[lenB];
+    }
+
     /**
      * Returns the number of entities in the graph.
      */
@@ -441,11 +649,19 @@ public final class EntityGraph implements AutoCloseable {
 
     /**
      * An edge in the entity graph.
+     *
+     * <p><b>TODO (JDK 28+ / Project Valhalla):</b> Convert to {@code value record}.
+     * As a value class, EntityEdge would be scalarized by the JIT — zero heap
+     * allocation. With specialized generics, {@code List<EntityEdge>} would store
+     * flat values instead of boxed pointers.</p>
      */
     public record EntityEdge(int targetEntityId, RelationType relationType, float weight) {}
 
     /**
      * A BFS traversal result.
+     *
+     * <p><b>TODO (JDK 28+ / Project Valhalla):</b> Convert to {@code value record}.
+     * Same benefits as EntityEdge above.</p>
      */
     public record TraversalResult(int entityId, int hopDistance) {}
 
