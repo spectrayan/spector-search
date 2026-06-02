@@ -38,14 +38,14 @@ Replace INT8 `[-127, 127]` codes with INT4 `[-7, 7]` codes in the SVASQ pipeline
 
 ---
 
-### 🔜 Padding-Aware Storage — Skip Zero Dimensions {#padding-aware}
+### ✅ Padding-Aware Storage — Skip Zero Dimensions {#padding-aware}
 
-!!! info "Status: Planned (next)"
-    Low effort, zero recall loss for L2 distance. Highest ROI pending improvement.
+!!! success "Completed"
+    Implemented in `SvasqEncoder`, `Svasq4Encoder`, `SvasqParams.storedDim()`. SIMD-aligned to 16-byte boundary (Option A).
 
-SVASQ pads vectors to the next power-of-two dimensionality (e.g., 768 → 1024), adding wasted bytes. The padded dimensions are zero-filled before FWHT, so their rotated codes are predictable. We can **store only the first `originalDim` codes** and reconstruct padded codes at query time.
+SVASQ pads vectors to the next power-of-two dimensionality (e.g., 768 → 1024), adding wasted bytes. The padded dimensions are zero-filled before FWHT, so their rotated codes are predictable. We now **store only the first `originalDim` codes** (aligned to the next SIMD boundary) and reconstruct padded codes at query time.
 
-| Dims | paddedDim | Current SVASQ-8 | Padding-Aware | Savings |
+| Dims | paddedDim | Before | After (Padding-Aware) | Savings |
 |------|-----------|---------------|---------------|---------|
 | 384 | 512 | 516 B | 388 B | **25%** |
 | 768 | 1024 | 1028 B | 772 B | **25%** |
@@ -54,37 +54,37 @@ SVASQ pads vectors to the next power-of-two dimensionality (e.g., 768 → 1024),
 
 **Recall impact:** **None** for L2 distance — padded dimensions contribute a constant offset that doesn't affect ranking.
 
-!!! warning "SIMD Tail Loop"
-    The current SIMD kernel exploits `paddedDim % VL == 0` to avoid tail loops. Storing only `originalDim` codes breaks this, requiring either a scalar tail loop or alignment padding to the next SIMD boundary (e.g., round up to multiple of 16 bytes).
+**Implementation:** SIMD-aligned stored codes (Option A — aligns `storedDim` to next 16-byte boundary). Zero SIMD tail loop overhead.
 
-**Changes required:**
+**Changes:**
 
-- `SvasqEncoder` / `Svasq4Encoder`: Store only `originalDim` codes, update `bytesPerVector()`
-- `SvasqSimdKernel` / `Svasq4SimdKernel`: Handle non-power-of-2 loop bound (SIMD-aligned padding recommended)
+- `SvasqParams.storedDim()`: Returns SIMD-aligned `originalDim`
+- `SvasqEncoder` / `Svasq4Encoder`: Store only `storedDim` codes
+- `SvasqSimdKernel` / `Svasq4SimdKernel`: Loop over `storedDim` instead of `paddedDim`
 
 ---
 
-### 🔜 Norm Header Compression — float32 → float16 {#norm-f16}
+### ✅ Norm Header Compression — float32 → float16 {#norm-f16}
 
-!!! info "Status: Planned (next)"
-    Very low effort. Negligible recall impact.
+!!! success "Completed"
+    Implemented via `Float.floatToFloat16()` / `Float.float16ToFloat()` in all SVASQ encoders and kernels.
 
-The 4-byte `float32 exactNormSq` header can be compressed to 2 bytes using `float16` (half-precision). Java 21+ provides `Float.floatToFloat16()` and `Float.float16ToFloat()` for lossless conversion.
+The 4-byte `float32 exactNormSq` header is now compressed to 2 bytes using `float16` (half-precision).
 
-**Savings:** 2 bytes per vector. Small absolute savings but trivial to implement.
+**Savings:** 2 bytes per vector (combined with padding-aware storage for maximum effect).
 
 | Combined with | Before | After | Savings |
 |---------------|--------|-------|---------|
-| SVASQ-8 (768-dim) | 1028 B | 1026 B | 0.2% |
-| SVASQ-4 (768-dim) | 516 B | 514 B | 0.4% |
-| Padding-aware SVASQ-8 (768-dim) | 772 B | 770 B | 0.3% |
+| SVASQ-8 (768-dim) | 1028 B | 770 B | **25%** |
+| SVASQ-4 (768-dim) | 516 B | 386 B | **25%** |
 
-**Recall impact:** < 0.01% — `float16` has ~3 decimal digits of precision. For L2 ranking, the norm header is a per-vector constant that shifts all distances equally.
+**Recall impact:** < 0.01% — `float16` has ~3 decimal digits of precision.
 
-**Changes required:**
+**Changes:**
 
-- `SvasqEncoder` / `Svasq4Encoder`: Use `Float.floatToFloat16()` for 2-byte header write
-- `SvasqSimdKernel` / `Svasq4SimdKernel`: Read with `Float.float16ToFloat(segment.get(JAVA_SHORT, offset))`
+- `SvasqEncoder` / `Svasq4Encoder`: Write norm via `Float.floatToFloat16()`
+- `SvasqSimdKernel` / `Svasq4SimdKernel`: Read via `Float.float16ToFloat()`
+- `SvasqParams.bytesPerVector()`: Uses 2-byte norm header
 
 ---
 
@@ -193,12 +193,19 @@ Built-in [Model Context Protocol](https://modelcontextprotocol.io/) server that 
 
 ---
 
-### 🔜 Streamable HTTP Transport {#mcp-http}
+### ✅ Streamable HTTP Transport {#mcp-http}
 
-!!! info "Status: Planned (next)"
-    Stdio covers Claude Desktop, Cursor, and all local agents. HTTP needed for cloud/remote deployments.
+!!! success "Completed"
+    `TransportMode` enum with `STDIO` and `HTTP` modes. CLI: `--transport=http --port=8080`.
 
-Add HTTP-based MCP transport for scenarios where the agent and Spector run on different machines. The official MCP SDK supports Streamable HTTP transport — Spector would expose the same 6 tools over an HTTP endpoint.
+HTTP-based MCP transport for remote/cloud deployments. Same 6 tools exposed over an HTTP endpoint.
+
+**Implementation:**
+
+- `TransportMode` enum: `STDIO` (default), `HTTP`
+- CLI flags: `--transport=http`, `--port=8080`
+- `SpectorMcpMain`: Parses transport mode and configures server accordingly
+- Graceful shutdown on SIGTERM for container readiness
 
 **Use cases:** Cloud deployments, remote agent connections, multi-agent architectures.
 
@@ -278,95 +285,79 @@ RecallPipeline
 
 ---
 
-### 🔜 Temporal Chain Pruning {#temporal-pruning}
+### ✅ Temporal Chain Pruning {#temporal-pruning}
 
-!!! info "Status: Planned (next)"
-    Low effort. Prevents unbounded temporal chain growth.
+!!! success "Completed"
+    `pruneOlderThan(long cutoffEpochMs)` implemented. Integrated into `reflect()` cycle with configurable `temporalRetentionDays(int)`.
 
-Temporal chain links are permanent — unlike Hebbian edges which decay via `decayEdges(0.9f)`, temporal links have no homeostasis mechanism. Old session-local links waste slots indefinitely.
+Temporal chain links now support automatic pruning during the `reflect()` consolidation cycle.
 
-**Design:**
+**Implementation:**
 
-- Add `pruneOlderThan(long cutoffEpochMs)` to `TemporalChain`
-- Replace the `pad:4B` field in the 16B node layout with `epochSec:4B` (seconds since epoch, ~136 year range)
-- Integrate into `DefaultSpectorMemory.reflect()` after Hebbian decay
-- Configurable retention period via Builder: `temporalRetentionDays(int)` (default: 7)
-
-**Effort:** ~0.5 day
+- `TemporalChain.pruneOlderThan(long cutoffEpochMs)`: Scans all nodes, unlinks stale entries, re-stitches prev → next pointers
+- `pad:4B` field in node layout replaced with `epochSec:4B` (seconds since epoch)
+- Configurable via Builder: `temporalRetentionDays(int)` (default: 7)
+- Pruned count reported in `ReflectReport`
 
 ---
 
-### 🔜 Cross-Layer Promotion (Hebbian → Entity) {#cross-layer-promotion}
+### ✅ Cross-Layer Promotion (Hebbian → Entity) {#cross-layer-promotion}
 
-!!! info "Status: Planned (next)"
-    Medium effort. Enables automatic knowledge graph construction from statistical patterns.
+!!! success "Completed"
+    `promoteHebbianToEntity()` implemented in `DefaultSpectorMemory.reflect()`. Uses reverse index for O(1) entity lookup per memory.
 
-Promote strong statistical Hebbian associations into explicit entity relations during sleep consolidation — analogous to hippocampal replay.
+Strong statistical Hebbian associations are automatically promoted to explicit entity relations during the `reflect()` consolidation cycle — analogous to hippocampal replay.
 
-**Design:**
+**Implementation:**
 
-- During `reflect()`, scan HebbianGraph for edges with `weight ≥ 0.8` AND `activationCount ≥ 5`
-- For each strong edge, look up shared entities via `EntityGraph.memoriesForEntity()`
-- If shared entities exist, strengthen the entity relation edge; if none, create a `RELATED_TO` relation
-- Add `promotionThreshold(float)` and `promotionMinActivations(int)` to Builder config
-- Add `PromotionReport` record for observability: `promotedCount`, `strengthenedCount`, `skippedCount`
-
-**Effort:** ~1-2 days
+- During `reflect()`, scans HebbianGraph for edges with weight ≥ threshold
+- Builds `memoryIdx → entityIds` reverse index for O(1) lookup (vs previous O(E×R) scan)
+- If shared entities exist, strengthens the entity relation edge; if none, creates a `RELATED_TO` relation
+- Cross-promotion count reported in `ReflectReport`
 
 ---
 
-### 🔜 Entity Graph Decay + Node Merging {#entity-decay}
+### ✅ Entity Graph Decay + Node Merging {#entity-decay}
 
-!!! info "Status: Planned"
-    Medium effort. Prevents entity graph bloat.
+!!! success "Completed"
+    `decayRelations()`, `mergeSimilarEntities()`, and `levenshteinDistance()` implemented with off-heap optimizations.
 
-Entity graph edges accumulate without decay. Near-duplicate entities (e.g., "John Smith" and "J. Smith") should be merged during consolidation.
+Entity graph edges now decay during consolidation, and near-duplicate entities are automatically merged.
 
-**Design:**
+**Implementation:**
 
-- Add `decayRelations(float factor)` to `EntityGraph` — multiplicative decay, prune below threshold
-- Add `mergeEntities(int sourceId, int targetId)` — redirect all edges and memory links
-- Fuzzy name matching via Levenshtein distance during consolidation
-- Integrate into `reflect()` cycle
-
-**Effort:** ~1-2 days
+- `EntityGraph.decayRelations(float factor)`: Multiplicative decay, prunes edges below threshold
+- `EntityGraph.mergeSimilarEntities(int maxEditDistance)`: Levenshtein-based fuzzy matching with `ThreadLocal` reusable int[] arrays (zero GC after warmup)
+- Integrated into `reflect()` cycle after cross-layer promotion
+- Decay/merge counts reported in `ReflectReport`
 
 ---
 
-### 🔜 Graph-Aware Scoring Weights {#graph-scoring}
+### ✅ Graph-Aware Scoring Weights {#graph-scoring}
 
-!!! info "Status: Planned"
-    Low effort. Highest ROI among remaining graph improvements.
+!!! success "Completed"
+    `GraphScoringPolicy` record implemented. Configurable via `DefaultSpectorMemory.Builder.graphScoringPolicy()`.
 
-Extract hardcoded graph score attenuation factors into a configurable `GraphScoringPolicy`.
-
-**Current hardcoded values:**
-
-| Factor | Current Value | Used In |
-|---|---|---|
-| Hebbian boost | 0.3f | RecallPipeline Step 5c |
-| Temporal forward | 0.8f | RecallPipeline Step 5d |
-| Temporal backward | 0.7f | RecallPipeline Step 5d |
-| Entity hop attenuation | 0.25f | RecallPipeline Step 5e |
-
-**Design:**
+All hardcoded graph score attenuation factors are now extracted into a configurable `GraphScoringPolicy` record:
 
 ```java
 public record GraphScoringPolicy(
-    float hebbianBoostFactor,     // default 0.3
-    float temporalForwardFactor,  // default 0.8
-    float temporalBackwardFactor, // default 0.7
-    float entityHopAttenuation,   // default 0.25
-    int hebbianMaxDepth,          // default 2
-    int temporalMaxHops,          // default 3
-    int entityMaxHops             // default 2
-) {}
+    float causalBoostWeight,       // default 0.3
+    float hebbianBoostFactor,      // default 0.3
+    float temporalForwardFactor,   // default 0.8
+    float temporalBackwardFactor,  // default 0.7
+    float entityHopAttenuation,    // default 0.25
+    int hebbianMaxDepth,           // default 2
+    int temporalMaxHops,           // default 3
+    int entityMaxHops              // default 2
+) {
+    public static final GraphScoringPolicy DEFAULT = ...;
+}
 ```
 
 - Configurable via Builder: `graphScoringPolicy(GraphScoringPolicy)`
+- All 8 constants replaced with policy accessors in `RecallPipeline`
 - Future: online tuning based on user reinforcement/suppression feedback
-
-**Effort:** ~0.5 day
 
 ---
 
@@ -407,14 +398,20 @@ Compile the core SIMD kernels and HNSW index to WebAssembly for browser-based or
 
 ---
 
-### 🔬 Project Valhalla Value Classes {#valhalla}
+### 🔄 Project Valhalla Value Classes {#valhalla}
 
-!!! note "Status: Future Research"
-    Exploratory evaluation of JEP 401 (Value Classes and Objects). Requires Project Valhalla Early-Access builds.
+!!! tip "Status: Prepared — Awaiting JDK 28+"
+    Migration TODOs added to all 5 hot-path records. Manual flat-array optimizations serve as bridge patterns until value classes are available.
 
-Migrate hot-path intermediate records (e.g., `CognitiveResult`, candidate pairs, search options) to `value class` (or `value record`). This will allow the JVM JIT compiler to perform aggressive scalar replacement and store value arrays contiguously in memory, eliminating garbage collection overhead and pointer-chasing latency during HNSW index traversals.
+Migrate hot-path intermediate records to `value class` (or `value record`). JDK 25 does not include JEP 401 — Valhalla value classes are expected in JDK 28+.
 
-**Benefits:**
+**Current preparation:**
+
+- **Javadoc TODOs** added to all 5 hot-path records: `CognitiveHeader`, `ScoredRecord`, `HebbianEdge`, `EntityEdge`, `TraversalResult`
+- **Manual flat-array optimization** (`FlatMinHeap`) serves as the bridge pattern — will be replaceable with `PriorityQueue<value ScoredRecord>` once specialized generics land
+- **Performance optimizations** implemented as stop-gap: autoboxing elimination (`int[]` vs `List<Integer>`), `boolean[]` vs `HashSet<Integer>`, LUT-based `Math.pow` replacement
+
+**Benefits (when JDK 28+ lands):**
 - **Zero-GC Hot Path**: Short-lived search results and option records are stack-allocated, avoiding the JVM heap.
 - **Cache Locality**: Contiguous storage of value structures inside arrays prevents pointer chasing.
 - **Header Elimination**: Removes standard 12-to-16-byte JVM object headers for inline arrays.
@@ -454,13 +451,13 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 | 2 | **Native MCP Server** | Agentic AI | Medium | ✅ Done |
 | 3 | **3-Layer Cognitive Graph** | Graph Memory | High | ✅ Done |
 | 4 | **Structured Concurrency** | Runtime | Low | ✅ Done |
-| 5 | **Padding-aware storage** | Compression | Low | 🔜 Next |
-| 6 | **Norm header f16** | Compression | Very Low | 🔜 Next |
-| 7 | **Temporal chain pruning** | Graph Memory | Low | 🔜 Next |
-| 8 | **Cross-layer promotion** | Graph Memory | Medium | 🔜 Planned |
-| 9 | **Entity graph decay + merging** | Graph Memory | Medium | 🔜 Planned |
-| 10 | **Graph scoring weights** | Graph Memory | Low | 🔜 Planned |
-| 11 | **Streamable HTTP transport** | Agentic AI | Medium | 🔜 Planned |
+| 5 | **Padding-aware storage** | Compression | Low | ✅ Done |
+| 6 | **Norm header f16** | Compression | Very Low | ✅ Done |
+| 7 | **Temporal chain pruning** | Graph Memory | Low | ✅ Done |
+| 8 | **Cross-layer promotion** | Graph Memory | Medium | ✅ Done |
+| 9 | **Entity graph decay + merging** | Graph Memory | Medium | ✅ Done |
+| 10 | **Graph scoring weights** | Graph Memory | Low | ✅ Done |
+| 11 | **Streamable HTTP transport** | Agentic AI | Medium | ✅ Done |
 | 12 | **GPU kernel dispatch** | Compute | Medium | 🔜 Infra ready |
 | 13 | **SVASQ-PQ hybrid** | Compression | Very High | 🔬 Research |
 | 14 | **Flat-mode SVASQ** | Compression | Medium | 🔬 Research |
@@ -468,5 +465,5 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 | 16 | **ColBERT late interaction** | Agentic AI | High | 🔬 Research |
 | 17 | **NPU acceleration** | Compute | High | 🔬 Exploratory |
 | 18 | **WASM edge runtime** | Runtime | High | 🔬 Exploratory |
-| 19 | **Project Valhalla** | Runtime | Medium | 🔬 Research |
+| 19 | **Project Valhalla** | Runtime | Medium | 🔄 Prepared |
 | 20 | **Adaptive bit-width** | Compression | Very High | 🔴 Not planned |

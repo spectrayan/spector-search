@@ -109,6 +109,7 @@ nav:
       - RAG Pipeline: architecture/rag-pipeline.md
       - Distributed Mode: architecture/distributed-mode.md
       - GPU Acceleration: architecture/gpu-acceleration.md
+      - Test Framework & LLM Judge: architecture/test-framework.md
       - Modules:
           - Overview: modules/index.md
           - spector-core: modules/spector-core.md
@@ -130,7 +131,9 @@ nav:
           - spector-cli: modules/spector-cli.md
           - spector-client: modules/spector-client.md
           - spector-spring: modules/spector-spring.md
+          - spector-test-support: modules/spector-test-support.md
           - spector-metrics: modules/spector-metrics.md
+          - spector-events: modules/spector-events.md
           - spector-bench: modules/spector-bench.md
           - spector-dist: modules/spector-dist.md
           - spector-cortex: modules/spector-cortex.md

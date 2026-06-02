@@ -5,10 +5,10 @@ description: "Research roadmap for Spector's experimental cognitive features: Ne
 
 # 🔬 Labs — Experimental Features
 
-> **Status**: Research / Future Work
+> **Status**: Research / Future Work (partially implemented)
 >
-> These features are under active research and planned for implementation
-> in the `labs` branch. They are not yet available in the main release.
+> Some features have graduated from Labs into the main release. Others remain
+> under active research and planned for implementation in the `labs` branch.
 
 ---
 
@@ -258,7 +258,10 @@ public List<CognitiveResult> recallAssociative(RecallOptions options) {
 
 ---
 
-## Two-Factor Memory Strength (Bjork & Bjork, 1992)
+## ✅ Two-Factor Memory Strength (Bjork & Bjork, 1992)
+
+!!! success "Graduated to Main Release"
+    Implemented in `CognitiveScorer`, `LtpReconsolidationListener`, and `TwoFactorConfig`. Storage strength scoring uses a precomputed 64-entry LUT for `S(t)^0.3` (~50× faster than `Math.pow`).
 
 ### Concept
 
@@ -389,9 +392,14 @@ These need empirical calibration with real agent workloads. The key question: ho
 
 ### Dependencies & Complexity
 
-- **Dependencies:** V2+ header layout (`storage_strength` field) ✅ **Ready** — field exists and is read/written
-- **Complexity:** Medium — formula is simple, calibration is the hard part
-- **Risk:** Miscalibrated S_gain can cause "immortal" memories that never decay
+- **Dependencies:** V2+ header layout (`storage_strength` field) ✅ **Ready**
+- **Complexity:** Medium — ✅ **Implemented**
+- **Implementation details:**
+    - `TwoFactorConfig` record: `sGain=0.1`, `sMax=5.0`, `sExponent=0.3`, `enabled=true`
+    - `CognitiveScorer`: Reads `storageStrength` from V2+ header, applies `fastStorageBoost()` using precomputed 64-entry LUT (linear interpolation, <0.2% error)
+    - `LtpReconsolidationListener`: Updates `storage_strength` on `reinforce()` calls with `ΔS = S_gain × (1 - R(t))`
+    - `RecallOptions`: Includes `TwoFactorConfig` for per-query configuration
+    - `DefaultSpectorMemory.Builder`: Exposes `twoFactorConfig(TwoFactorConfig)` builder method
 
 ---
 
@@ -535,12 +543,12 @@ if (isSQ4(flags)) {
 
 ## Priority Matrix
 
-| Feature | Value | Complexity | Dependencies Ready? | Estimated Effort |
-|:---|:---:|:---:|:---:|:---|
-| Two-Factor Memory (R+S) | 🟢 High | Medium | ✅ | 1-2 weeks |
-| Executive Dysfunction | 🟡 Medium | Medium | ✅ | 1-2 weeks |
-| Neuromodulatory Gain | 🟡 Medium | High | ⏳ | 3-4 weeks |
-| Dynamic Quantization | 🟡 Medium | High | ⏳ | 4-6 weeks |
+| Feature | Value | Complexity | Dependencies Ready? | Estimated Effort | Status |
+|:---|:---:|:---:|:---:|:---|:---:|
+| Two-Factor Memory (R+S) | 🟢 High | Medium | ✅ | 1-2 weeks | ✅ Done |
+| Executive Dysfunction | 🟡 Medium | Medium | ✅ | 1-2 weeks | 🔜 Planned |
+| Neuromodulatory Gain | 🟡 Medium | High | ⏳ | 3-4 weeks | 🔬 Research |
+| Dynamic Quantization | 🟡 Medium | High | ⏳ | 4-6 weeks | 🔬 Research |
 
 ---
 

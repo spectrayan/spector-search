@@ -26,8 +26,8 @@ The dashboard is built around **12 panels** organized in a responsive 3-column g
 | **Vector Space** | Three.js point cloud | 300-point PCA-projected embedding space with query dot and nearest-neighbor lines |
 | **Scoring Pipeline** | Animated funnel bars | The 6-phase cognitive scoring funnel — from total records → tombstone → tags → valence → decay → distance → final top-K |
 | **Live Metrics** | Canvas time-series | Real-time recall/remember/reinforce/forget rates plotted as multi-line chart |
-| **Cognitive Profile** | Canvas radar chart | 6-axis radar showing current thalamic modulation parameters (α, β, strictness, hyperfocus, lateral, valence range) |
-| **SIMD & Hardware** | Canvas register grid | 16-lane SIMD register heatmap showing vector processing utilization |
+| **Cognitive Profile** | Canvas radar chart | 6-axis radar showing current thalamic modulation parameters (α, β, strictness, hyperfocus, lateral, valence range) with animated dot displacement toward dominant profile corner |
+| **SIMD & Hardware** | Canvas register grid | 16-lane SIMD register visualization with intensity (processing speed) and utilization (fill level) color-coded bars |
 | **Memory Heatmap** | Canvas segment bars | Off-heap memory segment utilization across all 4 tier stores + graph structures |
 | **Decay Curve** | Canvas overlay chart | Ebbinghaus forgetting curve (dashed) vs. LTP reconsolidation curve (solid) — shows how recall events boost retention |
 | **Query History** | Scrollable timeline | Chronological query traces with profile, latency, and augmented result counts |
@@ -164,6 +164,12 @@ A Three.js point cloud of 300 memory embeddings projected into 3D via PCA:
 - **Query dot** — when a query fires, a white pulsing sphere appears at the query vector position
 - **Nearest-neighbor lines** — 5 translucent lines connect the query dot to its closest memories
 - Camera orbits slowly with mouse parallax
+- **Layer controls** — 4 toggleable layers matching the Neural Graph pattern:
+    - **Query** — show/hide query vector dot
+    - **k-NN** — show/hide nearest neighbor lines
+    - **Axes** — show/hide RGB-tinted 3D axis grid with concentric ring markers
+    - **Labels** — show/hide dimension labels (dim₀/dim₁/dim₂ billboard sprites)
+- **Tier legend** — Working/Episodic/Semantic/Procedural color overlay
 
 ### Scoring Pipeline
 
@@ -309,9 +315,12 @@ When `useMockData` is `false`, the `EventStreamService` connects to the configur
 
 ## Future Roadmap
 
+- [x] **Cluster view** — multi-node visualization for distributed Spector deployments
+- [x] **GPU acceleration panel** — CUDA kernel execution timeline visualization
+- [x] **Memory diff view** — before/after comparison of consolidation cycles
+- [x] **Vector Space layer controls** — Query dot, k-NN, Axes grid, Labels toggles
+- [x] **SIMD utilization bars** — fill-level + intensity color coding
+- [x] **Cognitive Profile dot displacement** — animated dot moves toward dominant profile corner
 - [ ] **Integration with Synaptiq** — embed Cortex panels into the Synaptiq monitoring dashboard
 - [ ] **Async event emission** — SSE events emitted on virtual threads (gated behind feature flag)
 - [ ] **Replay mode** — record and replay cognitive sessions for debugging
-- [ ] **Cluster view** — multi-node visualization for distributed Spector deployments
-- [ ] **GPU acceleration panel** — CUDA kernel execution timeline visualization
-- [ ] **Memory diff view** — before/after comparison of consolidation cycles

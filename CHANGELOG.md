@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — spector-events (Telemetry Event Bus)
+- **spector-events:** New module — decoupled telemetry event bus for real-time observability
+- **spector-events:** `TelemetryBus` — instance-based, thread-safe event router (not static, HA-safe)
+- **spector-events:** `TelemetryScope` — per-query scope that accumulates telemetry and flushes on close
+- **spector-events:** `TelemetryEvent` — sealed event hierarchy (SIMD, GPU, query trace, graph pulse, memory diagnostic, cluster topology, etc.)
+- **spector-events:** 12 telemetry event types mapping 1:1 to Cortex dashboard cards
+
+### Added — spector-cortex (Neural Dashboard)
+- **spector-cortex:** SIMD Panel — 16-lane hardware visualization with intensity (speed) and utilization (fill level) color-coded bars
+- **spector-cortex:** Cognitive Profile Radar — hexagonal radar chart with animated dot displacement toward dominant profile corner
+- **spector-cortex:** Vector Space layer controls — Query dot, k-NN lines, Axes grid, and Labels toggles (matching Neural Graph pattern)
+- **spector-cortex:** Vector Space 3D axes grid — RGB-tinted X/Y/Z axis lines with concentric ring markers at r=10/20/30
+- **spector-cortex:** Vector Space dimension labels — billboard sprites (`dim₀`/`dim₁`/`dim₂`) that face the camera
+- **spector-cortex:** Vector Space tier legend — Working/Episodic/Semantic/Procedural color legend overlay
+- **spector-cortex:** `ThemeService.getCanvasColor()` — resolves Angular Material 21 M3 CSS variables (oklch) to canvas-compatible hex via off-screen div probe
+- **spector-cortex:** `VectorLayerToggles` and `toggleVectorLayer()` in `CortexStateService`
+
+### Changed — spector-metrics (Unified Decorator)
+- **spector-metrics:** `MeteredSpectorEngine` now accepts optional `TelemetryBus` — single decorator for both Micrometer timers and event-bus telemetry
+- **spector-metrics:** Eliminated need for separate telemetry decorator layer
+
+### Fixed — spector-cortex (Angular 21 Compatibility)
+- **spector-cortex:** Moved all `effect()` calls from `ngAfterViewInit` to constructors — Angular 21 requires injection context (NG0203)
+- **spector-cortex:** Added initialization guards to constructor effects to prevent accessing uninitialized THREE.js scenes/canvas contexts
+- **spector-cortex:** Replaced `THREE.Clock` (deprecated r183+) with `THREE.Timer` in NeuralGraphComponent and VectorSpaceComponent
+- **spector-cortex:** Fixed canvas rendering across all 9 canvas components — oklch() color space silently ignored by Canvas 2D API
+
 ### Added
 - **spector-core:** SIMD-accelerated kernels for DotProduct, CosineSimilarity, and EuclideanDistance using Java Vector API
 - **spector-core:** `VectorOps` utility (magnitude, normalize, scale, add, subtract) — all SIMD-accelerated

@@ -30,6 +30,12 @@ graph LR
         memory["spector-memory<br/><i>Cognitive memory 🧠</i>"]
     end
 
+    subgraph "📡 Observability"
+        events["spector-events<br/><i>Telemetry event bus</i>"]
+        metrics["spector-metrics<br/><i>Micrometer + TelemetryBus</i>"]
+        cortex["spector-cortex<br/><i>Neural dashboard (Angular)</i>"]
+    end
+
     subgraph "🌐 Runtime & Interfaces"
         runtime["spector-runtime<br/><i>Composition root</i>"]
         node["spector-node<br/><i>Armeria: REST + gRPC + SSE</i>"]
@@ -40,7 +46,6 @@ graph LR
     end
 
     subgraph "📦 Distribution"
-        metrics["spector-metrics<br/><i>Prometheus + JVM</i>"]
         bench["spector-bench<br/><i>JMH benchmarks</i>"]
         dist["spector-dist<br/><i>Fat JAR</i>"]
     end
@@ -55,6 +60,7 @@ graph TD
     node["🌐 node"] --> runtime["⚡ runtime"]
     node --> mcp["🤖 mcp"]
     node --> metrics["📈 metrics"]
+    node --> events["📡 events"]
     mcp --> runtime
     mcp --> ingestion["📥 ingestion"]
     cli["🖥️ cli"] --> runtime
@@ -80,6 +86,11 @@ graph TD
 
     metrics --> engine
     metrics --> memory
+    metrics --> events
+
+    events --> commons["📄 commons"]
+
+    cortex["🧠 cortex"] -.->|SSE| node
 
     ingestion --> config["⚙️ config"]
     ingestion --> embedapi
@@ -96,7 +107,7 @@ graph TD
     storage --> core
     config --> core
 
-    embedapi --> commons["📄 commons"]
+    embedapi --> commons
     gpu --> core
     gpu --> storage
 
@@ -111,7 +122,7 @@ graph TD
     bench --> memory
 ```
 
-> **Legend:** Solid arrows = compile dependency. Dotted arrow (`gpu`) = optional dependency.
+> **Legend:** Solid arrows = compile dependency. Dotted arrows = optional/runtime dependency (`gpu` = optional Maven dep, `cortex` = connects via SSE at runtime).
 
 !!! important "Architecture"
     `spector-ingestion` defines the `IngestionPipeline` and `IngestionTarget` interface. Both `spector-engine` and `spector-memory` depend on it to implement their `IngestionTarget`. `spector-memory` is fully independent of `spector-engine` — they are peers, wired together only at the `SpectorRuntime` composition root.
@@ -208,6 +219,8 @@ graph TD
 
 | Module | Description |
 |:---|:---|
-| [spector-metrics](spector-metrics.md) | Metrics — Prometheus + JVM instrumentation |
+| [spector-events](spector-events.md) | Telemetry — decoupled event bus (`TelemetryBus`, `TelemetryScope`, 12 event types) |
+| [spector-metrics](spector-metrics.md) | Metrics — Micrometer + TelemetryBus instrumentation |
+| [spector-cortex](spector-cortex.md) | Dashboard — Angular 21 real-time neural visualization (10+ cards, THREE.js + Canvas 2D) |
 | [spector-bench](spector-bench.md) | Benchmarks — JMH performance testing |
 | [spector-dist](spector-dist.md) | Distribution — single fat JAR packaging |

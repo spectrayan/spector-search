@@ -165,6 +165,8 @@ Spector Memory is a biologically-inspired cognitive memory engine that gives AI 
 - **🧬 Embedding SPI** — Pluggable embedding providers (Ollama included out-of-the-box)
 - **📄 Chunked Ingestion** — Text, token-level, and streaming chunkers for large document support
 - **🤖 MCP Server** — Built-in Model Context Protocol server for AI agent integration
+- **📡 Telemetry Event Bus** — Decoupled `TelemetryBus` with per-query `TelemetryScope` for real-time observability
+- **🧠 Neural Dashboard** — Angular 21 real-time dashboard (Cortex) with 10+ live visualization cards (THREE.js, Canvas 2D)
 
 ---
 
@@ -235,6 +237,12 @@ graph LR
         memory["spector-memory<br/><i>Cognitive memory 🧠</i>"]
     end
 
+    subgraph "📡 Observability"
+        events["spector-events<br/><i>Telemetry event bus</i>"]
+        metrics["spector-metrics<br/><i>Micrometer + TelemetryBus</i>"]
+        cortex["spector-cortex<br/><i>Neural dashboard (Angular)</i>"]
+    end
+
     subgraph "🌐 Runtime & Interfaces"
         runtime["spector-runtime<br/><i>Composition root</i>"]
         node["spector-node<br/><i>Armeria: REST + gRPC + SSE</i>"]
@@ -245,7 +253,6 @@ graph LR
     end
 
     subgraph "📦 Distribution"
-        metrics["spector-metrics<br/><i>Prometheus + JVM</i>"]
         bench["spector-bench<br/><i>JMH benchmarks</i>"]
         dist["spector-dist<br/><i>Fat JAR</i>"]
     end
@@ -258,6 +265,7 @@ graph TD
     node["🌐 node"] --> runtime["⚡ runtime"]
     node --> mcp["🤖 mcp"]
     node --> metrics["📈 metrics"]
+    node --> events["📡 events"]
     mcp --> runtime
     mcp --> ingestion["📥 ingestion"]
     cli["🖥️ cli"] --> runtime
@@ -283,6 +291,11 @@ graph TD
 
     metrics --> engine
     metrics --> memory
+    metrics --> events
+
+    events --> commons["📄 commons"]
+
+    cortex["🧠 cortex"] -.->|SSE| node
 
     ingestion --> config["⚙️ config"]
     ingestion --> embedapi
@@ -299,7 +312,7 @@ graph TD
     storage --> core
     config --> core
 
-    embedapi --> commons["📄 commons"]
+    embedapi --> commons
     gpu --> core
     gpu --> storage
 
@@ -314,7 +327,7 @@ graph TD
     bench --> memory
 ```
 
-> **Legend:** Solid arrows = compile dependency. Dotted arrow (`gpu`) = optional dependency.
+> **Legend:** Solid arrows = compile dependency. Dotted arrows = optional/runtime dependency (`gpu` = optional Maven dep, `cortex` = connects via SSE at runtime).
 
 ---
 
@@ -674,6 +687,9 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 - [x] **Native MCP Server** (`spector-mcp` — 13 tools: 6 search + 7 cognitive memory, stdio transport)
 - [x] **SpectorRuntime** — Unified application context (engine + memory), config-driven via `spector.yml`
 - [x] **Distribution JAR** (`spector-dist` — single fat JAR for all modules)
+- [x] **Telemetry Event Bus** (`spector-events` — decoupled TelemetryBus, TelemetryScope, 12 event types)
+- [x] **Neural Dashboard** (`spector-cortex` — Angular 21, 10+ live cards, THREE.js + Canvas 2D)
+- [x] **Unified Metrics Decorator** (`MeteredSpectorEngine` — Micrometer + TelemetryBus in single decorator)
 - [ ] Streamable HTTP transport (MCP over HTTP for cloud/remote deployments)
 - [ ] Padding-aware storage (skip zero-padded dims — 25% savings for non-pow2 dimensions)
 - [ ] Norm header compression (float32 → float16 — 2 bytes/vector savings)
@@ -695,6 +711,8 @@ All comparisons below use **100K documents, 128 dimensions, top-10 retrieval** a
 | **GitHub Wiki** | [Wiki](https://github.com/spectrayan/spector/wiki) |
 | **Cognitive Memory** | [Memory Docs](https://spectrayan.github.io/spector/memory/) |
 | **Neural Dashboard** | [Cortex Dashboard](https://spectrayan.github.io/spector/cortex/) |
+| **Telemetry Events** | [Events Module](spector-events/README.md) |
+| **Metrics & Observability** | [Metrics Module](spector-metrics/README.md) |
 | **API Reference** | [REST API](https://spectrayan.github.io/spector/api-reference/rest-endpoints/) |
 | **MCP Server** | [MCP Docs](https://spectrayan.github.io/spector/sdk-usage/mcp-server/) |
 
