@@ -35,6 +35,20 @@ export class ProfileRadarComponent implements AfterViewInit, OnDestroy {
   private currentValues: number[] = new Array(AXES.length).fill(0);
   private targetValues: number[] = new Array(AXES.length).fill(0);
 
+  // Profile dot position (lerped toward dominant axis)
+  private dotX = 0;
+  private dotY = 0;
+  private targetDotX = 0;
+  private targetDotY = 0;
+
+  constructor() {
+    // React to profile changes — must be in constructor for injection context
+    effect(() => {
+      const profile = this.state.activeProfile();
+      this.updateTargets(profile);
+    });
+  }
+
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
 
@@ -45,12 +59,6 @@ export class ProfileRadarComponent implements AfterViewInit, OnDestroy {
 
     const observer = new ResizeObserver(() => this.resizeCanvas());
     observer.observe(canvas.parentElement!);
-
-    // React to profile changes
-    effect(() => {
-      const profile = this.state.activeProfile();
-      this.updateTargets(profile);
-    });
   }
 
   ngOnDestroy(): void {
@@ -66,7 +74,17 @@ export class ProfileRadarComponent implements AfterViewInit, OnDestroy {
     if (size < 10) return; // Skip if not yet laid out
     canvas.width = size;
     canvas.height = size;
+
+    // Initialize dot at center so it doesn't start at 0,0
+    if (this.dotX === 0 && this.dotY === 0) {
+      this.dotX = size / 2;
+      this.dotY = size / 2;
+      this.targetDotX = size / 2;
+      this.targetDotY = size / 2;
+    }
   }
+
+  private firstUpdate = true;
 
   private updateTargets(profile: CognitiveProfile): void {
     const params = PROFILE_PARAMS[profile];
@@ -78,6 +96,12 @@ export class ProfileRadarComponent implements AfterViewInit, OnDestroy {
       params.lateralMode ? 1.0 : 0.0,
       (params.valenceMax - params.valenceMin) / 255,
     ];
+
+    // On first call, snap currentValues immediately instead of lerping from zero
+    if (this.firstUpdate) {
+      this.currentValues = [...this.targetValues];
+      this.firstUpdate = false;
+    }
   }
 
   private animate(): void {
@@ -98,11 +122,12 @@ export class ProfileRadarComponent implements AfterViewInit, OnDestroy {
       this.currentValues[i] += (this.targetValues[i] - this.currentValues[i]) * 0.08;
     }
 
-    const primary = this.themeService.getCssVariable('--mat-sys-primary') || '#bb86fc';
-    const tertiary = this.themeService.getCssVariable('--mat-sys-tertiary') || '#03dac6';
-    const outline = this.themeService.getCssVariable('--mat-sys-outline-variant') || '#555';
-    const onSurface = this.themeService.getCssVariable('--mat-sys-on-surface-variant') || '#aaa';
-    const surfaceHigh = this.themeService.getCssVariable('--mat-sys-surface-container-high') || '#333';
+    // Hardcoded hex colors for canvas compatibility
+    const primary = '#7c4dff';
+    const tertiary = '#00bfa5';
+    const outline = '#444';
+    const onSurface = '#999';
+    const surfaceHigh = '#2a2a3e';
 
     const n = AXES.length;
     const angleStep = (Math.PI * 2) / n;
@@ -195,10 +220,72 @@ export class ProfileRadarComponent implements AfterViewInit, OnDestroy {
       ctx.fill();
     }
 
-    // Center label
+    // Profile indicator dot — positioned toward the dominant axis
     const profile = this.state.activeProfile();
     const params = PROFILE_PARAMS[profile];
-    ctx.fillStyle = this.themeService.getCssVariable('--mat-sys-on-surface') || '#fff';
+
+    // Power-weighted centroid: cube each axis value so the dominant axis
+    // gets exponentially more pull (e.g., 0.7³ = 0.343 vs 0.3³ = 0.027 → 12:1 ratio)
+    let weightedX = 0;
+    let weightedY = 0;
+    let totalWeight = 0;
+    for (let i = 0; i < n; i++) {
+      const val = this.currentValues[i];
+      const weight = val * val * val; // cube for exponential bias
+      const angle = i * angleStep - Math.PI / 2;
+      weightedX += weight * Math.cos(angle);
+      weightedY += weight * Math.sin(angle);
+      totalWeight += weight;
+    }
+    if (totalWeight > 0.001) {
+      // Normalize and scale — 0.85 pushes the dot most of the way to the edge
+      this.targetDotX = cx + (weightedX / totalWeight) * radius * 0.85;
+      this.targetDotY = cy + (weightedY / totalWeight) * radius * 0.85;
+    } else {
+      this.targetDotX = cx;
+      this.targetDotY = cy;
+    }
+
+    // Lerp dot position — 0.15 for fast visible movement
+    this.dotX += (this.targetDotX - this.dotX) * 0.15;
+    this.dotY += (this.targetDotY - this.dotY) * 0.15;
+
+    // Draw trail line from center to dot position
+    const distFromCenter = Math.sqrt((this.dotX - cx) ** 2 + (this.dotY - cy) ** 2);
+    if (distFromCenter > 3) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(this.dotX, this.dotY);
+      ctx.strokeStyle = tertiary;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.4;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+
+    // Draw dot outer glow
+    const time = performance.now() / 1000;
+    const pulseScale = 1 + Math.sin(time * 3) * 0.3;
+    ctx.beginPath();
+    ctx.arc(this.dotX, this.dotY, 14 * pulseScale, 0, Math.PI * 2);
+    ctx.fillStyle = tertiary;
+    ctx.globalAlpha = 0.12;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Draw dot (larger for visibility)
+    ctx.beginPath();
+    ctx.arc(this.dotX, this.dotY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = tertiary;
+    ctx.fill();
+    ctx.strokeStyle = primary;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Center label — at actual center, not at dot
+    ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 13px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

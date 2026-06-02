@@ -11,6 +11,11 @@ import {
   MemoryDiagnosticEvent,
   GraphPulseEvent,
   ReflectCycleEvent,
+  MemorySnapshotEvent,
+  GpuKernelEvent,
+  ClusterNodeInfo,
+  ClusterTopologyEvent,
+  EmbeddingProjectionEvent,
 } from '../models/cortex-events';
 import { CognitiveProfile, ConnectionStatus } from '../models/memory-types';
 
@@ -18,6 +23,8 @@ import { CognitiveProfile, ConnectionStatus } from '../models/memory-types';
 const MAX_QUERY_HISTORY = 50;
 const MAX_GRAPH_PULSES = 100;
 const MAX_METRICS_HISTORY = 120; // 2 min at 1s intervals
+const MAX_GPU_KERNELS = 200;
+const MAX_MEMORY_DIFFS = 10;
 
 /** Time-series data point for metrics chart. */
 export interface MetricsPoint {
@@ -53,6 +60,23 @@ export interface GraphLayerToggles {
   particles: boolean;
 }
 
+export interface VectorLayerToggles {
+  queryDot: boolean;
+  knnLines: boolean;
+  axesGrid: boolean;
+  labels: boolean;
+}
+
+/** Memory diff pair for before/after consolidation comparison. */
+export interface MemoryDiffPair {
+  readonly reflectCycleId: string;
+  readonly pre: MemorySnapshotEvent;
+  readonly post: MemorySnapshotEvent;
+}
+
+/** Dashboard view mode — normal panels or cluster topology. */
+export type ViewMode = 'dashboard' | 'cluster';
+
 @Injectable({ providedIn: 'root' })
 export class CortexStateService {
 
@@ -85,6 +109,11 @@ export class CortexStateService {
     hebbian: true, temporal: true, entity: true, particles: true,
   });
 
+  // ── Vector Space Layer Toggles ──────────────────────────────────────
+  readonly vectorLayers = signal<VectorLayerToggles>({
+    queryDot: true, knnLines: true, axesGrid: true, labels: true,
+  });
+
   // ── Live Metrics Time-Series ───────────────────────────────────────
   readonly metricsHistory = signal<MetricsPoint[]>([]);
 
@@ -113,6 +142,22 @@ export class CortexStateService {
 
   // ── Query Input ────────────────────────────────────────────────────
   readonly isQueryRunning = signal<boolean>(false);
+
+  // ── Memory Diff ────────────────────────────────────────────────────
+  readonly memoryDiffs = signal<MemoryDiffPair[]>([]);
+  readonly pendingSnapshots = signal<Map<string, MemorySnapshotEvent>>(new Map());
+  readonly activeDiffIndex = signal<number>(0);
+
+  // ── GPU Timeline ───────────────────────────────────────────────────
+  readonly gpuKernels = signal<GpuKernelEvent[]>([]);
+  readonly gpuStreamCount = signal<number>(2);
+
+  // ── Cluster Topology ───────────────────────────────────────────────
+  readonly clusterNodes = signal<ClusterNodeInfo[]>([]);
+  readonly clusterLinks = signal<Array<[string, string]>>([]);
+
+  // ── View Mode ──────────────────────────────────────────────────────
+  readonly viewMode = signal<ViewMode>('dashboard');
 
   // ── Computed ───────────────────────────────────────────────────────
   readonly isConnected = computed(() => this.connectionStatus() === 'connected');
@@ -186,5 +231,75 @@ export class CortexStateService {
 
   toggleGraphLayer(layer: keyof GraphLayerToggles): void {
     this.graphLayers.update(l => ({ ...l, [layer]: !l[layer] }));
+  }
+
+  toggleVectorLayer(layer: keyof VectorLayerToggles): void {
+    this.vectorLayers.update(l => ({ ...l, [layer]: !l[layer] }));
+  }
+
+  // ── Memory Diff Mutations ──────────────────────────────────────────
+
+  pushMemorySnapshot(event: MemorySnapshotEvent): void {
+    if (event.phase === 'pre-reflect') {
+      // Store pre-snapshot, waiting for post
+      this.pendingSnapshots.update(map => {
+        const next = new Map(map);
+        next.set(event.reflectCycleId, event);
+        return next;
+      });
+    } else if (event.phase === 'post-reflect') {
+      // Match with pending pre-snapshot
+      const pending = this.pendingSnapshots();
+      const pre = pending.get(event.reflectCycleId);
+      if (pre) {
+        this.memoryDiffs.update(diffs => {
+          const next = [{ reflectCycleId: event.reflectCycleId, pre, post: event }, ...diffs];
+          return next.length > MAX_MEMORY_DIFFS ? next.slice(0, MAX_MEMORY_DIFFS) : next;
+        });
+        // Clean up pending
+        this.pendingSnapshots.update(map => {
+          const next = new Map(map);
+          next.delete(event.reflectCycleId);
+          return next;
+        });
+      }
+    }
+  }
+
+  // ── GPU Timeline Mutations ─────────────────────────────────────────
+
+  pushGpuKernel(event: GpuKernelEvent): void {
+    this.gpuKernels.update(kernels => {
+      const next = [...kernels, event];
+      return next.length > MAX_GPU_KERNELS ? next.slice(-MAX_GPU_KERNELS) : next;
+    });
+    // Track max stream index
+    if (event.streamIndex + 1 > this.gpuStreamCount()) {
+      this.gpuStreamCount.set(event.streamIndex + 1);
+    }
+  }
+
+  // ── Cluster Topology Mutations ─────────────────────────────────────
+
+  pushClusterTopology(event: ClusterTopologyEvent): void {
+    this.clusterNodes.set(event.nodes);
+    this.clusterLinks.set(event.replicationLinks);
+  }
+
+  // ── Embedding Projection Mutations ───────────────────────────────────
+
+  pushEmbeddingProjection(event: EmbeddingProjectionEvent): void {
+    if (event.points && event.points.length > 0) {
+      this.vectorPoints.set(event.points.map(p => ({
+        id: p.id,
+        position: [p.x, p.y, p.z] as [number, number, number],
+        tier: p.tier,
+        importance: p.importance,
+        label: p.label,
+      })));
+    }
+    if (event.queryProjection) {
+      this.queryVector.set(event.queryProjection);
+    }
   }
 }

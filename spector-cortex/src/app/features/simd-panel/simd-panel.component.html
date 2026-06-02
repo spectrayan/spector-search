@@ -8,24 +8,20 @@
   @if (state.simdState(); as simd) {
     <div class="stats-bar">
       <div class="stat">
-        <span class="stat-label">ISA</span>
-        <span class="stat-value cortex-mono">AVX-{{ simd.vectorBitSize }}</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Lanes</span>
-        <span class="stat-value cortex-mono">{{ simd.laneCount }}</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Iterations</span>
-        <span class="stat-value cortex-mono">{{ simd.totalIterations }}</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Tail</span>
-        <span class="stat-value cortex-mono">{{ simd.tailLanesActive }}/{{ simd.laneCount }}</span>
-      </div>
-      <div class="stat">
         <span class="stat-label">Kernel</span>
-        <span class="stat-value cortex-mono kernel-badge">{{ simd.activeKernel }}</span>
+        <span class="stat-value cortex-mono kernel-badge">{{ simd.kernelName }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Lane Width</span>
+        <span class="stat-value cortex-mono">{{ simd.laneWidth }}F</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Vectors</span>
+        <span class="stat-value cortex-mono">{{ simd.vectorsProcessed | number }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Duration</span>
+        <span class="stat-value cortex-mono">{{ simd.durationMicros | number }}µs</span>
       </div>
     </div>
   } @else {

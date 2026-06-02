@@ -102,3 +102,36 @@
     min-height: 260px;
   }
 }
+
+// ── Cluster View Grid ────────────────────────────────────────────────
+.cluster-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 280px;
+  column-gap: 14px;
+  row-gap: 16px;
+  padding: 12px 14px 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.panel-cluster-hero {
+  grid-column: 1 / -1;
+  min-height: 350px;
+}
+
+@media (max-width: 768px) {
+  .cluster-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: minmax(240px, auto);
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .panel-cluster-hero {
+    grid-column: 1;
+  }
+}
+

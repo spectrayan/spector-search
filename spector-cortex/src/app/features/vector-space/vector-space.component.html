@@ -1,1 +1,52 @@
-<div #canvasContainer class="vector-canvas" (mousemove)="onMouseMove($event)"></div>
+<div class="vector-wrapper">
+  <div #canvasContainer class="vector-canvas"
+       (mousemove)="onMouseMove($event)"
+       (mousedown)="onMouseDown($event)"
+       (mouseup)="onMouseUp()"
+       (mouseleave)="onMouseUp()"
+       (wheel)="onWheel($event)"></div>
+
+  <!-- Layer Toggle Controls -->
+  <div class="layer-controls">
+    <label class="layer-toggle">
+      <mat-checkbox
+        [checked]="state.vectorLayers().queryDot"
+        (change)="state.toggleVectorLayer('queryDot')"
+        color="primary">
+      </mat-checkbox>
+      <span class="layer-label query-label">Query</span>
+    </label>
+    <label class="layer-toggle">
+      <mat-checkbox
+        [checked]="state.vectorLayers().knnLines"
+        (change)="state.toggleVectorLayer('knnLines')"
+        color="primary">
+      </mat-checkbox>
+      <span class="layer-label knn-label">k-NN</span>
+    </label>
+    <label class="layer-toggle">
+      <mat-checkbox
+        [checked]="state.vectorLayers().axesGrid"
+        (change)="state.toggleVectorLayer('axesGrid')"
+        color="primary">
+      </mat-checkbox>
+      <span class="layer-label axes-label">Axes</span>
+    </label>
+    <label class="layer-toggle">
+      <mat-checkbox
+        [checked]="state.vectorLayers().labels"
+        (change)="state.toggleVectorLayer('labels')"
+        color="primary">
+      </mat-checkbox>
+      <span class="layer-label">Labels</span>
+    </label>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background: #ffb74d"></span>Working</div>
+    <div class="legend-item"><span class="legend-dot" style="background: #66bb6a"></span>Episodic</div>
+    <div class="legend-item"><span class="legend-dot" style="background: #42a5f5"></span>Semantic</div>
+    <div class="legend-item"><span class="legend-dot" style="background: #ab47bc"></span>Procedural</div>
+  </div>
+</div>

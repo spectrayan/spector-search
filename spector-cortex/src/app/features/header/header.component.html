@@ -8,6 +8,80 @@
 
   <div class="spacer"></div>
 
+  <!-- Record / Replay Controls -->
+  <div class="replay-controls">
+    <!-- Record Button -->
+    <button mat-icon-button
+            (click)="toggleRecording()"
+            [matTooltip]="recorder.isRecording() ? 'Stop Recording & Export' : 'Record Session'"
+            [class.recording]="recorder.isRecording()">
+      <mat-icon>{{ recorder.isRecording() ? 'stop_circle' : 'fiber_manual_record' }}</mat-icon>
+    </button>
+
+    @if (recorder.isRecording()) {
+      <span class="recording-badge cortex-mono">
+        <span class="rec-dot"></span>
+        REC · {{ recorder.eventCount() }}
+      </span>
+    }
+
+    <!-- Import Session -->
+    <button mat-icon-button
+            (click)="openImportDialog()"
+            matTooltip="Import Session File"
+            [disabled]="recorder.isRecording()">
+      <mat-icon>upload_file</mat-icon>
+    </button>
+
+    <input #sessionFileInput
+           type="file"
+           accept=".json"
+           style="display: none"
+           (change)="onFileSelected($event)" />
+
+    <!-- Replay Controls (visible when replaying) -->
+    @if (replay.isReplaying() || replay.currentSession()) {
+      <div class="replay-toolbar">
+        <button mat-icon-button
+                (click)="replay.isPaused() || !replay.isReplaying() ? replay.play() : replay.pause()"
+                [matTooltip]="replay.isPaused() || !replay.isReplaying() ? 'Play' : 'Pause'">
+          <mat-icon>{{ replay.isPaused() || !replay.isReplaying() ? 'play_arrow' : 'pause' }}</mat-icon>
+        </button>
+
+        <button mat-icon-button
+                (click)="replay.stop()"
+                matTooltip="Stop Replay">
+          <mat-icon>stop</mat-icon>
+        </button>
+
+        <button mat-icon-button
+                (click)="replay.stepForward()"
+                matTooltip="Step Forward"
+                [disabled]="replay.isReplaying() && !replay.isPaused()">
+          <mat-icon>skip_next</mat-icon>
+        </button>
+
+        <!-- Speed selector -->
+        <button mat-icon-button [matMenuTriggerFor]="speedMenu"
+                [matTooltip]="'Speed: ' + replay.playbackSpeed() + '×'">
+          <mat-icon>speed</mat-icon>
+        </button>
+        <mat-menu #speedMenu="matMenu">
+          @for (speed of playbackSpeeds; track speed) {
+            <button mat-menu-item (click)="replay.setSpeed(speed)"
+                    [class.active-speed]="replay.playbackSpeed() === speed">
+              {{ speed }}×
+            </button>
+          }
+        </mat-menu>
+
+        <span class="replay-progress cortex-mono">
+          {{ replay.currentIndex() }}/{{ replay.totalEvents() }}
+        </span>
+      </div>
+    }
+  </div>
+
   <!-- Connection Status -->
   <div class="status-group">
     <div class="status-indicator"

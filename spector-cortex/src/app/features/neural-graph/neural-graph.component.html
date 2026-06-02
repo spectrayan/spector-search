@@ -1,7 +1,11 @@
 <div class="graph-wrapper">
   <div #canvasContainer
        class="graph-canvas"
-       (mousemove)="onMouseMove($event)">
+       (mousemove)="onMouseMove($event)"
+       (mousedown)="onMouseDown($event)"
+       (mouseup)="onMouseUp()"
+       (mouseleave)="onMouseUp()"
+       (wheel)="onWheel($event)">
   </div>
 
   <!-- Layer Toggle Controls -->

@@ -12,6 +12,9 @@ import {
   MemoryDiagnosticEvent,
   GraphPulseEvent,
   ReflectCycleEvent,
+  MemorySnapshotEvent,
+  GpuKernelEvent,
+  ClusterTopologyEvent,
 } from '../models/cortex-events';
 import { CognitiveProfile } from '../models/memory-types';
 
@@ -54,8 +57,11 @@ export class MockDataService implements OnDestroy {
   private reflectInterval: ReturnType<typeof setInterval> | null = null;
   private metricsInterval: ReturnType<typeof setInterval> | null = null;
   private habituationInterval: ReturnType<typeof setInterval> | null = null;
+  private gpuInterval: ReturnType<typeof setInterval> | null = null;
+  private clusterInterval: ReturnType<typeof setInterval> | null = null;
   private profileIndex = 0;
   private queryCounter = 0;
+  private reflectCycleCounter = 0;
 
   /** Start emitting mock events at realistic intervals. */
   start(): void {
@@ -106,23 +112,34 @@ export class MockDataService implements OnDestroy {
       this.updateHabituation();
     }, 2000);
 
+    // GPU kernel events every 100-300ms
+    this.gpuInterval = setInterval(() => {
+      this.emitGpuKernel();
+    }, 100 + Math.random() * 200);
+
+    // Cluster topology every 5s
+    this.clusterInterval = setInterval(() => {
+      this.emitClusterTopology();
+    }, 5000);
+
     // Emit initial data immediately
     this.emitMemoryDiag();
     this.emitSimdEvent();
     this.emitQueryTrace();
     this.emitMetrics();
+    this.emitClusterTopology();
   }
 
   /** Stop all mock event emission. */
   stop(): void {
     [this.queryInterval, this.simdInterval, this.diagInterval,
      this.graphInterval, this.reflectInterval, this.metricsInterval,
-     this.habituationInterval].forEach(id => {
+     this.habituationInterval, this.gpuInterval, this.clusterInterval].forEach(id => {
       if (id !== null) clearInterval(id);
     });
     this.queryInterval = this.simdInterval = this.diagInterval =
       this.graphInterval = this.reflectInterval = this.metricsInterval =
-      this.habituationInterval = null;
+      this.habituationInterval = this.gpuInterval = this.clusterInterval = null;
     this.state.connectionStatus.set('disconnected');
   }
 
@@ -185,21 +202,19 @@ export class MockDataService implements OnDestroy {
 
   private emitSimdEvent(): void {
     const is512 = Math.random() > 0.3;
-    const laneCount = is512 ? 16 : 8;
-    const dims = [384, 512, 768, 1024][Math.floor(Math.random() * 4)];
-    const totalIter = Math.ceil(dims / laneCount);
-    const tailLanes = dims % laneCount || laneCount;
+    const laneWidth = is512 ? 16 : 8;
+    const vectorsProcessed = [100, 500, 1000, 5000][Math.floor(Math.random() * 4)];
+    const durationMicros = Math.floor(Math.random() * 5000) + 100;
 
     const event: SimdLaneEvent = {
       eventType: 'cortex.simd.lane',
       timestamp: Date.now(),
       nodeId: 'node-1',
-      vectorBitSize: is512 ? 512 : 256,
-      laneCount,
-      totalIterations: totalIter,
-      tailLanesActive: tailLanes,
-      activeKernel: KERNELS[Math.floor(Math.random() * KERNELS.length)],
-      fmaOpsCount: Math.floor(Math.random() * 100_000_000),
+      kernelName: KERNELS[Math.floor(Math.random() * KERNELS.length)],
+      laneWidth,
+      vectorsProcessed,
+      durationMicros,
+      fallbackNanos: Math.floor(Math.random() * 1000),
     };
 
     this.state.pushSimdEvent(event);
@@ -238,47 +253,79 @@ export class MockDataService implements OnDestroy {
   }
 
   private emitGraphPulse(): void {
-    const types = ['hebbian', 'temporal', 'entity'] as const;
-    const graphType = types[Math.floor(Math.random() * types.length)];
-    const source = Math.floor(Math.random() * 1000);
-
-    const edgeCount = graphType === 'hebbian' ? 2 + Math.floor(Math.random() * 4)
-      : graphType === 'temporal' ? 1 + Math.floor(Math.random() * 3)
-      : 1 + Math.floor(Math.random() * 2);
-
-    const edges: Array<[number, number]> = [];
-    for (let i = 0; i < edgeCount; i++) {
-      edges.push([
-        Math.floor(Math.random() * 1000),
-        300 + Math.floor(Math.random() * 700),
-      ]);
-    }
+    const nodesVisited = 5 + Math.floor(Math.random() * 20);
+    const edgesTraversed = nodesVisited + Math.floor(Math.random() * 15);
+    const maxDepth = 1 + Math.floor(Math.random() * 3);
+    const durationMicros = Math.floor(Math.random() * 2000) + 50;
 
     const event: GraphPulseEvent = {
       eventType: 'cortex.graph.pulse',
       timestamp: Date.now(),
       nodeId: 'node-1',
-      graphType,
-      sourceNode: source,
-      activatedEdges: edges,
-      depth: 1 + Math.floor(Math.random() * 2),
+      nodesVisited,
+      edgesTraversed,
+      maxDepth,
+      durationMicros,
     };
 
     this.state.pushGraphPulse(event);
   }
 
   private emitReflect(): void {
+    this.reflectCycleCounter++;
+    const cycleId = `reflect-${this.reflectCycleCounter}`;
+    const diag = this.state.memoryDiag();
+
+    // Emit pre-reflect snapshot
+    const preSnapshot: MemorySnapshotEvent = {
+      eventType: 'cortex.memory.snapshot',
+      timestamp: Date.now(),
+      nodeId: 'node-1',
+      phase: 'pre-reflect',
+      reflectCycleId: cycleId,
+      hebbianEdgeCount: diag?.hebbianEdges ?? 245000,
+      temporalLinkCount: diag?.temporalLinks ?? 98000,
+      entityNodeCount: diag?.entityNodes ?? 15000,
+      entityEdgeCount: diag?.entityEdges ?? 42000,
+      offHeapBytes: diag?.offHeapBytes ?? 50_331_648,
+      tombstoneCount: Math.floor(Math.random() * 500),
+      coActivationPairs: diag?.coActivationPairs ?? 8500,
+      stdpEdges: diag?.stdpEdges ?? 3200,
+    };
+    this.state.pushMemorySnapshot(preSnapshot);
+
+    const edgesDecayed = 50 + Math.floor(Math.random() * 200);
+    const edgesRemoved = Math.floor(Math.random() * 20);
+
     const event: ReflectCycleEvent = {
       eventType: 'cortex.reflect.cycle',
       timestamp: Date.now(),
       nodeId: 'node-1',
-      hebbianEdgesDecayed: 50 + Math.floor(Math.random() * 200),
-      hebbianEdgesRemoved: Math.floor(Math.random() * 20),
+      hebbianEdgesDecayed: edgesDecayed,
+      hebbianEdgesRemoved: edgesRemoved,
       decayFactor: 0.95 + Math.random() * 0.04,
       durationMs: 10 + Math.floor(Math.random() * 50),
     };
 
     this.state.pushReflect(event);
+
+    // Emit post-reflect snapshot (slightly reduced counts)
+    const postSnapshot: MemorySnapshotEvent = {
+      eventType: 'cortex.memory.snapshot',
+      timestamp: Date.now(),
+      nodeId: 'node-1',
+      phase: 'post-reflect',
+      reflectCycleId: cycleId,
+      hebbianEdgeCount: preSnapshot.hebbianEdgeCount - edgesRemoved,
+      temporalLinkCount: preSnapshot.temporalLinkCount - Math.floor(Math.random() * 50),
+      entityNodeCount: preSnapshot.entityNodeCount - Math.floor(Math.random() * 5),
+      entityEdgeCount: preSnapshot.entityEdgeCount - Math.floor(Math.random() * 30),
+      offHeapBytes: preSnapshot.offHeapBytes - Math.floor(Math.random() * 500_000),
+      tombstoneCount: preSnapshot.tombstoneCount + Math.floor(Math.random() * 10),
+      coActivationPairs: preSnapshot.coActivationPairs - Math.floor(Math.random() * 20),
+      stdpEdges: preSnapshot.stdpEdges - Math.floor(Math.random() * 10),
+    };
+    this.state.pushMemorySnapshot(postSnapshot);
   }
 
   private emitMetrics(): void {
@@ -356,5 +403,74 @@ export class MockDataService implements OnDestroy {
       points.push({ ageDays: d, rawDecay, ltpDecay });
     }
     this.state.decayCurve.set(points);
+  }
+
+  private emitGpuKernel(): void {
+    const kernelNames = ['cosine_similarity', 'dot_product', 'euclidean_dist', 'hnsw_neighbor_select', 'memcpy_h2d', 'memcpy_d2h'];
+    const streamIndex = Math.floor(Math.random() * 2);
+    const kernelName = kernelNames[Math.floor(Math.random() * kernelNames.length)];
+    const isMemcpy = kernelName.startsWith('memcpy');
+
+    const event: GpuKernelEvent = {
+      eventType: 'cortex.gpu.kernel',
+      timestamp: Date.now(),
+      nodeId: 'node-1',
+      streamIndex,
+      kernelName,
+      durationMicros: isMemcpy ? 5 + Math.floor(Math.random() * 50) : 20 + Math.floor(Math.random() * 500),
+      gridDim: [
+        isMemcpy ? 1 : 32 + Math.floor(Math.random() * 224),
+        isMemcpy ? 1 : 1 + Math.floor(Math.random() * 4),
+        1,
+      ],
+      blockDim: [
+        isMemcpy ? 1 : 128 + [0, 128, 384][Math.floor(Math.random() * 3)],
+        1,
+        1,
+      ],
+      memoryTransferBytes: isMemcpy
+        ? 1_048_576 + Math.floor(Math.random() * 50_000_000)
+        : Math.floor(Math.random() * 1_000_000),
+    };
+
+    this.state.pushGpuKernel(event);
+  }
+
+  private emitClusterTopology(): void {
+    const event: ClusterTopologyEvent = {
+      eventType: 'cortex.cluster.topology',
+      timestamp: Date.now(),
+      nodeId: 'node-1',
+      nodes: [
+        {
+          nodeId: 'node-1',
+          status: 'active',
+          shardCount: 8 + Math.floor(Math.random() * 4),
+          memoryUsedBytes: 50_000_000 + Math.floor(Math.random() * 10_000_000),
+          queryRate: 2 + Math.random() * 5,
+        },
+        {
+          nodeId: 'node-2',
+          status: Math.random() > 0.1 ? 'active' : 'draining',
+          shardCount: 6 + Math.floor(Math.random() * 4),
+          memoryUsedBytes: 40_000_000 + Math.floor(Math.random() * 15_000_000),
+          queryRate: 1.5 + Math.random() * 4,
+        },
+        {
+          nodeId: 'node-3',
+          status: Math.random() > 0.05 ? 'active' : 'down',
+          shardCount: 4 + Math.floor(Math.random() * 6),
+          memoryUsedBytes: 30_000_000 + Math.floor(Math.random() * 20_000_000),
+          queryRate: 1 + Math.random() * 3,
+        },
+      ],
+      replicationLinks: [
+        ['node-1', 'node-2'],
+        ['node-1', 'node-3'],
+        ['node-2', 'node-3'],
+      ],
+    };
+
+    this.state.pushClusterTopology(event);
   }
 }

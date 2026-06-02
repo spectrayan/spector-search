@@ -80,10 +80,54 @@ export class NeuralGraphComponent implements AfterViewInit, OnDestroy {
   private animationId = 0;
   private mouseX = 0;
   private mouseY = 0;
-  private clock = new THREE.Clock();
+  private timer = new THREE.Timer();
+
+  // ── Orbit & zoom state ──
+  private isDragging = false;
+  private orbitTheta = 0;       // horizontal angle
+  private orbitPhi = Math.PI / 4; // vertical angle (start tilted)
+  private orbitRadius = 80;     // zoom distance
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private dragStartTheta = 0;
+  private dragStartPhi = 0;
+  private autoOrbitSpeed = 0.04; // rad/s when not dragging
 
   // Profile color tint
   private profileHue = 0;
+
+  constructor() {
+    // All effects must be in constructor for Angular 21 injection context
+    // Guard with this.scene to skip before ngAfterViewInit
+
+    effect(() => {
+      const trace = this.state.currentQueryTrace();
+      if (trace && this.scene) {
+        this.pulseRandomNodes(trace.finalTopK + trace.hebbianActivated);
+        this.launchTraversalParticles(trace.hebbianActivated + trace.temporalLinked + trace.entityDiscovered);
+      }
+    });
+
+    effect(() => {
+      const pulses = this.state.graphPulses();
+      if (pulses.length > 0 && this.graphEdges.length > 0) {
+        const latest = pulses[0];
+        this.pulseEdgesAggregate(latest.edgesTraversed);
+      }
+    });
+
+    effect(() => {
+      const reflect = this.state.lastReflect();
+      if (reflect && this.graphEdges.length > 0) {
+        this.consolidationAnimation(reflect.hebbianEdgesRemoved);
+      }
+    });
+
+    effect(() => {
+      const profile = this.state.activeProfile();
+      if (this.scene) this.applyProfileVisuals(profile);
+    });
+  }
 
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
@@ -92,38 +136,6 @@ export class NeuralGraphComponent implements AfterViewInit, OnDestroy {
     this.generateEdges();
     this.createQueryTrail();
     this.animate();
-
-    // React to query traces — pulse nodes + launch traversal particle
-    effect(() => {
-      const trace = this.state.currentQueryTrace();
-      if (trace) {
-        this.pulseRandomNodes(trace.finalTopK + trace.hebbianActivated);
-        this.launchTraversalParticles(trace.hebbianActivated + trace.temporalLinked + trace.entityDiscovered);
-      }
-    });
-
-    // React to graph pulses — pulse edges by type
-    effect(() => {
-      const pulses = this.state.graphPulses();
-      if (pulses.length > 0) {
-        const latest = pulses[0];
-        this.pulseEdgesByType(latest.graphType);
-      }
-    });
-
-    // React to reflect cycles — dim all edges (consolidation)
-    effect(() => {
-      const reflect = this.state.lastReflect();
-      if (reflect) {
-        this.consolidationAnimation(reflect.hebbianEdgesRemoved);
-      }
-    });
-
-    // React to profile changes — shift color tint
-    effect(() => {
-      const profile = this.state.activeProfile();
-      this.applyProfileVisuals(profile);
-    });
   }
 
   ngOnDestroy(): void {
@@ -135,6 +147,33 @@ export class NeuralGraphComponent implements AfterViewInit, OnDestroy {
     const rect = this.canvasContainer.nativeElement.getBoundingClientRect();
     this.mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    if (this.isDragging) {
+      const dx = (event.clientX - this.dragStartX) * 0.005;
+      const dy = (event.clientY - this.dragStartY) * 0.005;
+      this.orbitTheta = this.dragStartTheta - dx;
+      this.orbitPhi = Math.max(0.1, Math.min(Math.PI - 0.1,
+        this.dragStartPhi + dy));
+    }
+  }
+
+  onMouseDown(event: MouseEvent): void {
+    this.isDragging = true;
+    this.dragStartX = event.clientX;
+    this.dragStartY = event.clientY;
+    this.dragStartTheta = this.orbitTheta;
+    this.dragStartPhi = this.orbitPhi;
+    event.preventDefault();
+  }
+
+  onMouseUp(): void {
+    this.isDragging = false;
+  }
+
+  onWheel(event: WheelEvent): void {
+    this.orbitRadius = Math.max(20, Math.min(200,
+      this.orbitRadius + event.deltaY * 0.05));
+    event.preventDefault();
   }
 
   private initScene(): void {
@@ -333,16 +372,19 @@ export class NeuralGraphComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  private pulseEdgesByType(type: 'hebbian' | 'temporal' | 'entity'): void {
-    const layers = this.state.graphLayers();
-    if ((type === 'hebbian' && !layers.hebbian) ||
-        (type === 'temporal' && !layers.temporal) ||
-        (type === 'entity' && !layers.entity)) return;
+  /**
+   * Pulses all visible edges with activation strength proportional
+   * to the number of edges traversed during graph spreading activation.
+   */
+  private pulseEdgesAggregate(edgesTraversed: number): void {
+    // Activation strength: more edges = higher visual intensity
+    const activation = Math.min(0.95, 0.3 + (edgesTraversed / 50) * 0.65);
+    const pulseFraction = Math.min(1.0, edgesTraversed / this.graphEdges.length);
+    const pulseCount = Math.max(1, Math.floor(this.graphEdges.length * pulseFraction));
 
-    for (const edge of this.graphEdges) {
-      if (edge.type === type) {
-        edge.activation = 0.8;
-      }
+    for (let i = 0; i < pulseCount; i++) {
+      const edge = this.graphEdges[Math.floor(Math.random() * this.graphEdges.length)];
+      edge.activation = activation;
     }
   }
 
@@ -386,13 +428,18 @@ export class NeuralGraphComponent implements AfterViewInit, OnDestroy {
 
   private animate(): void {
     this.animationId = requestAnimationFrame(() => this.animate());
-    const delta = this.clock.getDelta();
-    const time = this.clock.getElapsedTime();
+    this.timer.update(performance.now() / 1000);
+    const delta = this.timer.getDelta();
+    const time = this.timer.getElapsed();
     const layers = this.state.graphLayers();
 
-    // Camera orbit
-    this.camera.position.x = 80 * Math.sin(time * 0.04) + this.mouseX * 15;
-    this.camera.position.y = 25 * Math.sin(time * 0.025) + this.mouseY * 15;
+    // Camera orbit — auto-rotate when not dragging, user-controlled when dragging
+    if (!this.isDragging) {
+      this.orbitTheta += this.autoOrbitSpeed * delta;
+    }
+    this.camera.position.x = this.orbitRadius * Math.sin(this.orbitPhi) * Math.cos(this.orbitTheta);
+    this.camera.position.y = this.orbitRadius * Math.cos(this.orbitPhi);
+    this.camera.position.z = this.orbitRadius * Math.sin(this.orbitPhi) * Math.sin(this.orbitTheta);
     this.camera.lookAt(0, 0, 0);
 
     // Divergent rainbow hue shift

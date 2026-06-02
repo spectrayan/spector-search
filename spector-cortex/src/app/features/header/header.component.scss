@@ -164,3 +164,62 @@
     }
   }
 }
+
+// ── Record / Replay Controls ─────────────────────────────────────────
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.recording {
+  color: #f44336 !important;
+  animation: pulse-glow 1.2s ease-in-out infinite;
+}
+
+.recording-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f44336;
+  background: color-mix(in srgb, #f44336 12%, transparent);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  letter-spacing: 0.05em;
+}
+
+.rec-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f44336;
+  animation: pulse-glow 1s ease-in-out infinite;
+}
+
+.replay-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--mat-sys-surface-container-high);
+  border: 1px solid var(--mat-sys-outline-variant);
+}
+
+.replay-progress {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface-variant);
+  margin-left: 4px;
+  letter-spacing: 0.03em;
+}
+
+.active-speed {
+  color: var(--mat-sys-primary) !important;
+  font-weight: 700;
+}
+

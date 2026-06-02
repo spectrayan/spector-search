@@ -34,17 +34,16 @@ export interface QueryTraceEvent extends CortexEvent {
 }
 
 /**
- * SIMD lane event — emitted during vector operations.
- * Reports lane utilization and kernel activity.
+ * SIMD lane event — emitted per-query with aggregate SIMD execution stats.
+ * Reports which SIMD kernel was used, the lane width, vectors processed, and duration.
  */
 export interface SimdLaneEvent extends CortexEvent {
   readonly eventType: 'cortex.simd.lane';
-  readonly vectorBitSize: number;
-  readonly laneCount: number;
-  readonly totalIterations: number;
-  readonly tailLanesActive: number;
-  readonly activeKernel: string;
-  readonly fmaOpsCount: number;
+  readonly kernelName: string;
+  readonly laneWidth: number;
+  readonly vectorsProcessed: number;
+  readonly durationMicros: number;
+  readonly fallbackNanos: number;
 }
 
 /**
@@ -74,15 +73,15 @@ export interface MemoryDiagnosticEvent extends CortexEvent {
 }
 
 /**
- * Graph pulse event — emitted during spreading activation,
- * temporal chain traversal, or entity BFS.
+ * Graph pulse event — emitted per-query with aggregate spreading
+ * activation, temporal chain traversal, and entity BFS stats.
  */
 export interface GraphPulseEvent extends CortexEvent {
   readonly eventType: 'cortex.graph.pulse';
-  readonly graphType: 'hebbian' | 'temporal' | 'entity';
-  readonly sourceNode: number;
-  readonly activatedEdges: Array<[number, number]>; // [targetNode, weight×1000]
-  readonly depth: number;
+  readonly nodesVisited: number;
+  readonly edgesTraversed: number;
+  readonly maxDepth: number;
+  readonly durationMicros: number;
 }
 
 /**
@@ -96,10 +95,88 @@ export interface ReflectCycleEvent extends CortexEvent {
   readonly durationMs: number;
 }
 
+/**
+ * Memory snapshot event — emitted before and after reflect() consolidation.
+ * Used by the memory diff view to show before/after comparison.
+ */
+export interface MemorySnapshotEvent extends CortexEvent {
+  readonly eventType: 'cortex.memory.snapshot';
+  readonly phase: 'pre-reflect' | 'post-reflect';
+  readonly reflectCycleId: string;
+  readonly hebbianEdgeCount: number;
+  readonly temporalLinkCount: number;
+  readonly entityNodeCount: number;
+  readonly entityEdgeCount: number;
+  readonly offHeapBytes: number;
+  readonly tombstoneCount: number;
+  readonly coActivationPairs: number;
+  readonly stdpEdges: number;
+}
+
+/**
+ * GPU kernel event — emitted during CUDA kernel execution.
+ * Used by the GPU timeline panel.
+ */
+export interface GpuKernelEvent extends CortexEvent {
+  readonly eventType: 'cortex.gpu.kernel';
+  readonly streamIndex: number;
+  readonly kernelName: string;
+  readonly durationMicros: number;
+  readonly gridDim: [number, number, number];
+  readonly blockDim: [number, number, number];
+  readonly memoryTransferBytes: number;
+}
+
+/**
+ * Cluster node info — state of a single node in the cluster.
+ */
+export interface ClusterNodeInfo {
+  readonly nodeId: string;
+  readonly status: 'active' | 'draining' | 'down';
+  readonly shardCount: number;
+  readonly memoryUsedBytes: number;
+  readonly queryRate: number;
+}
+
+/**
+ * Cluster topology event — emitted periodically with full cluster state.
+ */
+export interface ClusterTopologyEvent extends CortexEvent {
+  readonly eventType: 'cortex.cluster.topology';
+  readonly nodes: ClusterNodeInfo[];
+  readonly replicationLinks: Array<[string, string]>;
+}
+
+/** Projected 3D point for vector space visualization. */
+export interface ProjectedPointDto {
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly tier: string;
+  readonly importance: number;
+  readonly label: string;
+}
+
+/**
+ * Embedding projection event — carries PCA/random-projected 3D
+ * coordinates of stored vectors for the vector space panel.
+ */
+export interface EmbeddingProjectionEvent extends CortexEvent {
+  readonly eventType: 'cortex.embedding.projection';
+  readonly points: ProjectedPointDto[];
+  readonly queryProjection: [number, number, number] | null;
+}
+
 /** Union type for all cortex events */
 export type AnyCortexEvent =
   | QueryTraceEvent
   | SimdLaneEvent
   | MemoryDiagnosticEvent
   | GraphPulseEvent
-  | ReflectCycleEvent;
+  | ReflectCycleEvent
+  | MemorySnapshotEvent
+  | GpuKernelEvent
+  | ClusterTopologyEvent
+  | EmbeddingProjectionEvent;
+

@@ -22,6 +22,10 @@ export class DecayCurveComponent implements AfterViewInit, OnDestroy {
   private ctx!: CanvasRenderingContext2D;
   private animationId = 0;
 
+  constructor() {
+    effect(() => { this.state.decayCurve(); });
+  }
+
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
     this.ctx = this.canvasRef.nativeElement.getContext('2d')!;
@@ -29,8 +33,6 @@ export class DecayCurveComponent implements AfterViewInit, OnDestroy {
     observer.observe(this.canvasRef.nativeElement.parentElement!);
     this.resizeCanvas();
     this.draw();
-
-    effect(() => { this.state.decayCurve(); });
   }
 
   ngOnDestroy(): void { cancelAnimationFrame(this.animationId); }
@@ -53,10 +55,10 @@ export class DecayCurveComponent implements AfterViewInit, OnDestroy {
     const curve = this.state.decayCurve();
     if (curve.length < 2) return;
 
-    const error = this.themeService.getCssVariable('--mat-sys-error') || '#f44336';
-    const primary = this.themeService.getCssVariable('--mat-sys-primary') || '#bb86fc';
-    const outline = this.themeService.getCssVariable('--mat-sys-outline-variant') || '#555';
-    const onSurface = this.themeService.getCssVariable('--mat-sys-on-surface-variant') || '#aaa';
+    const error = this.themeService.getCanvasColor('--mat-sys-error', '#f44336');
+    const primary = this.themeService.getCanvasColor('--mat-sys-primary', '#bb86fc');
+    const outline = this.themeService.getCanvasColor('--mat-sys-outline-variant', '#555');
+    const onSurface = this.themeService.getCanvasColor('--mat-sys-on-surface-variant', '#aaa');
 
     const pad = { top: 10, right: 10, bottom: 24, left: 35 };
     const cw = w - pad.left - pad.right;

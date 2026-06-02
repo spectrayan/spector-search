@@ -22,6 +22,12 @@ export class MetricsChartComponent implements AfterViewInit, OnDestroy {
   private ctx!: CanvasRenderingContext2D;
   private animationId = 0;
 
+  constructor() {
+    effect(() => {
+      this.state.metricsHistory();
+    });
+  }
+
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
     this.ctx = this.canvasRef.nativeElement.getContext('2d')!;
@@ -29,11 +35,6 @@ export class MetricsChartComponent implements AfterViewInit, OnDestroy {
     observer.observe(this.canvasRef.nativeElement.parentElement!);
     this.resizeCanvas();
     this.draw();
-
-    effect(() => {
-      this.state.metricsHistory();
-      // Redraw on new metrics data
-    });
   }
 
   ngOnDestroy(): void {
@@ -58,12 +59,12 @@ export class MetricsChartComponent implements AfterViewInit, OnDestroy {
     const history = this.state.metricsHistory();
     if (history.length < 2) return;
 
-    const primary = this.themeService.getCssVariable('--mat-sys-primary') || '#bb86fc';
-    const tertiary = this.themeService.getCssVariable('--mat-sys-tertiary') || '#03dac6';
-    const secondary = this.themeService.getCssVariable('--mat-sys-secondary') || '#c4b5fd';
-    const error = this.themeService.getCssVariable('--mat-sys-error') || '#f44336';
-    const outline = this.themeService.getCssVariable('--mat-sys-outline-variant') || '#555';
-    const onSurface = this.themeService.getCssVariable('--mat-sys-on-surface-variant') || '#aaa';
+    const primary = this.themeService.getCanvasColor('--mat-sys-primary', '#bb86fc');
+    const tertiary = this.themeService.getCanvasColor('--mat-sys-tertiary', '#03dac6');
+    const secondary = this.themeService.getCanvasColor('--mat-sys-secondary', '#c4b5fd');
+    const error = this.themeService.getCanvasColor('--mat-sys-error', '#f44336');
+    const outline = this.themeService.getCanvasColor('--mat-sys-outline-variant', '#555');
+    const onSurface = this.themeService.getCanvasColor('--mat-sys-on-surface-variant', '#aaa');
 
     const padding = { top: 10, right: 10, bottom: 20, left: 35 };
     const chartW = w - padding.left - padding.right;
