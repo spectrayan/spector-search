@@ -39,11 +39,15 @@ import com.spectrayan.spector.commons.error.ErrorCode;
 /**
  * Serializes an in-memory {@link AbstractHnswIndex} into multiple shard files.
  *
- * <p>Each shard file uses the standard {@link IndexFileFormat} layout and contains
+ * <p>
+ * Each shard file uses the standard {@link IndexFileFormat} layout and contains
  * a range of nodes. Neighbor indices remain <b>global</b> (not shard-local),
- * preserving the HNSW graph structure unchanged. A manifest file catalogs all shards.</p>
+ * preserving the HNSW graph structure unchanged. A manifest file catalogs all
+ * shards.
+ * </p>
  *
  * <h3>Usage</h3>
+ * 
  * <pre>{@code
  *   HnswIndex inMemory = buildIndex(...);
  *   ShardedDiskHnswWriter.write(inMemory, Path.of("index_shards"), 50_000);
@@ -65,22 +69,25 @@ public final class ShardedDiskHnswWriter {
     /** Maximum upper layers supported per node in the graph block layout. */
     private static final int MAX_POSSIBLE_LEVELS = 10;
 
-    private ShardedDiskHnswWriter() {}
+    private ShardedDiskHnswWriter() {
+    }
 
     /**
      * Writes an HNSW index as multiple sharded files plus a manifest.
      *
-     * @param index        the in-memory HNSW index
-     * @param shardDir     directory for shard files and manifest (created if absent)
+     * @param index         the in-memory HNSW index
+     * @param shardDir      directory for shard files and manifest (created if
+     *                      absent)
      * @param nodesPerShard maximum nodes per shard (last shard may have fewer)
-     * @throws IOException if writing fails
+     * @throws IOException                if writing fails
      * @throws SpectorValidationException if nodesPerShard <= 0
      */
     public static void write(AbstractHnswIndex index, Path shardDir, int nodesPerShard)
             throws IOException {
 
         if (nodesPerShard <= 0) {
-            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "nodesPerShard", 1, Integer.MAX_VALUE, nodesPerShard);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE, "nodesPerShard", 1, Integer.MAX_VALUE,
+                    nodesPerShard);
         }
 
         int totalNodes = index.size();
@@ -127,12 +134,12 @@ public final class ShardedDiskHnswWriter {
                 params.m(), params.maxLevel0Connections(),
                 index.entryPoint(), index.maxLevel(),
                 simFunc.ordinal(), QuantizationType.NONE.ordinal(),
-                shardEntries
-        );
+                shardEntries);
         ShardedIndexFormat.writeManifest(manifest, shardDir);
 
         long totalBytes = 0;
-        for (var e : shardEntries) totalBytes += e.fileSize();
+        for (var e : shardEntries)
+            totalBytes += e.fileSize();
         log.info("ShardedDiskHnswWriter: done — {} shards, {} total bytes, manifest at {}",
                 shardCount, totalBytes, shardDir.resolve(ShardedIndexFormat.MANIFEST_NAME));
     }
@@ -143,14 +150,16 @@ public final class ShardedDiskHnswWriter {
      * Writes a single shard file containing nodes [startNode, endNode).
      * Returns the total file size in bytes.
      *
-     * <p>The file uses the standard {@link IndexFileFormat} layout. The header's
+     * <p>
+     * The file uses the standard {@link IndexFileFormat} layout. The header's
      * nodeCount is the shard's local count, but all neighbor indices in the graph
-     * region are <b>global</b>.</p>
+     * region are <b>global</b>.
+     * </p>
      */
     private static long writeShard(AbstractHnswIndex index, Path shardPath,
-                                    int startNode, int endNode,
-                                    int dimensions, HnswParams params,
-                                    int graphBlockSize, SimilarityFunction simFunc)
+            int startNode, int endNode,
+            int dimensions, HnswParams params,
+            int graphBlockSize, SimilarityFunction simFunc)
             throws IOException {
 
         int shardNodeCount = endNode - startNode;
@@ -171,8 +180,10 @@ public final class ShardedDiskHnswWriter {
         }
         long totalFileSize = IndexFileFormat.alignToPage(idTableOffset + idRegionSize);
 
-        // Create header (nodeCount = shard-local, entryPoint/maxLevel are shard-local too for format compat)
-        // Note: entryPoint and maxLevel in the shard header are set to 0 since the global values
+        // Create header (nodeCount = shard-local, entryPoint/maxLevel are shard-local
+        // too for format compat)
+        // Note: entryPoint and maxLevel in the shard header are set to 0 since the
+        // global values
         // are stored in the manifest. The shard is not independently searchable.
         var header = new IndexFileFormat.Header(
                 IndexFileFormat.MAGIC, IndexFileFormat.VERSION,
@@ -181,14 +192,14 @@ public final class ShardedDiskHnswWriter {
                 0, 0, // shard-local entryPoint/maxLevel unused
                 simFunc.ordinal(), QuantizationType.NONE.ordinal(),
                 vectorDataOffset, graphDataOffset, idTableOffset,
-                graphBlockSize, totalFileSize
-        );
+                graphBlockSize, totalFileSize);
 
         Path parent = shardPath.getParent();
-        if (parent != null) Files.createDirectories(parent);
+        if (parent != null)
+            Files.createDirectories(parent);
 
         try (var raf = new RandomAccessFile(shardPath.toFile(), "rw");
-             var channel = raf.getChannel()) {
+                var channel = raf.getChannel()) {
 
             raf.setLength(totalFileSize);
             var arena = Arena.ofConfined();
