@@ -12,6 +12,10 @@
  */
 package com.spectrayan.spector.memory.sync;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorStorageException;
+import com.spectrayan.spector.memory.error.SpectorWalCorruptionException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -120,7 +124,7 @@ public final class MemoryWal implements AutoCloseable {
             try {
                 Files.createDirectories(walDir);
             } catch (IOException e) {
-                throw new UncheckedIOException("Cannot create WAL directory: " + walDir, e);
+                throw new SpectorStorageException(ErrorCode.PARTITION_DIR_FAILED, e, walDir);
             }
 
             // Recover state from existing chunk files
@@ -191,7 +195,7 @@ public final class MemoryWal implements AutoCloseable {
                 }
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("WAL write failed at seq=" + seq, e);
+            throw new SpectorStorageException(ErrorCode.WAL_WRITE_FAILED, e);
         } finally {
             writeLock.unlock();
         }
@@ -254,7 +258,7 @@ public final class MemoryWal implements AutoCloseable {
                 readChunkFile(chunk, diskEvents);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("WAL disk replay failed", e);
+            throw new SpectorStorageException(ErrorCode.WAL_REPLAY_FAILED, e, "disk replay");
         }
         return diskEvents;
     }
@@ -333,12 +337,12 @@ public final class MemoryWal implements AutoCloseable {
                     .orElse(0L);
             sequenceCounter.set(maxSeq);
 
-        } catch (WalCorruptionException e) {
+        } catch (SpectorWalCorruptionException e) {
             log.error("Fatal WAL corruption detected during recovery: {}", e.getMessage());
-            throw new UncheckedIOException(e);
+            throw e; // Already a SpectorStorageException — propagate directly
         } catch (IOException e) {
             log.error("WAL recovery failed: {}", e.getMessage());
-            throw new UncheckedIOException("Failed to recover WAL from disk", e);
+            throw new SpectorStorageException(ErrorCode.WAL_REPLAY_FAILED, e, "recovery");
         }
     }
 
@@ -366,7 +370,7 @@ public final class MemoryWal implements AutoCloseable {
                 activeChannel.position(activeChunkBytes); // seek to end for appending
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Cannot open WAL chunk: " + activeChunkPath, e);
+            throw new SpectorStorageException(ErrorCode.DISK_IO_FAILED, e, "open WAL chunk: " + activeChunkPath);
         }
     }
 
@@ -508,7 +512,7 @@ public final class MemoryWal implements AutoCloseable {
      */
     private WalEvent readEventFromChannel(FileChannel ch, Path source, int fileVersion) throws IOException {
         if (fileVersion != WAL_VERSION) {
-            throw new WalCorruptionException("Unsupported file version: " + fileVersion + " (expected " + WAL_VERSION + ")");
+            throw new SpectorWalCorruptionException("Unsupported file version: " + fileVersion + " (expected " + WAL_VERSION + ")");
         }
 
         long startPos = ch.position();
@@ -731,7 +735,8 @@ public final class MemoryWal implements AutoCloseable {
         Files.move(path, quarantinedPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         log.warn("Quarantined corrupted WAL chunk {} to {}", path, quarantinedPath);
 
-        throw new WalCorruptionException("Fatal WAL corruption: " + reason + " at position " + startPos + " in file " + path);
+        throw new SpectorWalCorruptionException(
+                "Fatal WAL corruption: " + reason + " at position " + startPos, path);
     }
 
     private byte[] compress(byte[] data) {

@@ -22,7 +22,9 @@ import com.spectrayan.spector.memory.cortex.CentroidRouter;
 import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.ProceduralMemoryStore;
+import com.spectrayan.spector.memory.cortex.PartitionedSemanticStore;
 import com.spectrayan.spector.memory.cortex.SemanticMemoryStore;
+import com.spectrayan.spector.memory.cortex.StorageMigrator;
 import com.spectrayan.spector.memory.cortex.SemanticRecallStrategy;
 import com.spectrayan.spector.memory.cortex.TierRouter;
 import com.spectrayan.spector.memory.cortex.WorkingMemoryStore;
@@ -55,6 +57,7 @@ import com.spectrayan.spector.memory.prospective.ProspectiveScheduler;
 import com.spectrayan.spector.memory.prospective.Reminder;
 import com.spectrayan.spector.memory.sync.MemoryWal;
 import com.spectrayan.spector.memory.sync.WalEvent;
+import com.spectrayan.spector.memory.synapse.ActRActivation;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 import com.spectrayan.spector.memory.temporal.TemporalChain;
@@ -205,15 +208,6 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         EpisodicMemoryStore episodicStore = new EpisodicMemoryStore(
                 episodicPath, quantizedVecBytes, builder.episodicPartitionCapacity);
 
-        // Semantic: file-backed in DISK mode
-        SemanticMemoryStore semanticStore;
-        if (isDisk && basePath != null) {
-            semanticStore = new SemanticMemoryStore(quantizedVecBytes, builder.semanticCapacity,
-                    basePath.resolve("semantic.mem"));
-        } else {
-            semanticStore = new SemanticMemoryStore(quantizedVecBytes, builder.semanticCapacity);
-        }
-
         // Procedural: file-backed in DISK mode
         ProceduralMemoryStore proceduralStore;
         if (isDisk && basePath != null) {
@@ -223,7 +217,23 @@ public final class DefaultSpectorMemory implements SpectorMemory {
             proceduralStore = new ProceduralMemoryStore(quantizedVecBytes, builder.proceduralCapacity);
         }
 
-        this.tierRouter = new TierRouter(workingStore, episodicStore, semanticStore, proceduralStore);
+        // Semantic: partitioned in DISK mode, single-file otherwise
+        if (isDisk && basePath != null) {
+            // Auto-migrate from legacy single-file format if needed
+            StorageMigrator migrator = new StorageMigrator(quantizedVecBytes, builder.nodesPerPartition);
+            if (migrator.needsMigration(basePath)) {
+                log.info("Legacy semantic.mem detected — auto-migrating to partitioned format");
+                migrator.migrate(basePath);
+            }
+
+            Path semanticDir = basePath.resolve("semantic");
+            PartitionedSemanticStore partitionedStore = new PartitionedSemanticStore(
+                    quantizedVecBytes, builder.nodesPerPartition, semanticDir);
+            this.tierRouter = new TierRouter(workingStore, episodicStore, partitionedStore, proceduralStore);
+        } else {
+            SemanticMemoryStore semanticStore = new SemanticMemoryStore(quantizedVecBytes, builder.semanticCapacity);
+            this.tierRouter = new TierRouter(workingStore, episodicStore, semanticStore, proceduralStore);
+        }
 
         // ── Memory Index (load from disk if DISK mode and file exists) ──
         if (isDisk && basePath != null) {
@@ -323,9 +333,11 @@ public final class DefaultSpectorMemory implements SpectorMemory {
                 hebbianGraph, temporalChain, entityExtractor, entityGraph);
 
         // Build optional fused semantic recall strategy
-        SemanticRecallStrategy semanticStrategy = builder.semanticIndex != null
-                ? new SemanticRecallStrategy(builder.semanticIndex, semanticStore, index)
-                : null;
+        SemanticRecallStrategy semanticStrategy = null;
+        if (builder.semanticIndex != null && tierRouter.semantic() != null) {
+            semanticStrategy = new SemanticRecallStrategy(builder.semanticIndex, tierRouter.semantic(), index);
+        }
+        // TODO: Phase 1b — add PartitionedSemanticRecallStrategy for partitioned mode
 
         this.recallPipeline = new RecallPipeline(
                 embeddingProvider, tierRouter, index,
@@ -438,8 +450,11 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     @Override
     public ReflectReport reflect() {
         log.info("Manual reflection triggered");
+        // Get the semantic TierStore (works for both single-file and partitioned modes)
+        var semanticTarget = tierRouter.isSemanticPartitioned()
+                ? tierRouter.semanticPartitioned() : tierRouter.semantic();
         ReflectReport report = reflectDaemon.runCycle(
-                tierRouter.episodic(), tierRouter.semantic(),
+                tierRouter.episodic(), semanticTarget,
                 offset -> index.findTextByOffset(MemoryType.EPISODIC, offset));
 
         // ── Graph Decay (Sleep Consolidation) ──
@@ -586,6 +601,12 @@ public final class DefaultSpectorMemory implements SpectorMemory {
             valenceTracker.reinforce(segment, loc.offset(), layout, valence);
             layout.incrementRecallCount(segment, loc.offset()); // LTP on explicit use
 
+            // ACT-R: record recall timestamp in ring buffer (V3 only)
+            if (layout.headerLayout().version() >= 3) {
+                long creationTs = layout.readTimestamp(segment, loc.offset());
+                ActRActivation.recordRecall(segment, loc.offset(), creationTs, System.currentTimeMillis());
+            }
+
             // Two-Factor Memory: update storage strength S(t) on successful retrieval
             // ΔS = sGain × (1 - R(t)) → max boost when retrieval was hard
             var headerLayout = layout.headerLayout();
@@ -659,6 +680,77 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     public MemoryInsight introspect(String topic) {
         List<CognitiveResult> results = recall(topic, RecallOptions.builder().topK(20).build());
         return introspector.analyze(topic, results);
+    }
+
+    @Override
+    public WhyNotExplanation whyNot(String memoryId, String queryText, RecallOptions options) {
+        // Step 1: Does the memory exist at all?
+        var loc = index.locate(memoryId);
+        if (loc == null) {
+            return new WhyNotExplanation(memoryId, queryText, false, false,
+                    null, 0f, WhyNotExplanation.Reason.NOT_FOUND,
+                    "Memory '" + memoryId + "' does not exist in the index.");
+        }
+
+        // Step 2: Is it tombstoned?
+        var layout = tierRouter.layoutFor(loc.type());
+        var segment = tierRouter.segmentFor(loc.type());
+        if (layout != null && segment != null) {
+            byte flags = segment.get(
+                    com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.LAYOUT_FLAGS,
+                    loc.offset() + com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.OFFSET_FLAGS);
+            if (com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.isTombstoned(flags)) {
+                return new WhyNotExplanation(memoryId, queryText, true, false,
+                        null, 0f, WhyNotExplanation.Reason.TOMBSTONED,
+                        "Memory '" + memoryId + "' has been deleted (tombstone flag set).");
+            }
+        }
+
+        // Step 3: Is it suppressed?
+        if (suppressionSet.isSuppressed(memoryId)) {
+            return new WhyNotExplanation(memoryId, queryText, true, true,
+                    null, 0f, WhyNotExplanation.Reason.SUPPRESSED,
+                    "Memory '" + memoryId + "' is in the suppression set. "
+                    + "Use unsuppress(\"" + memoryId + "\") to allow recall.");
+        }
+
+        // Step 4: Run a full recall in OBSERVE mode (no mutations)
+        int originalTopK = options != null ? options.topK() : 5;
+        RecallOptions observeOptions = RecallOptions.builder()
+                .recallMode(RecallMode.OBSERVE)
+                .topK(Math.max(originalTopK, 20)) // wider net to find the missing memory
+                .build();
+
+        List<CognitiveResult> results = recall(queryText, observeOptions);
+
+        // Step 5: Is the memory in the results?
+        CognitiveResult found = null;
+        for (CognitiveResult r : results) {
+            if (memoryId.equals(r.id())) {
+                found = r;
+                break;
+            }
+        }
+
+        if (found != null) {
+            // Memory WAS returned — it's in the top-K.
+            // This means it was probably outranked for a smaller topK.
+            float cutoffScore = results.isEmpty() ? 0f : results.get(results.size() - 1).score();
+            return new WhyNotExplanation(memoryId, queryText, true, false,
+                    found.breakdown(), 0f, WhyNotExplanation.Reason.OUTRANKED,
+                    "Memory '" + memoryId + "' WAS found in extended recall "
+                    + "(score=" + String.format("%.4f", found.score()) + "). "
+                    + "It may have been outside your original topK cutoff.");
+        }
+
+        // Step 6: Memory exists but wasn't in results — it was pre-filtered or outranked
+        float cutoffScore = results.isEmpty() ? 0f : results.get(results.size() - 1).score();
+        return new WhyNotExplanation(memoryId, queryText, true, false,
+                null, cutoffScore, WhyNotExplanation.Reason.FILTERED,
+                "Memory '" + memoryId + "' was eliminated by pre-filters "
+                + "(tag gate, valence range, importance floor, or time decay). "
+                + "TopK cutoff score: " + String.format("%.4f", cutoffScore) + ". "
+                + (cutoffScore > 0 ? "Check if tags/valence/importance match your query options." : ""));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -831,6 +923,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         private int workingCapacity = 100;
         private int episodicPartitionCapacity = 10_000;
         private int semanticCapacity = 100_000;
+        private int nodesPerPartition = 10_000;
         private int proceduralCapacity = 1_000;
         private int surpriseWarmup = 20;
         private double flashbulbThreshold = 3.0;
@@ -872,6 +965,8 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         public Builder workingCapacity(int c) { this.workingCapacity = c; return this; }
         public Builder episodicPartitionCapacity(int c) { this.episodicPartitionCapacity = c; return this; }
         public Builder semanticCapacity(int c) { this.semanticCapacity = c; return this; }
+        /** Nodes per semantic partition before rolling to a new file (default: 10,000). */
+        public Builder nodesPerPartition(int n) { this.nodesPerPartition = n; return this; }
         public Builder proceduralCapacity(int c) { this.proceduralCapacity = c; return this; }
         public Builder surpriseWarmup(int w) { this.surpriseWarmup = w; return this; }
         public Builder flashbulbThreshold(double t) { this.flashbulbThreshold = t; return this; }

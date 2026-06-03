@@ -14,6 +14,8 @@ package com.spectrayan.spector.memory.cortex;
 
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorStorageException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -180,7 +182,7 @@ public abstract class AbstractTierStore implements TierStore {
                         getClass().getSimpleName(), filePath, count);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Cannot create/open persistent tier store: " + filePath, e);
+            throw new SpectorStorageException(ErrorCode.MMAP_FAILED, e, filePath);
         }
     }
 

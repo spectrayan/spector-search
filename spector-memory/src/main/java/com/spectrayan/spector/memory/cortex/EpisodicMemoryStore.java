@@ -16,6 +16,8 @@ import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorStorageException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,7 +99,7 @@ public final class EpisodicMemoryStore implements TierStore {
         try {
             Files.createDirectories(basePath);
         } catch (IOException e) {
-            throw new UncheckedIOException("Cannot create episodic store directory: " + basePath, e);
+            throw new SpectorStorageException(ErrorCode.PARTITION_DIR_FAILED, e, basePath);
         }
 
         // Load existing partition files from disk
@@ -380,7 +382,7 @@ public final class EpisodicMemoryStore implements TierStore {
                 writeMetadata();
 
             } catch (IOException e) {
-                throw new UncheckedIOException("Cannot create partition: " + path, e);
+                throw new SpectorStorageException(ErrorCode.MMAP_FAILED, e, path);
             }
         }
 
@@ -425,7 +427,7 @@ public final class EpisodicMemoryStore implements TierStore {
                 }
 
             } catch (IOException e) {
-                throw new UncheckedIOException("Cannot load partition: " + path, e);
+                throw new SpectorStorageException(ErrorCode.MMAP_FAILED, e, path);
             }
         }
 

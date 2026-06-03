@@ -12,6 +12,10 @@
  */
 package com.spectrayan.spector.memory.synapse;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorStorageException;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,15 +97,15 @@ public final class HeaderMigrator {
      * @param vectorBytes bytes per quantized vector (needed for stride calculation)
      * @param isHeaderOnly true for header-only stores (e.g., SemanticMemoryStore)
      * @return migration report with statistics
-     * @throws IllegalArgumentException if source and target are the same version
-     * @throws UncheckedIOException if file I/O fails
+     * @throws SpectorValidationException if source and target are the same version
+     * @throws SpectorStorageException if file I/O fails
      */
     public static MigrationReport migrate(Path storePath, HeaderLayout source,
                                             HeaderLayout target, int vectorBytes,
                                             boolean isHeaderOnly) {
         if (source.version() == target.version()) {
-            throw new IllegalArgumentException(
-                    "Source and target are the same version: V" + source.version());
+            throw new SpectorValidationException(
+                    ErrorCode.ARGUMENT_INVALID, "targetVersion", "same as source: V" + source.version());
         }
 
         boolean isDowngrade = target.version() < source.version();
@@ -126,7 +130,7 @@ public final class HeaderMigrator {
         try {
             bytesBefore = Files.size(storePath);
         } catch (IOException e) {
-            throw new UncheckedIOException("Cannot read source file size: " + storePath, e);
+            throw new SpectorStorageException(ErrorCode.DISK_IO_FAILED, e, "read file size: " + storePath);
         }
 
         try (Arena sourceArena = Arena.ofConfined();
@@ -142,8 +146,8 @@ public final class HeaderMigrator {
             // Read metadata
             int magic = sourceSegment.get(ValueLayout.JAVA_INT, META_MAGIC);
             if (magic != TIER_MAGIC) {
-                throw new IllegalStateException(
-                        "Invalid tier magic in " + storePath + ": 0x" + Integer.toHexString(magic));
+                throw new SpectorStorageException(
+                        ErrorCode.FILE_FORMAT_INVALID, "bad tier magic in " + storePath + ": 0x" + Integer.toHexString(magic));
             }
 
             recordCount = sourceSegment.get(ValueLayout.JAVA_INT, META_COUNT);
@@ -236,7 +240,7 @@ public final class HeaderMigrator {
             } catch (IOException cleanupEx) {
                 log.warn("Failed to clean up temp file: {}", tempPath, cleanupEx);
             }
-            throw new UncheckedIOException("Migration failed: " + storePath, e);
+            throw new SpectorStorageException(ErrorCode.STORAGE_MIGRATION_FAILED, e, storePath);
         }
     }
 

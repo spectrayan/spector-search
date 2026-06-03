@@ -148,6 +148,20 @@ public interface SpectorMemory extends AutoCloseable {
     /** Introspects the agent's knowledge about a topic (metamemory). */
     MemoryInsight introspect(String topic);
 
+    /**
+     * Explains why a specific memory was NOT returned for a given query.
+     *
+     * <p>Evaluates the memory against the full scoring pipeline (in OBSERVE mode,
+     * so no state mutations) and identifies the exact reason it was excluded:
+     * not found, tombstoned, suppressed, outranked, or pre-filtered.</p>
+     *
+     * @param memoryId  the memory ID to investigate
+     * @param queryText the query it was expected to match
+     * @param options   recall options (profile, filters, etc.) — recallMode is forced to OBSERVE
+     * @return a diagnostic explanation of why the memory was not retrieved
+     */
+    WhyNotExplanation whyNot(String memoryId, String queryText, RecallOptions options);
+
     // ══════════════════════════════════════════════════════════════
     // PROSPECTIVE / SCRATCHPAD / STATS
     // ══════════════════════════════════════════════════════════════

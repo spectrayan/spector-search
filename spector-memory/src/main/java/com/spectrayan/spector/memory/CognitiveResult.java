@@ -34,6 +34,7 @@ import com.spectrayan.spector.memory.cortex.MemorySource;
  * @param decayFactor     raw decay multiplier (before reconsolidation adjustment)
  * @param ltpAdjustedDecay decay multiplier after reconsolidation adjustment
  * @param retrievalMode   how this result was retrieved (Standard, Lateral, Hyperfocus)
+ * @param breakdown       decomposed scoring trace (nullable for backward compat)
  */
 public record CognitiveResult(
         String id,
@@ -48,7 +49,8 @@ public record CognitiveResult(
         String[] synapticTags,
         float decayFactor,
         float ltpAdjustedDecay,
-        RetrievalMode retrievalMode
+        RetrievalMode retrievalMode,
+        ScoreBreakdown breakdown
 ) {
 
     /**
@@ -82,7 +84,20 @@ public record CognitiveResult(
                             float ltpAdjustedDecay) {
         this(id, text, score, importance, ageDays, recallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
-                RetrievalMode.STANDARD);
+                RetrievalMode.STANDARD, null);
+    }
+
+    /**
+     * Constructor with retrieval mode but no breakdown (backward compat).
+     */
+    public CognitiveResult(String id, String text, float score, float importance,
+                            float ageDays, int recallCount, byte valence,
+                            MemoryType memoryType, MemorySource source,
+                            String[] synapticTags, float decayFactor,
+                            float ltpAdjustedDecay, RetrievalMode retrievalMode) {
+        this(id, text, score, importance, ageDays, recallCount, valence,
+                memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
+                retrievalMode, null);
     }
 
     /**
@@ -90,6 +105,13 @@ public record CognitiveResult(
      */
     public float confidenceWeight() {
         return source != null ? source.confidenceWeight() : 0.5f;
+    }
+
+    /**
+     * Returns true if this result has a decomposed score breakdown.
+     */
+    public boolean hasBreakdown() {
+        return breakdown != null;
     }
 
     /**

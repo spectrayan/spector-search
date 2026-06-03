@@ -19,7 +19,7 @@ import com.spectrayan.spector.memory.ReflectReport;
 import com.spectrayan.spector.memory.cortex.CentroidRouter;
 import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore;
 import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore.EpisodicPartition;
-import com.spectrayan.spector.memory.cortex.SemanticMemoryStore;
+import com.spectrayan.spector.memory.cortex.TierStore;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
@@ -187,7 +187,7 @@ public final class ReflectDaemon {
      * @return report summarizing what was done
      */
     public ReflectReport runCycle(EpisodicMemoryStore episodicStore,
-                                   SemanticMemoryStore semanticStore) {
+                                   TierStore semanticStore) {
         return runCycle(episodicStore, semanticStore, null);
     }
 
@@ -200,7 +200,7 @@ public final class ReflectDaemon {
      * @return report summarizing what was done
      */
     public ReflectReport runCycle(EpisodicMemoryStore episodicStore,
-                                   SemanticMemoryStore semanticStore,
+                                   TierStore semanticStore,
                                    Function<Long, String> textLookup) {
         if (!running.compareAndSet(false, true)) {
             log.warn("Reflection cycle already in progress — skipping");
@@ -336,7 +336,7 @@ public final class ReflectDaemon {
      * </ol>
      */
     private int clusterAndSynthesize(EpisodicPartition partition,
-                                      SemanticMemoryStore semanticStore,
+                                      TierStore semanticStore,
                                       Function<Long, String> textLookup) {
         if (semanticStore == null || partition.count() == 0) return 0;
 
@@ -419,7 +419,7 @@ public final class ReflectDaemon {
             }
 
             if (promotedHeader != null) {
-                semanticStore.store(promotedHeader);
+                semanticStore.write(promotedHeader, null);
                 totalPromoted++;
 
                 // Step 5: Mark all cluster members as consolidated
@@ -626,7 +626,7 @@ public final class ReflectDaemon {
      * into the semantic store. Used as fallback when clustering is not configured.
      */
     private int promoteHighestImportance(EpisodicPartition partition,
-                                          SemanticMemoryStore semanticStore) {
+                                          TierStore semanticStore) {
         if (semanticStore == null || partition.count() == 0) return 0;
 
         CognitiveRecordLayout layout = partition.layout();
@@ -659,7 +659,7 @@ public final class ReflectDaemon {
             CognitiveHeader semanticHeader = createSemanticHeader(episodicHeader,
                     episodicHeader.synapticTags());
 
-            semanticStore.store(semanticHeader);
+            semanticStore.write(semanticHeader, null);
 
             // Mark the episodic original as consolidated
             layout.markConsolidated(segment, offset);

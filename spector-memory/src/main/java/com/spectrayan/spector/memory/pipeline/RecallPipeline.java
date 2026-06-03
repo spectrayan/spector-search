@@ -27,7 +27,9 @@ import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.memory.CognitiveResult;
 import com.spectrayan.spector.memory.CognitiveResult.RetrievalMode;
 import com.spectrayan.spector.memory.MemoryType;
+import com.spectrayan.spector.memory.RecallMode;
 import com.spectrayan.spector.memory.RecallOptions;
+import com.spectrayan.spector.memory.ScoreBreakdown;
 import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore.EpisodicPartition;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.SemanticRecallStrategy;
@@ -267,7 +269,14 @@ public final class RecallPipeline {
         if (queryText == null) { throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "queryText"); }
         if (options == null) options = RecallOptions.DEFAULT;
 
-        log.debug("Recall query: '{}', topK={}", queryText, options.topK());
+        if (options.recallMode() == RecallMode.REPLAY) {
+            throw new SpectorValidationException(
+                    ErrorCode.RECALL_MODE_NOT_IMPLEMENTED,
+                    "REPLAY",
+                    "Requires WAL point-in-time reconstruction. Use LEARN or OBSERVE instead.");
+        }
+
+        log.debug("Recall query: '{}', topK={}, mode={}", queryText, options.topK(), options.recallMode());
         this.lastRecallOptions = options; // for RetrievalMode detection in headerToResult
 
         // Step 1: Embed query
@@ -313,7 +322,9 @@ public final class RecallPipeline {
         // Step 5: Apply habituation penalty + inhibition of return + semantic satiation
         for (int i = 0; i < allResults.size(); i++) {
             CognitiveResult r = allResults.get(i);
-            float habPenalty = habituationPenalty.recordAndComputePenalty(r.id());
+            float habPenalty = (options.recallMode() == RecallMode.LEARN)
+                    ? habituationPenalty.recordAndComputePenalty(r.id())
+                    : habituationPenalty.currentPenalty(r.id());
             float iorPenalty = habituationPenalty.computeInhibitionOfReturn(r.id(), nowMs);
             float combinedPenalty = Math.min(habPenalty, iorPenalty); // stronger suppression wins
 
@@ -323,10 +334,23 @@ public final class RecallPipeline {
             }
 
             if (combinedPenalty < 1.0f) {
+                float newScore = r.score() * combinedPenalty;
+                // Carry breakdown with actual habituation penalty recorded
+                ScoreBreakdown bd = r.breakdown() != null
+                        ? new ScoreBreakdown(
+                                r.breakdown().similarity(),
+                                r.breakdown().importanceDecay(),
+                                r.breakdown().tagBoostFactor(),
+                                combinedPenalty,
+                                r.breakdown().graphBoost(),
+                                r.breakdown().valenceAlignment(),
+                                newScore)
+                        : null;
                 allResults.set(i, new CognitiveResult(
-                        r.id(), r.text(), r.score() * combinedPenalty, r.importance(), r.ageDays(),
+                        r.id(), r.text(), newScore, r.importance(), r.ageDays(),
                         r.recallCount(), r.valence(), r.memoryType(), r.source(),
-                        r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay()));
+                        r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay(),
+                        r.retrievalMode(), bd));
             }
         }
 
@@ -497,7 +521,8 @@ public final class RecallPipeline {
         }
 
         // Step 7: Fire async post-recall listeners (LTP reconsolidation + Hebbian)
-        if (!listeners.isEmpty()) {
+        // In OBSERVE mode, listeners are skipped to prevent persistent mutations.
+        if (options.recallMode() == RecallMode.LEARN && !listeners.isEmpty()) {
             final List<CognitiveResult> finalResults = allResults;
             for (RecallListener listener : listeners) {
                 Thread.startVirtualThread(() -> {
@@ -510,30 +535,35 @@ public final class RecallPipeline {
             }
         }
 
-        // Step 8: Record recall timestamps for Inhibition of Return
-        long recallTs = System.currentTimeMillis();
-        for (CognitiveResult r : allResults) {
-            habituationPenalty.recordRecall(r.id(), recallTs);
-        }
-
-        log.debug("Recall returned {} results for '{}'", allResults.size(), queryText);
-
-        // Cache retrieval modes for lateral feedback (reinforce/suppress)
-        if (recentRetrievalModes.size() > RETRIEVAL_MODE_CACHE_MAX) {
-            recentRetrievalModes.clear(); // simple eviction — reset when full
-        }
-        for (CognitiveResult r : allResults) {
-            if (r.id() != null) {
-                recentRetrievalModes.put(r.id(), r.retrievalMode());
+        // Steps 8-8c: Record ephemeral session state (LEARN mode only)
+        if (options.recallMode() == RecallMode.LEARN) {
+            // Step 8: Record recall timestamps for Inhibition of Return
+            long recallTs = System.currentTimeMillis();
+            for (CognitiveResult r : allResults) {
+                habituationPenalty.recordRecall(r.id(), recallTs);
             }
-        }
 
-        // Update semantic satiation LRU cache with returned result IDs
-        long nowForSatiation = System.currentTimeMillis();
-        for (CognitiveResult r : allResults) {
-            if (r.id() != null) {
-                satiationCache.put(r.id(), nowForSatiation);
+            log.debug("Recall returned {} results for '{}'", allResults.size(), queryText);
+
+            // Step 8c: Cache retrieval modes for lateral feedback (reinforce/suppress)
+            if (recentRetrievalModes.size() > RETRIEVAL_MODE_CACHE_MAX) {
+                recentRetrievalModes.clear(); // simple eviction — reset when full
             }
+            for (CognitiveResult r : allResults) {
+                if (r.id() != null) {
+                    recentRetrievalModes.put(r.id(), r.retrievalMode());
+                }
+            }
+
+            // Step 8b: Update semantic satiation LRU cache
+            long nowForSatiation = System.currentTimeMillis();
+            for (CognitiveResult r : allResults) {
+                if (r.id() != null) {
+                    satiationCache.put(r.id(), nowForSatiation);
+                }
+            }
+        } else {
+            log.debug("Recall [OBSERVE] returned {} results for '{}'", allResults.size(), queryText);
         }
 
         return allResults;
@@ -569,16 +599,27 @@ public final class RecallPipeline {
         }
 
         // Semantic Memory — fused HNSW+cognitive if strategy available, else header slab
-        if (TierRouter.shouldScan(MemoryType.SEMANTIC, targetTypes)
-                && tierRouter.semantic().size() > 0) {
-            if (semanticRecallStrategy != null && semanticRecallStrategy.isAvailable()) {
-                // Fused pipeline: HNSW search → cognitive re-ranking
-                tasks.add(() -> semanticRecallStrategy.recall(queryVector, options, nowMs));
-            } else {
-                // Fallback: header-only slab scan (with tag/valence filters)
-                tasks.add(() -> scoreHeaderSlabToList(
-                        tierRouter.semantic().headerSlab(), tierRouter.semantic().size(),
-                        tierRouter.semantic().layout(), queryVector, options, nowMs));
+        if (TierRouter.shouldScan(MemoryType.SEMANTIC, targetTypes)) {
+            if (tierRouter.isSemanticPartitioned()) {
+                // Partitioned mode: one task per partition for parallel recall
+                var partitions = tierRouter.semanticPartitioned().partitions();
+                for (var partition : partitions) {
+                    if (partition.store().size() > 0) {
+                        tasks.add(() -> scoreHeaderSlabToList(
+                                partition.headerSlab(), partition.store().size(),
+                                partition.store().layout(), queryVector, options, nowMs));
+                    }
+                }
+            } else if (tierRouter.semantic() != null && tierRouter.semantic().size() > 0) {
+                if (semanticRecallStrategy != null && semanticRecallStrategy.isAvailable()) {
+                    // Fused pipeline: HNSW search → cognitive re-ranking
+                    tasks.add(() -> semanticRecallStrategy.recall(queryVector, options, nowMs));
+                } else {
+                    // Fallback: header-only slab scan (with tag/valence filters)
+                    tasks.add(() -> scoreHeaderSlabToList(
+                            tierRouter.semantic().headerSlab(), tierRouter.semantic().size(),
+                            tierRouter.semantic().layout(), queryVector, options, nowMs));
+                }
             }
         }
 
@@ -614,14 +655,24 @@ public final class RecallPipeline {
                 }
             }
         }
-        if (TierRouter.shouldScan(MemoryType.SEMANTIC, targetTypes)
-                && tierRouter.semantic().size() > 0) {
-            if (semanticRecallStrategy != null && semanticRecallStrategy.isAvailable()) {
-                results.addAll(semanticRecallStrategy.recall(queryVector, options, nowMs));
-            } else {
-                results.addAll(scoreHeaderSlabToList(tierRouter.semantic().headerSlab(),
-                        tierRouter.semantic().size(), tierRouter.semantic().layout(),
-                        queryVector, options, nowMs));
+        if (TierRouter.shouldScan(MemoryType.SEMANTIC, targetTypes)) {
+            if (tierRouter.isSemanticPartitioned()) {
+                // Partitioned mode: scan each partition sequentially
+                for (var partition : tierRouter.semanticPartitioned().partitions()) {
+                    if (partition.store().size() > 0) {
+                        results.addAll(scoreHeaderSlabToList(partition.headerSlab(),
+                                partition.store().size(), partition.store().layout(),
+                                queryVector, options, nowMs));
+                    }
+                }
+            } else if (tierRouter.semantic() != null && tierRouter.semantic().size() > 0) {
+                if (semanticRecallStrategy != null && semanticRecallStrategy.isAvailable()) {
+                    results.addAll(semanticRecallStrategy.recall(queryVector, options, nowMs));
+                } else {
+                    results.addAll(scoreHeaderSlabToList(tierRouter.semantic().headerSlab(),
+                            tierRouter.semantic().size(), tierRouter.semantic().layout(),
+                            queryVector, options, nowMs));
+                }
             }
         }
         if (TierRouter.shouldScan(MemoryType.PROCEDURAL, targetTypes)
@@ -721,11 +772,30 @@ public final class RecallPipeline {
             mode = RetrievalMode.STANDARD;
         }
 
+        // ── ScoreBreakdown: re-derive components from header ──
+        // Uses the same formula as CognitiveScorer Phase 6.
+        // Note: these are approximations — the scorer's strictness/arousal/storageBoost
+        // values are folded into the fused score. We capture what we can from the header.
+        float importanceDecay = header.importance() * ltpDecay;
+        // Breakdown: individual multipliers default to 1.0 (no effect)
+        // habituationPenalty and graphBoost are applied post-scorer in the pipeline
+        // and updated in-place on CognitiveResult — we record 1.0 here and
+        // the pipeline adjusts them when it applies those factors.
+        ScoreBreakdown breakdown = new ScoreBreakdown(
+                /* similarity */       Math.max(0, sr.score() > 0 ? sr.score() : 0),
+                /* importanceDecay */  importanceDecay,
+                /* tagBoostFactor */   1.0f,
+                /* habituationPenalty */ 1.0f,
+                /* graphBoost */       1.0f,
+                /* valenceAlignment */ 1.0f,
+                /* finalScore */       sr.score()
+        );
+
         return new CognitiveResult(
                 id != null ? id : "unknown-" + sr.index(),
                 text, sr.score(), header.importance(), ageDays,
                 header.recallCount(), header.valence(), type, source,
-                tags, rawDecay, ltpDecay, mode
+                tags, rawDecay, ltpDecay, mode, breakdown
         );
     }
 

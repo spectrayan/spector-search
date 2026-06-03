@@ -14,6 +14,8 @@ package com.spectrayan.spector.memory.index;
 
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.cortex.MemorySource;
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorStorageException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -226,7 +228,7 @@ public final class MemoryIndex {
             try {
                 Files.createDirectories(parent);
             } catch (IOException e) {
-                throw new UncheckedIOException("Cannot create index directory: " + parent, e);
+                throw new SpectorStorageException(ErrorCode.PARTITION_DIR_FAILED, e, parent);
             }
         }
 
@@ -258,7 +260,7 @@ public final class MemoryIndex {
             log.info("MemoryIndex saved: {} entries → {}", locations.size(), filePath);
 
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to save MemoryIndex: " + filePath, e);
+            throw new SpectorStorageException(ErrorCode.DISK_IO_FAILED, e, "save MemoryIndex: " + filePath);
         }
     }
 

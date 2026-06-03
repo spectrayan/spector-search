@@ -42,7 +42,9 @@ spector-memory/
 │     ├── TierRouter.java               (Registry + polymorphic dispatch)
 │     ├── WorkingMemoryStore.java       (Prefrontal Cortex — volatile circular buffer)
 │     ├── EpisodicMemoryStore.java      (Hippocampus — time-partitioned mmap)
-│     ├── SemanticMemoryStore.java      (Neocortex — permanent knowledge)
+│     ├── SemanticMemoryStore.java      (Neocortex — single-file semantic storage)
+│     ├── PartitionedSemanticStore.java (Neocortex — rolling partitioned semantic storage)
+│     ├── StorageMigrator.java          (Single-file → partitioned migration)
 │     └── ProceduralMemoryStore.java    (Basal Ganglia — learned procedures)
 │
 ├── synapse/                        ← "Synaptic Machinery" — header layout + scoring
@@ -118,7 +120,8 @@ SpectorMemory memory = SpectorMemory.builder()
     .embeddingProvider(OllamaEmbeddingProvider.create("qwen3-embedding"))
     .workingCapacity(100)
     .episodicPartitionCapacity(10_000)
-    .semanticCapacity(5_000)
+    .nodesPerPartition(10_000)         // Semantic partition capacity (rolling files)
+    .semanticCapacity(5_000)           // Single-file fallback capacity
     .proceduralCapacity(500)
     .build();
 

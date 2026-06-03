@@ -44,8 +44,9 @@ public final class TierRouter implements AutoCloseable {
     // ── Typed accessors for tier-specific operations ──
     private final WorkingMemoryStore workingStore;
     private final EpisodicMemoryStore episodicStore;
-    private final SemanticMemoryStore semanticStore;
+    private final SemanticMemoryStore semanticStore;   // null when partitioned
     private final ProceduralMemoryStore proceduralStore;
+    private final PartitionedSemanticStore partitionedSemantic;  // null when single-file
 
     /**
      * Creates a TierRouter with all four cognitive tier stores.
@@ -62,11 +63,35 @@ public final class TierRouter implements AutoCloseable {
         this.episodicStore = episodicStore;
         this.semanticStore = semanticStore;
         this.proceduralStore = proceduralStore;
+        this.partitionedSemantic = null;
 
         // Register in EnumMap for polymorphic dispatch
         stores.put(MemoryType.WORKING, workingStore);
         stores.put(MemoryType.EPISODIC, episodicStore);
         stores.put(MemoryType.SEMANTIC, semanticStore);
+        stores.put(MemoryType.PROCEDURAL, proceduralStore);
+    }
+
+    /**
+     * Creates a TierRouter with partitioned semantic storage.
+     *
+     * <p>In this mode, semantic memories are distributed across rolling
+     * partitions for improved compaction and parallel recall.</p>
+     */
+    public TierRouter(WorkingMemoryStore workingStore,
+                       EpisodicMemoryStore episodicStore,
+                       PartitionedSemanticStore partitionedSemanticStore,
+                       ProceduralMemoryStore proceduralStore) {
+        this.workingStore = workingStore;
+        this.episodicStore = episodicStore;
+        this.semanticStore = null;
+        this.proceduralStore = proceduralStore;
+        this.partitionedSemantic = partitionedSemanticStore;
+
+        // Register in EnumMap for polymorphic dispatch
+        stores.put(MemoryType.WORKING, workingStore);
+        stores.put(MemoryType.EPISODIC, episodicStore);
+        stores.put(MemoryType.SEMANTIC, partitionedSemanticStore);
         stores.put(MemoryType.PROCEDURAL, proceduralStore);
     }
 
@@ -128,8 +153,11 @@ public final class TierRouter implements AutoCloseable {
      * Returns the total memory count across all registered tiers.
      */
     public int totalCount() {
-        return workingStore.size() + episodicStore.size()
-                + semanticStore.size() + proceduralStore.size();
+        int total = 0;
+        for (TierStore store : stores.values()) {
+            total += store.size();
+        }
+        return total;
     }
 
     /**
@@ -157,8 +185,14 @@ public final class TierRouter implements AutoCloseable {
     /** Returns the Episodic Memory store (for partition iteration). */
     public EpisodicMemoryStore episodic() { return episodicStore; }
 
-    /** Returns the Semantic Memory store (for header slab access). */
+    /** Returns the Semantic Memory store (for header slab access). Null in partitioned mode. */
     public SemanticMemoryStore semantic() { return semanticStore; }
+
+    /** Returns the Partitioned Semantic store (for parallel recall). Null in single-file mode. */
+    public PartitionedSemanticStore semanticPartitioned() { return partitionedSemantic; }
+
+    /** Returns true if semantic storage is partitioned. */
+    public boolean isSemanticPartitioned() { return partitionedSemantic != null; }
 
     /** Returns the Procedural Memory store (for flat scan). */
     public ProceduralMemoryStore procedural() { return proceduralStore; }

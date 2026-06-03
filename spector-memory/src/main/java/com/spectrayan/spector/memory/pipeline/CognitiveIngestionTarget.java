@@ -201,6 +201,18 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
     public void ingestCognitive(String id, String text, float[] vector,
                                  MemoryType type, String[] tags,
                                  MemorySource source, IngestionHints hints) {
+        // ── Dedup guard: skip if this ID is already indexed ──
+        // The MemoryIndex (loaded from disk on startup) tracks all known IDs.
+        // Without this check, re-ingesting the same files would:
+        //   - Append orphaned records to tier stores (semantic.mem grows)
+        //   - Add duplicate nodes to the HNSW index (index.spct grows)
+        //   - Append redundant WAL entries
+        // The VectorStore.put() already deduplicates, but tier stores do not.
+        if (index.locate(id) != null) {
+            log.debug("Skipping duplicate memory '{}' — already indexed", id);
+            return;
+        }
+
         // Step 2: Encode synaptic tags
         long synapticTags = SynapticTagEncoder.encode(tags);
 
@@ -271,7 +283,7 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
             if (vectorStore != null) {
                 storeIndex = vectorStore.put(id, vector);
             } else {
-                storeIndex = tierRouter.semantic().size() - 1;
+                storeIndex = tierRouter.countFor(MemoryType.SEMANTIC) - 1;
             }
             semanticIndex.add(id, storeIndex, vector);
         }

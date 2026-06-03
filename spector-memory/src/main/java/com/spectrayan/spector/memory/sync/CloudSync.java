@@ -12,6 +12,10 @@
  */
 package com.spectrayan.spector.memory.sync;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorStorageException;
+import com.spectrayan.spector.memory.error.SpectorWalCorruptionException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,7 +102,7 @@ public final class CloudSync {
                 }
             }
         } catch (Exception e) {
-            if (e instanceof WalCorruptionException || e.getCause() instanceof WalCorruptionException) {
+            if (e instanceof SpectorWalCorruptionException || e.getCause() instanceof SpectorWalCorruptionException) {
                 log.error("WAL Corruption detected during event replication! Triggering cold bootstrap sync...", e);
                 throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "WAL corruption");
             }
@@ -192,7 +196,7 @@ public final class CloudSync {
                 }
             }
         } catch (Exception e) {
-            if (e instanceof WalCorruptionException || e.getCause() instanceof WalCorruptionException) {
+            if (e instanceof SpectorWalCorruptionException || e.getCause() instanceof SpectorWalCorruptionException) {
                 log.error("WAL Corruption detected during CRDT event replication! Triggering cold bootstrap sync...", e);
                 throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "WAL corruption");
             }
@@ -222,11 +226,11 @@ public final class CloudSync {
                         Files.copy(path, zos);
                         zos.closeEntry();
                     } catch (IOException e) {
-                        throw new UncheckedIOException(e);
+                        throw new SpectorStorageException(ErrorCode.DISK_IO_FAILED, e, "zip entry: " + zipPath);
                     }
                 });
-        } catch (UncheckedIOException e) {
-            throw e.getCause();
+        } catch (SpectorStorageException e) {
+            throw new IOException(e.getMessage(), e);
         }
     }
 

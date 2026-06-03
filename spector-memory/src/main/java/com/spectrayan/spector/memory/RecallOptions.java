@@ -14,6 +14,10 @@ package com.spectrayan.spector.memory;
 
 import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.logging.Logger;
+
 /**
  * Builder for recall query configuration.
  *
@@ -74,7 +78,9 @@ public record RecallOptions(
         byte queryValence,
         boolean enableValenceAlignment,
         // ── Two-Factor Memory (Bjork & Bjork) ──
-        com.spectrayan.spector.memory.synapse.TwoFactorConfig twoFactorConfig
+        com.spectrayan.spector.memory.synapse.TwoFactorConfig twoFactorConfig,
+        // ── Recall Mode (Statefulness Control) ──
+        RecallMode recallMode
 ) {
 
     /** Default options: top 10, no filters, balanced scoring. */
@@ -123,6 +129,9 @@ public record RecallOptions(
         // ── Two-Factor Memory (Bjork & Bjork) ──
         private com.spectrayan.spector.memory.synapse.TwoFactorConfig twoFactorConfig
                 = com.spectrayan.spector.memory.synapse.TwoFactorConfig.DEFAULT;
+
+        // ── Recall Mode ──
+        private RecallMode recallMode = RecallMode.LEARN;
 
         /**
          * Applies a {@link CognitiveProfile} preset to this builder.
@@ -321,18 +330,116 @@ public record RecallOptions(
             return this;
         }
 
+        // ── Recall Mode ──
+
+        /**
+         * Sets the recall mode — controls whether recall mutates memory state.
+         *
+         * <ul>
+         *   <li>{@link RecallMode#LEARN} (default): Full biological memory — recall
+         *       fires LTP, Hebbian, habituation, ACT-R timestamps.</li>
+         *   <li>{@link RecallMode#OBSERVE}: Pure read — no side effects.
+         *       Same query always returns the same results.</li>
+         * </ul>
+         *
+         * @param mode the recall mode
+         */
+        public Builder recallMode(RecallMode mode) {
+            this.recallMode = mode;
+            return this;
+        }
+
         public RecallOptions build() {
             int effectiveLateralMax = lateralMaxResults >= 0
                     ? lateralMaxResults
                     : Math.max(1, topK / 3);
-            return new RecallOptions(topK, synapticTagMask, minImportance,
+            var options = new RecallOptions(topK, synapticTagMask, minImportance,
                     memoryTypes, minValence, maxValence, alpha, beta,
                     tagRelevanceBoost, semanticCandidateMultiplier,
                     hyperfocusMask, hyperfocusBoost,
                     lateralMode, lateralDistanceThreshold,
                     effectiveLateralMax, lateralMinTagOverlap,
                     strictnessCoefficient, queryValence, enableValenceAlignment,
-                    twoFactorConfig);
+                    twoFactorConfig, recallMode);
+            return options;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Validation — detect conflicting parameter combinations
+    // ══════════════════════════════════════════════════════════════
+
+    private static final Logger VALIDATION_LOG = Logger.getLogger(RecallOptions.class.getName());
+
+    /**
+     * Validates this options instance for conflicting parameter combinations.
+     *
+     * <p>Returns a list of warning messages describing detected conflicts.
+     * Also logs each warning via {@code java.util.logging}. The recall operation
+     * proceeds regardless — these are advisory, not blocking.</p>
+     *
+     * <h4>Detected Conflicts</h4>
+     * <ul>
+     *   <li><b>lateralMode + high strictness</b>: Lateral mode finds semantically
+     *       distant memories, but high strictness rejects vague matches. These
+     *       two features fight each other.</li>
+     *   <li><b>hyperfocusMask + lateralMode</b>: Hyperfocus narrows attention to a
+     *       specific topic, while lateral mode broadens it. Use one or the other.</li>
+     *   <li><b>α + β ≠ 1.0</b>: Scoring weights should typically sum to 1.0.
+     *       Other values produce unnormalized scores.</li>
+     * </ul>
+     *
+     * @return list of warning messages (empty if no conflicts detected)
+     */
+    public List<String> validate() {
+        List<String> warnings = new ArrayList<>();
+
+        // 1. lateralMode + high strictness are contradictory
+        if (lateralMode && strictnessCoefficient > 5.0f) {
+            String msg = "lateralMode=true + strictnessCoefficient=" + strictnessCoefficient
+                    + " is contradictory — lateral finds distant matches, high strictness rejects them. "
+                    + "Consider using one or the other.";
+            warnings.add(msg);
+            VALIDATION_LOG.warning(msg);
+        }
+
+        // 2. hyperfocusMask + lateralMode are contradictory
+        if (hyperfocusMask != 0 && lateralMode) {
+            String msg = "hyperfocusMask is set + lateralMode=true — hyperfocus narrows attention "
+                    + "to a specific topic, lateral mode broadens it. Consider using one or the other.";
+            warnings.add(msg);
+            VALIDATION_LOG.warning(msg);
+        }
+
+        // 3. α + β should sum to ~1.0
+        float sum = alpha + beta;
+        if (Math.abs(sum - 1.0f) > 0.01f) {
+            String msg = "alpha (" + alpha + ") + beta (" + beta + ") = " + sum
+                    + " — scoring weights don't sum to 1.0. Scores may be unnormalized.";
+            warnings.add(msg);
+            VALIDATION_LOG.warning(msg);
+        }
+
+        return warnings;
+    }
+
+    /**
+     * Parses a profile name string (case-insensitive) into a {@link CognitiveProfile}.
+     *
+     * <p>Intended for MCP/REST integrations where profile arrives as a string.
+     * Returns {@code null} if the name is null, empty, or doesn't match any profile.</p>
+     *
+     * @param profileName profile name (e.g., "DEBUGGING", "debugging", "Debugging")
+     * @return the matching profile, or {@code null} if not found
+     */
+    public static CognitiveProfile parseProfile(String profileName) {
+        if (profileName == null || profileName.isBlank()) return null;
+        try {
+            return CognitiveProfile.valueOf(profileName.strip().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            VALIDATION_LOG.warning("Unknown CognitiveProfile: '" + profileName
+                    + "'. Available: " + java.util.Arrays.toString(CognitiveProfile.values()));
+            return null;
         }
     }
 }
