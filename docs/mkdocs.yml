@@ -150,6 +150,7 @@ nav:
   - "🧠 Cognitive Memory":
       - Overview: memory/index.md
       - Getting Started: memory/getting-started.md
+      - "Use Cases & Configuration": memory/use-cases.md
       - Architecture:
           - System Architecture: memory/architecture.md
           - The 6-Phase Scoring Pipeline: memory/scoring-pipeline.md

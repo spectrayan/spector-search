@@ -1,56 +1,56 @@
-# 🏗️ Architecture Overview
+# ðŸ—ï¸ Architecture Overview
 
 > **Spector is a modular, JVM-native AI memory backbone organized as a Maven multi-module project.** This page covers the module structure, dependency graph, data flow, threading model, and memory architecture that make sub-millisecond, agent-native search possible.
 
 ---
 
-## 📦 Module Diagram
+## ðŸ“¦ Module Diagram
 
 ```mermaid
 graph LR
-    subgraph "🔬 Core Layer"
+    subgraph "ðŸ”¬ Core Layer"
         core["spector-core<br/><i>SIMD kernels</i>"]
         commons["spector-commons<br/><i>Config, chunkers, tokenizer</i>"]
     end
 
-    subgraph "💾 Storage Layer"
+    subgraph "ðŸ’¾ Storage Layer"
         storage["spector-storage<br/><i>Panama MemorySegment stores</i>"]
     end
 
-    subgraph "📊 Index Layer"
+    subgraph "ðŸ“Š Index Layer"
         index["spector-index<br/><i>HNSW + IVF-PQ + BM25</i>"]
     end
 
-    subgraph "🔍 Query Layer"
+    subgraph "ðŸ” Query Layer"
         query["spector-query<br/><i>Hybrid orchestrator + RRF</i>"]
     end
 
-    subgraph "🧠 Intelligence"
+    subgraph "ðŸ§  Intelligence"
         embedapi["spector-embed-api<br/><i>EmbeddingProvider SPI</i>"]
         embedollama["spector-embed-ollama<br/><i>Ollama provider</i>"]
         gpu["spector-gpu<br/><i>Panama FFM + CUDA</i>"]
     end
 
-    subgraph "📥 Pipelines"
+    subgraph "ðŸ“¥ Pipelines"
         ingestion["spector-ingestion<br/><i>Ingest orchestration</i>"]
         rag["spector-rag<br/><i>RAG pipeline</i>"]
     end
 
-    subgraph "⚡ Runtime & Interfaces"
+    subgraph "âš¡ Runtime & Interfaces"
         runtime["spector-runtime<br/><i>Unified context (engine + memory)</i>"]
         engine["spector-engine<br/><i>Search facade + lifecycle</i>"]
         node["spector-node<br/><i>Armeria: REST + gRPC + SSE + cluster</i>"]
-        mcp["spector-mcp<br/><i>MCP Server — Agent-native</i>"]
+        mcp["spector-mcp<br/><i>MCP Server â€” Agent-native</i>"]
         cli["spector-cli<br/><i>spectorctl CLI</i>"]
         client["spector-client<br/><i>Java client SDK</i>"]
         spring["spector-spring<br/><i>Spring AI VectorStore</i>"]
     end
 
-    subgraph "🧠 Cognitive Memory"
+    subgraph "ðŸ§  Cognitive Memory"
         memory["spector-memory<br/><i>Biologically-inspired agent memory</i>"]
     end
 
-    subgraph "📈 Distribution"
+    subgraph "ðŸ“ˆ Distribution"
         bench["spector-bench<br/><i>JMH benchmarks</i>"]
         dist["spector-dist<br/><i>Single fat JAR</i>"]
     end
@@ -61,47 +61,47 @@ graph LR
 
 ---
 
-## 🔗 Dependency Graph
+## ðŸ”— Dependency Graph
 
 ```mermaid
 graph TD
-    node["🌐 node"] --> runtime["⚡ runtime"]
-    node --> mcp["🤖 mcp"]
-    node --> metrics["📈 metrics"]
+    node["ðŸŒ node"] --> runtime["âš¡ runtime"]
+    node --> mcp["ðŸ¤– mcp"]
+    node --> metrics["ðŸ“ˆ metrics"]
     mcp --> runtime
-    mcp --> ingestion["📥 ingestion"]
-    cli["🖥️ cli"] --> runtime
-    cli --> client["📦 client"]
+    mcp --> ingestion["ðŸ“¥ ingestion"]
+    cli["ðŸ–¥ï¸ cli"] --> runtime
+    cli --> client["ðŸ“¦ client"]
 
-    runtime --> engine["⚡ engine"]
-    runtime --> memory["🧠 memory"]
+    runtime --> engine["âš¡ engine"]
+    runtime --> memory["ðŸ§  memory"]
     runtime --> ingestion
 
-    engine --> query["🔍 query"]
-    engine --> rag["🤖 rag"]
+    engine --> query["ðŸ” query"]
+    engine --> rag["ðŸ¤– rag"]
     engine --> ingestion
-    engine --> index["📊 index"]
-    engine --> storage["💾 storage"]
-    engine --> embedapi["🧬 embed-api"]
-    engine -.-> gpu["🎮 gpu"]
+    engine --> index["ðŸ“Š index"]
+    engine --> storage["ðŸ’¾ storage"]
+    engine --> embedapi["ðŸ§¬ embed-api"]
+    engine -.-> gpu["ðŸŽ® gpu"]
 
     memory --> index
     memory --> storage
     memory --> ingestion
     memory --> embedapi
-    memory --> core["🔬 core"]
+    memory --> core["ðŸ”¬ core"]
 
     metrics --> engine
     metrics --> memory
 
-    ingestion --> config["⚙️ config"]
+    ingestion --> config["âš™ï¸ config"]
     ingestion --> embedapi
 
     rag --> query
     rag --> index
     rag --> storage
     rag --> embedapi
-    rag --> commons["📄 commons"]
+    rag --> commons["ðŸ“„ commons"]
 
     query --> index
     query --> commons
@@ -115,14 +115,14 @@ graph TD
     gpu --> core
     gpu --> storage
 
-    dist["📦 dist"] --> mcp
+    dist["ðŸ“¦ dist"] --> mcp
     dist --> cli
     dist --> runtime
 
-    spring["🌱 spring"] --> engine
+    spring["ðŸŒ± spring"] --> engine
     spring --> memory
     spring --> metrics
-    bench["🧪 bench"] --> engine
+    bench["ðŸ§ª bench"] --> engine
     bench --> memory
 ```
 
@@ -132,33 +132,33 @@ graph TD
 
 | Path | Description |
 |------|-------------|
-| `runtime → engine + memory + ingestion` | Composition root — wires all subsystems |
-| `cli → runtime + client` | CLI with local batch (runtime) and remote (client) modes |
-| `node → runtime` | Unified Armeria node: REST + gRPC + cluster coordination |
-| `mcp → runtime + ingestion` | MCP agent entry point (in-process, zero network) |
-| `engine → ingestion` | `EngineIngestionTarget` implements `IngestionTarget` |
-| `memory → ingestion` | `CognitiveIngestionTarget` implements `IngestionTarget` |
-| `engine → rag` | RAG context assembly pipeline |
+| `runtime â†’ engine + memory + ingestion` | Composition root â€” wires all subsystems |
+| `cli â†’ runtime + client` | CLI with local batch (runtime) and remote (client) modes |
+| `node â†’ runtime` | Unified Armeria node: REST + gRPC + cluster coordination |
+| `mcp â†’ runtime + ingestion` | MCP agent entry point (in-process, zero network) |
+| `engine â†’ ingestion` | `EngineIngestionTarget` implements `IngestionTarget` |
+| `memory â†’ ingestion` | `CognitiveIngestionTarget` implements `IngestionTarget` |
+| `engine â†’ rag` | RAG context assembly pipeline |
 | `engine -.-> gpu` | Optional GPU acceleration |
-| `memory → index, storage, core, embed-api` | Cognitive memory (independent of engine) |
-| `dist → mcp + cli + runtime` | Fat JAR distribution |
+| `memory â†’ index, storage, core, embed-api` | Cognitive memory (independent of engine) |
+| `dist â†’ mcp + cli + runtime` | Fat JAR distribution |
 
 !!! important
-    **No circular dependencies.** `spector-memory` and `spector-engine` are **peers** — both depend on `spector-ingestion` for the `IngestionTarget` interface, but neither depends on the other. `SpectorRuntime` is the single composition root that wires them together.
+    **No circular dependencies.** `spector-memory` and `spector-engine` are **peers** â€” both depend on `spector-ingestion` for the `IngestionTarget` interface, but neither depends on the other. `SpectorRuntime` is the single composition root that wires them together.
 
 ---
 
-## 📥 Data Flow: Ingest Path
+## ðŸ“¥ Data Flow: Ingest Path
 
 ```mermaid
 sequenceDiagram
-    participant Client as 👤 Client (CLI/MCP/REST)
-    participant Runtime as ⚡ SpectorRuntime
-    participant Handler as 📥 IngestionHandler
-    participant Pipeline as 🔄 IngestionPipeline
-    participant Embed as 🧠 ParallelEmbeddingPipeline
-    participant Target as 💾 IngestionTarget
-    participant Store as 💾 Storage (mmap)
+    participant Client as ðŸ‘¤ Client (CLI/MCP/REST)
+    participant Runtime as âš¡ SpectorRuntime
+    participant Handler as ðŸ“¥ IngestionHandler
+    participant Pipeline as ðŸ”„ IngestionPipeline
+    participant Embed as ðŸ§  ParallelEmbeddingPipeline
+    participant Target as ðŸ’¾ IngestionTarget
+    participant Store as ðŸ’¾ Storage (mmap)
 
     Client->>Runtime: runtime.ingestion().ingest(dir, pattern)
     Runtime->>Handler: Pre-configured pipeline + target
@@ -173,13 +173,13 @@ sequenceDiagram
             Target->>Store: VectorStore + VectorIndex + KeywordIndex
         end
     end
-    Store-->>Client: ✅ Indexed
+    Store-->>Client: âœ… Indexed
 ```
 
-1. **Client** calls `runtime.ingestion().ingest()` — all entry points use this
+1. **Client** calls `runtime.ingestion().ingest()` â€” all entry points use this
 2. **IngestionHandler** delegates to a pre-configured `IngestionPipeline`
 3. **IngestionPipeline** handles chunking (from config) and parallel embedding
-4. **IngestionTarget** receives pre-embedded chunks — `EngineIngestionTarget` for SEARCH, `CognitiveIngestionTarget` for MEMORY
+4. **IngestionTarget** receives pre-embedded chunks â€” `EngineIngestionTarget` for SEARCH, `CognitiveIngestionTarget` for MEMORY
 5. Each target handles its own downstream storage (VectorStore/HNSW or Quantize/TierRoute/WAL)
 
 > [!TIP]
@@ -187,21 +187,21 @@ sequenceDiagram
 
 ---
 
-## 🔍 Data Flow: Search Path
+## ðŸ” Data Flow: Search Path
 
 ```mermaid
 sequenceDiagram
-    participant Client as 👤 Client
-    participant Engine as ⚡ SpectorEngine
-    participant QB as 🧭 Query Builder
-    participant BM25 as 📝 BM25 Search
-    participant HNSW as 🧠 HNSW Search
-    participant RRF as 🧬 RRF Fusion
-    participant LLM as 🤖 LLM Reranker
+    participant Client as ðŸ‘¤ Client
+    participant Engine as âš¡ SpectorEngine
+    participant QB as ðŸ§­ Query Builder
+    participant BM25 as ðŸ“ BM25 Search
+    participant HNSW as ðŸ§  HNSW Search
+    participant RRF as ðŸ§¬ RRF Fusion
+    participant LLM as ðŸ¤– LLM Reranker
 
     Client->>Engine: Search (text + vector + topK)
     Engine->>QB: Auto-detect mode
-    Note over QB: text only → KEYWORD<br/>vector only → VECTOR<br/>both → HYBRID
+    Note over QB: text only â†’ KEYWORD<br/>vector only â†’ VECTOR<br/>both â†’ HYBRID
     par Parallel search on virtual threads
         QB->>BM25: Keyword search
         QB->>HNSW: Vector search
@@ -209,7 +209,7 @@ sequenceDiagram
     BM25->>RRF: Ranked results
     HNSW->>RRF: Ranked results
     RRF->>LLM: Fused top candidates
-    LLM-->>Client: ✨ Final ranked results
+    LLM-->>Client: âœ¨ Final ranked results
 ```
 
 1. **Query Builder** determines search mode from provided fields
@@ -219,37 +219,37 @@ sequenceDiagram
 
 ---
 
-## 🤖 Data Flow: MCP Agent Path
+## ðŸ¤– Data Flow: MCP Agent Path
 
 ```mermaid
 sequenceDiagram
-    participant Agent as 🤖 AI Agent (Claude/Cursor)
-    participant MCP as 📡 MCP Transport (stdio)
-    participant Handler as 🔧 McpToolHandler
-    participant Runtime as ⚡ SpectorRuntime
-    participant Engine as 🔧 SpectorEngine
-    participant SIMD as 🔬 SIMD Kernels
+    participant Agent as ðŸ¤– AI Agent (Claude/Cursor)
+    participant MCP as ðŸ“¡ MCP Transport (stdio)
+    participant Handler as ðŸ”§ McpToolHandler
+    participant Runtime as âš¡ SpectorRuntime
+    participant Engine as ðŸ”§ SpectorEngine
+    participant SIMD as ðŸ”¬ SIMD Kernels
 
-    Agent->>MCP: tools/call {"name": "semantic_search", "arguments": {"query": "..."}}
-    MCP->>Handler: SemanticSearchTool.execute(runtime, args)
+    Agent->>MCP: tools/call {"name": "engine_search", "arguments": {"query": "..."}}
+    MCP->>Handler: EngineSearchTool.execute(runtime, args)
     Handler->>Runtime: runtime.search().query(text, topK)
     Runtime->>Engine: engine.search(query, topK)
     Engine->>SIMD: HNSW traversal (off-heap MemorySegment)
-    SIMD-->>Engine: ScoredResult[] (~100µs)
+    SIMD-->>Engine: ScoredResult[] (~100Âµs)
     Engine-->>Runtime: SearchResponse
     Runtime-->>Handler: SpectorResult[]
     Handler-->>MCP: CallToolResult
     MCP-->>Agent: JSON-RPC response with search results
 ```
 
-The MCP path routes through `SpectorRuntime` — the single composition root that holds both the search engine and optional cognitive memory. The MCP server wraps runtime handler calls with JSON-RPC transport. There is **zero network overhead** because everything runs in the same JVM process.
+The MCP path routes through `SpectorRuntime` â€” the single composition root that holds both the search engine and optional cognitive memory. The MCP server wraps runtime handler calls with JSON-RPC transport. There is **zero network overhead** because everything runs in the same JVM process.
 
 > [!TIP]
 > For full MCP architecture details, tool schemas, and design patterns, see the dedicated [MCP Integration](mcp-integration.md) page.
 
 ---
 
-## 🧵 Threading Model: Virtual Threads
+## ðŸ§µ Threading Model: Virtual Threads
 
 Spector is designed from the ground up for Java virtual threads:
 
@@ -265,35 +265,35 @@ Spector is designed from the ground up for Java virtual threads:
 | HNSW construction (>10K) | Virtual threads per core for parallel insertion |
 | Distributed fan-out | Virtual thread per shard query |
 
-### 📈 Scaling Results
+### ðŸ“ˆ Scaling Results
 
 At 50K docs with hybrid search (384-dim, production-realistic):
 
 | Virtual Threads | Throughput | Scaling |
 |-----------------|-----------|---------|
-| 1 | 3,739 ops/s | 1.0× |
-| 4 | 10,317 ops/s | **2.8×** |
-| 8 | 11,812 ops/s | **3.2×** |
-| 16 | 14,022 ops/s | **3.7×** |
+| 1 | 3,739 ops/s | 1.0Ã— |
+| 4 | 10,317 ops/s | **2.8Ã—** |
+| 8 | 11,812 ops/s | **3.2Ã—** |
+| 16 | 14,022 ops/s | **3.7Ã—** |
 
 > [!NOTE]
-> Scaling depends on vector dimensions and workload type. 384-dim shows ~3.7× at 16 threads due to higher per-query memory bandwidth. Individual HNSW queries are inherently sequential (graph traversal data dependencies) — scaling comes from concurrent queries sharing CPU cores.
+> Scaling depends on vector dimensions and workload type. 384-dim shows ~3.7Ã— at 16 threads due to higher per-query memory bandwidth. Individual HNSW queries are inherently sequential (graph traversal data dependencies) â€” scaling comes from concurrent queries sharing CPU cores.
 
 ---
 
-## 💾 Memory Model: Panama Off-Heap
+## ðŸ’¾ Memory Model: Panama Off-Heap
 
 All vector data lives off-heap using the Panama Foreign Function & Memory API:
 
 ```mermaid
 graph TB
-    subgraph "☕ JVM Heap (minimal)"
+    subgraph "â˜• JVM Heap (minimal)"
         HG["HNSW Graph<br/>(adjacency lists)"]
         BM["BM25 Index<br/>(inverted index)"]
         ES["Engine State<br/>(config, lifecycle)"]
     end
 
-    subgraph "🧊 Off-Heap (Panama MemorySegment)"
+    subgraph "ðŸ§Š Off-Heap (Panama MemorySegment)"
         VS["Vector Store<br/>Contiguous float32, SIMD-aligned<br/>Zero-copy reads, no GC pressure"]
         QS["Quantized Store<br/>INT8 or PQ codes"]
         GM["GPU Device Memory<br/>CUDA via FFM"]
@@ -307,28 +307,28 @@ graph TB
 
 **Benefits:**
 
-- ✅ **Zero GC pressure** — Vectors never touch the garbage collector
+- âœ… **Zero GC pressure** â€” Vectors never touch the garbage collector
 
-- ✅ **Instant startup** — Memory-mapped files load via `mmap` syscall, no deserialization
+- âœ… **Instant startup** â€” Memory-mapped files load via `mmap` syscall, no deserialization
 
-- ✅ **SIMD-friendly layout** — Contiguous float32 arrays ready for Vector API operations
+- âœ… **SIMD-friendly layout** â€” Contiguous float32 arrays ready for Vector API operations
 
-- ✅ **Explicit lifecycle** — `Arena`-scoped memory with deterministic cleanup
+- âœ… **Explicit lifecycle** â€” `Arena`-scoped memory with deterministic cleanup
 
-- ✅ **Memory efficiency** — Store billions of vectors limited only by disk/address space
+- âœ… **Memory efficiency** â€” Store billions of vectors limited only by disk/address space
 
-### 📊 Storage Types
+### ðŸ“Š Storage Types
 
 | Store | Location | Use Case |
 |-------|----------|----------|
 | `InMemoryVectorStore` | Off-heap (Arena) | Development, small datasets |
 | `MmapVectorStore` | Memory-mapped file | Production, persistence |
 | `QuantizedVectorStore` | Off-heap (INT8) | Memory-constrained deployments |
-| `IvfPqStore` | Off-heap (PQ codes) | Billion-scale (32× compression) |
+| `IvfPqStore` | Off-heap (PQ codes) | Billion-scale (32Ã— compression) |
 
 ---
 
-## 🌐 API Layer
+## ðŸŒ API Layer
 
 ```mermaid
 graph TD
@@ -337,16 +337,16 @@ graph TD
         Auth["API Key decorator"]
         COMPRESS["EncodingService - gzip/brotli"]
         subgraph "ApiModule Registration"
-            SE["🔍 SearchEndpoint"]
-            IE["📥 IngestEndpoint"]
-            RE["🤖 RagEndpoint"]
-            DE["🗑️ DocumentEndpoint"]
-            STE["📊 StatusEndpoint"]
-            ESE["📡 EventStreamEndpoint"]
+            SE["ðŸ” SearchEndpoint"]
+            IE["ðŸ“¥ IngestEndpoint"]
+            RE["ðŸ¤– RagEndpoint"]
+            DE["ðŸ—‘ï¸ DocumentEndpoint"]
+            STE["ðŸ“Š StatusEndpoint"]
+            ESE["ðŸ“¡ EventStreamEndpoint"]
         end
         gRPC["gRPC Service<br/>inter-node fan-out"]
-        HEALTH["💚 /health"]
-        PROM["📊 /metrics"]
+        HEALTH["ðŸ’š /health"]
+        PROM["ðŸ“Š /metrics"]
     end
 
     subgraph "Service Facades"
@@ -359,7 +359,7 @@ graph TD
     IE --> IS
     RE --> RS
     SS & IS --> EB["SpectorEventBus<br/>17 event types"]
-    SS --> ENGINE["⚡ SpectorEngine"]
+    SS --> ENGINE["âš¡ SpectorEngine"]
 ```
 
 Every request runs on its own virtual thread. The Armeria server handles HTTP REST, gRPC, and SSE events on a single port. API endpoints are registered via the `ApiModule` factory pattern, enabling straightforward API versioning (`/api/v1`, `/api/v2`).
@@ -370,12 +370,12 @@ The `/api/v1/search/stream` endpoint uses Server-Sent Events to emit results pro
 
 ---
 
-## 🔗 See Also
+## ðŸ”— See Also
 
-- [Core Concepts](core-concepts.md) — Algorithms and data structures in detail
+- [Core Concepts](core-concepts.md) â€” Algorithms and data structures in detail
 
-- [Distributed Mode](distributed-mode.md) — Multi-node clustering architecture
+- [Distributed Mode](distributed-mode.md) â€” Multi-node clustering architecture
 
-- [GPU Acceleration](gpu-acceleration.md) — CUDA kernel integration via Panama
+- [GPU Acceleration](gpu-acceleration.md) â€” CUDA kernel integration via Panama
 
-- [Performance Tuning](../operations/performance-tuning.md) — Optimizing for your workload
+- [Performance Tuning](../operations/performance-tuning.md) â€” Optimizing for your workload

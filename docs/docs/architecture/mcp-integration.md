@@ -8,7 +8,7 @@
 
 The [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is Anthropic's open standard for connecting AI agents to external data sources. Instead of writing custom Python glue-code with orchestration frameworks, agents connect directly to an MCP server via JSON-RPC and autonomously invoke tools.
 
-**Spector's MCP server runs in-process.** When Claude Desktop or Cursor calls `semantic_search`, the request goes from JSON-RPC → Java method call → SIMD kernel — never touching a network socket. This makes Spector **23–113× faster than Python-based MCP servers** that route through HTTP/gRPC.
+**Spector's MCP server runs in-process.** When Claude Desktop or Cursor calls `engine_search`, the request goes from JSON-RPC → Java method call → SIMD kernel — never touching a network socket. This makes Spector **23–113× faster than Python-based MCP servers** that route through HTTP/gRPC.
 
 ---
 
@@ -30,13 +30,21 @@ graph LR
             PP["💬 SpectorPromptProvider"]
         end
 
-        subgraph "Tools (McpToolHandler subclasses)"
-            T1["SemanticSearchTool"]
-            T2["HybridSearchTool"]
-            T3["RagQueryTool"]
-            T4["IngestDocumentTool"]
-            T5["DeleteDocumentTool"]
+        subgraph "Engine Tools"
+            T1["EngineSearchTool"]
+            T2["EngineHybridSearchTool"]
+            T3["EngineRagTool"]
+            T4["EngineIngestTool"]
+            T5["EngineDeleteTool"]
             T6["EngineStatusTool"]
+        end
+
+        subgraph "Memory Tools"
+            M1["MemoryRememberTool"]
+            M2["MemoryRecallTool"]
+            M3["MemoryForgetTool"]
+            M4["MemoryIntrospectTool"]
+            M5["... 7 more"]
         end
 
         subgraph Foundation
@@ -82,8 +90,8 @@ sequenceDiagram
     participant Engine as 🔧 SpectorEngine
     participant SIMD as 🔬 SIMD Kernel
 
-    Agent->>MCP: tools/call {"name": "semantic_search", "arguments": {"query": "..."}}
-    MCP->>Handler: SemanticSearchTool.execute(runtime, args)
+    Agent->>MCP: tools/call {"name": "engine_search", "arguments": {"query": "..."}}
+    MCP->>Handler: EngineSearchTool.execute(runtime, args)
     
     Note over Handler: requireString(args, "query")<br/>optionalInt(args, "top_k", 5)
     
@@ -112,13 +120,26 @@ spector-mcp/src/main/java/com/spectrayan/spector/mcp/
 │   └── ToolSchemaBuilder.java     ← Type-safe fluent builder for JSON schemas
 ├── tools/
 │   ├── McpToolHandler.java        ← Abstract base with timing, error handling
-│   ├── SpectorToolRegistry.java   ← Tool discovery & registration
-│   ├── SemanticSearchTool.java    ← Individual tool implementations
-│   ├── HybridSearchTool.java
-│   ├── RagQueryTool.java
-│   ├── IngestDocumentTool.java
-│   ├── DeleteDocumentTool.java
-│   └── EngineStatusTool.java
+│   ├── SpectorToolRegistry.java   ← Mode-aware tool discovery & registration
+│   ├── engine/                    ← Engine tools (available in SEARCH/HYBRID mode)
+│   │   ├── EngineSearchTool.java
+│   │   ├── EngineHybridSearchTool.java
+│   │   ├── EngineRagTool.java
+│   │   ├── EngineIngestTool.java
+│   │   ├── EngineDeleteTool.java
+│   │   └── EngineStatusTool.java
+│   └── memory/                    ← Memory tools (available in MEMORY/HYBRID mode)
+│       ├── MemoryRememberTool.java
+│       ├── MemoryRecallTool.java
+│       ├── MemoryForgetTool.java
+│       ├── MemoryReinforceTool.java
+│       ├── MemorySuppressTool.java
+│       ├── MemoryResolveTool.java
+│       ├── MemoryIntrospectTool.java
+│       ├── MemoryScratchpadTool.java
+│       ├── MemoryReminderTool.java
+│       ├── MemoryWhyNotTool.java
+│       └── MemoryStatusTool.java
 ├── resources/
 │   └── SpectorResourceProvider.java   ← Resource definitions & handlers
 ├── prompts/
@@ -131,7 +152,7 @@ spector-mcp/src/main/java/com/spectrayan/spector/mcp/
 
 ## Tool Reference
 
-### `semantic_search`
+### `engine_search`
 
 Performs semantic similarity search using vector embeddings. Requires an embedding provider (e.g., Ollama) to be configured.
 
@@ -140,7 +161,7 @@ Performs semantic similarity search using vector embeddings. Requires an embeddi
 | `query` | string | ✅ | — | Natural language search query |
 | `top_k` | integer | ❌ | 5 | Number of results to return (1–100) |
 
-### `hybrid_search`
+### `engine_hybrid_search`
 
 Combined keyword (BM25) + semantic (vector) search with reciprocal rank fusion. Falls back to keyword-only if no embedding provider is configured.
 
@@ -150,7 +171,7 @@ Combined keyword (BM25) + semantic (vector) search with reciprocal rank fusion. 
 | `top_k` | integer | ❌ | 5 | Number of results to return |
 | `mode` | enum | ❌ | `hybrid` | Search mode: `hybrid`, `keyword`, or `vector` |
 
-### `rag_query`
+### `engine_rag`
 
 Retrieval-Augmented Generation — retrieves relevant context with source citations formatted for LLM consumption.
 
@@ -159,7 +180,7 @@ Retrieval-Augmented Generation — retrieves relevant context with source citati
 | `query` | string | ✅ | — | The question or topic to retrieve context for |
 | `top_k` | integer | ❌ | 5 | Number of context passages to retrieve |
 
-### `ingest_document`
+### `engine_ingest`
 
 Ingests a document into the search index with automatic embedding and optional chunking.
 
@@ -169,7 +190,7 @@ Ingests a document into the search index with automatic embedding and optional c
 | `content` | string | ✅ | — | Document text content |
 | `title` | string | ❌ | — | Optional document title |
 
-### `delete_document`
+### `engine_delete`
 
 Removes a document from the search index by ID.
 
@@ -184,6 +205,22 @@ Returns engine metadata including document count, dimensions, SIMD capabilities,
 | Parameter | Type | Required | Default | Description |
 |:---|:---|:---|:---|:---|
 | *(none)* | — | — | — | No input parameters required |
+
+### Memory Tools
+
+| Tool | Parameters | Description |
+|:---|:---|:---|
+| `memory_remember` | `id`, `text`, `type`, `source`, `tags` | Store a cognitive memory |
+| `memory_recall` | `query`, `top_k`, `tags`, `types` | Cognitive recall across all tiers |
+| `memory_forget` | `id` | Tombstone a memory |
+| `memory_reinforce` | `id`, `valence` | Positive/negative feedback |
+| `memory_suppress` | `id`, `reason` | Suppress from recall |
+| `memory_resolve` | `id` | Mark as resolved |
+| `memory_introspect` | `topic` | Topic knowledge analysis |
+| `memory_scratchpad` | `text` | Quick-write to working memory |
+| `memory_reminder` | `text`, `delay_seconds`, `tags` | Schedule future reminder |
+| `memory_why_not` | `memory_id`, `query`, `top_k` | Explain why not recalled |
+| `memory_status` | *(none)* | Tier counts and partition info |
 
 ---
 
@@ -222,11 +259,11 @@ Register the tool in `SpectorToolRegistry.handlers()`:
 
 ```java
 List.of(
-    new SemanticSearchTool(),
-    new HybridSearchTool(),
-    new RagQueryTool(),
-    new IngestDocumentTool(),
-    new DeleteDocumentTool(),
+    new EngineSearchTool(),
+    new EngineHybridSearchTool(),
+    new EngineRagTool(),
+    new EngineIngestTool(),
+    new EngineDeleteTool(),
     new EngineStatusTool(serverVersion)
     // new YourNewTool()  ← just add here
 );
@@ -289,8 +326,9 @@ graph LR
 ## Security Considerations
 
 > [!WARNING]
-> The `ingest_document` and `delete_document` tools allow agents to modify the search index. In production environments, consider:
+> The `engine_ingest` and `engine_delete` tools allow agents to modify the search index. In production environments, consider:
 > - Running the MCP server in read-only mode (expose only search tools)
+> - Using `SEARCH` mode to disable memory write tools
 > - Implementing document-level access control
 > - Rate limiting ingestion operations
 > - Auditing all write operations

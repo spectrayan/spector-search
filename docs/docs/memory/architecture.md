@@ -137,8 +137,10 @@ sequenceDiagram
         CT->>CS: score(partition1, ...)
     and Episodic Partition 2
         CT->>CS: score(partition2, ...)
-    and Semantic
-        CT->>CS: score(semanticSlab, ...)
+    and Semantic Partition 1 (virtual thread)
+        CT->>CS: score(semPartition1, ...)
+    and Semantic Partition N (virtual thread)
+        CT->>CS: score(semPartitionN, ...)
     and Procedural
         CT->>CS: score(proceduralSegment, ...)
     end
@@ -211,6 +213,7 @@ graph LR
     TR --> WM[cortex/<br/>WorkingMemoryStore]
     TR --> EM[cortex/<br/>EpisodicMemoryStore]
     TR --> SE[cortex/<br/>SemanticMemoryStore]
+    TR --> PS2[cortex/<br/>PartitionedSemanticStore]
     TR --> PR[cortex/<br/>ProceduralMemoryStore]
     
     RP -.->|async| HL[pipeline/<br/>HebbianListener]

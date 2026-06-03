@@ -5,7 +5,7 @@ description: "How Spector Memory maps neuroscience concepts to code — a guided
 
 # 🧬 Biological Systems — Overview
 
-Spector Memory doesn't just borrow neuroscience *terminology* — it implements the actual **computational principles** behind biological memory. Each package in `spector-memory` corresponds to a distinct brain region or cognitive mechanism, implementing the mathematical models that neuroscientists have validated over decades of research.
+Spector Memory draws on computational neuroscience research to implement **simplified, performance-optimized approximations** of biological memory mechanisms. Each package in `spector-memory` maps to a neuroscience concept, implementing mathematical models inspired by peer-reviewed cognitive science — particularly Anderson's ACT-R architecture (1993) — and optimized for microsecond-scale agent memory operations.
 
 ---
 
@@ -73,15 +73,15 @@ graph TB
 
 ## Key Mathematical Models
 
-### Temporal Decay (Ebbinghaus Forgetting Curve)
+### Temporal Decay (Power Law of Forgetting)
 
-Spector approximates the exponential forgetting curve using precomputed decay buckets — avoiding expensive `Math.exp()` calls in the hot loop:
+Spector approximates the **power law of forgetting** using precomputed decay buckets — avoiding expensive `Math.pow()` calls in the hot loop:
 
-$$R(t) = e^{-\lambda t / S}$$
+$$R(t) = a \cdot t^{-d}$$
 
-Where $R(t)$ is retrieval strength, $\lambda$ is the decay rate, $t$ is time since encoding, and $S$ is storage strength. Spector discretizes this into 9 buckets (see [Scoring Pipeline](scoring-pipeline.md)).
+Where $R(t)$ is retrieval strength, $t$ is time since encoding, and $d$ is the configurable decay exponent (default: 0.15). Research since Wixted (2004) has established that forgetting follows a power law, not the exponential curve originally proposed by Ebbinghaus (1885). Spector discretizes this into 12 buckets spanning 5+ years, with a configurable permastore floor (default: 0.10) — see [Scoring Pipeline](scoring-pipeline.md)).
 
-> **Reference**: Ebbinghaus, H. (1885). *Über das Gedächtnis*[^13]
+> **References**: Wixted, J.T. (2004). *The psychology and neuroscience of forgetting*[^15]; Ebbinghaus, H. (1885). *Über das Gedächtnis*[^13]
 
 ### Reconsolidation (Spacing Effect)
 
@@ -119,6 +119,25 @@ $$\Delta w = \begin{cases} A_+ \cdot e^{-\Delta t / \tau_+} & \text{if } \Delta 
 
 > **Reference**: Bi & Poo (2001). *Synaptic modification by correlated activity*[^6]
 
+### Scoring Formula (ACT-R Lineage)
+
+Spector's core scoring formula is a simplified, hardware-optimized approximation of the ACT-R activation equation (Anderson, 1993):
+
+$$\text{ACT-R: } A_i = \underbrace{B_i}_{\text{base-level}} + \underbrace{\sum_{j} W_j \cdot S_{ji}}_{\text{spreading activation}} + \epsilon$$
+
+Spector's approximation:
+
+$$\text{Spector: } \text{score} = \underbrace{\alpha \cdot \text{similarity}}_{\approx \sum W_j S_{ji}} + \underbrace{\beta \cdot \text{importance} \cdot \text{decay} \cdot S^{0.3}}_{\approx B_i}$$
+
+Where:
+
+- **Similarity** ≈ ACT-R's spreading activation from current context
+- **Importance × decay** ≈ ACT-R's base-level activation $B_i$
+- **$S^{0.3}$** (storage strength) ≈ Bjork's two-factor model (1992)[^14]
+- **α, β** = relative weighting of context vs. base-level (default: 0.6, 0.4)
+
+> **References**: Anderson, J.R. (1993). *Rules of the Mind*[^16]; Anderson, J.R. & Lebiere, C. (1998). *The Atomic Components of Thought*[^17]
+
 ### Habituation Penalty
 
 Repeated recall of the same memory incurs an exponentially increasing penalty:
@@ -133,7 +152,7 @@ Where $n$ is the number of times the memory appeared in recent results and $\gam
 
 ## Design Principles
 
-1. **Fidelity to neuroscience**: Each system implements a real cognitive mechanism, not just a metaphor. The mathematical models are drawn from peer-reviewed research.
+1. **Grounded in research**: Each system implements a mathematical model inspired by peer-reviewed cognitive science, optimized for microsecond-scale agent memory operations. The scoring formula is a simplified, hardware-optimized approximation of the ACT-R activation equation (Anderson, 1993)[^16], with extensions for emotional valence (McGaugh, 2004)[^4] and storage strength (Bjork & Bjork, 1992)[^14].
 
 2. **Independent testability**: Each biological system is a standalone package with its own unit tests. Systems compose via dependency injection, not inheritance.
 
@@ -228,3 +247,19 @@ Where $n$ is the number of times the memory appeared in recent results and $\gam
 [^13]: Ebbinghaus, H. (1885). *Über das Gedächtnis: Untersuchungen zur experimentellen Psychologie*. Leipzig: Duncker & Humblot. English translation: *Memory: A Contribution to Experimental Psychology* (1913).
 
 [^14]: Bjork, R.A. & Bjork, E.L. (1992). A new theory of disuse and an old theory of stimulus fluctuation. In *From Learning Processes to Cognitive Processes: Essays in Honor of William K. Estes*, 2, 35–67.
+
+[^15]: Wixted, J.T. (2004). The psychology and neuroscience of forgetting. *Annual Review of Psychology*, 55, 235–269. [doi:10.1146/annurev.psych.55.090902.141555](https://doi.org/10.1146/annurev.psych.55.090902.141555)
+
+[^16]: Anderson, J.R. (1993). *Rules of the Mind*. Hillsdale, NJ: Erlbaum.
+
+[^17]: Anderson, J.R. & Lebiere, C. (1998). *The Atomic Components of Thought*. Mahwah, NJ: Erlbaum.
+
+[^18]: Park, J.S. et al. (2023). Generative Agents: Interactive Simulacra of Human Behavior. *UIST '23*. [doi:10.1145/3586183.3606763](https://doi.org/10.1145/3586183.3606763)
+
+[^19]: Hu, Y. et al. (2025). MemoryOS: Cognitive-Inspired Memory Architecture for AI Agents. *arXiv:2506.06326*.
+
+[^20]: McClelland, J.L., McNaughton, B.L. & O'Reilly, R.C. (1995). Why there are complementary learning systems in the hippocampus and neocortex. *Psychological Review*, 102(3), 419–457. [doi:10.1037/0033-295X.102.3.419](https://doi.org/10.1037/0033-295X.102.3.419)
+
+[^21]: Baddeley, A.D. (2000). The episodic buffer: a new component of working memory? *Trends in Cognitive Sciences*, 4(11), 417–423. [doi:10.1016/S1364-6613(00)01538-2](https://doi.org/10.1016/S1364-6613(00)01538-2)
+
+[^22]: Bahrick, H.P. (1984). Semantic memory content in permastore: Fifty years of memory for Spanish learned in school. *JEP: General*, 113(1), 1–29. [doi:10.1037/0096-3445.113.1.1](https://doi.org/10.1037/0096-3445.113.1.1)

@@ -112,10 +112,15 @@ Just as the human brain has distinct memory systems, Spector organizes memories 
 
     **Biological analog: Neocortex**
     
-    Distilled, permanent knowledge. Created by sleep consolidation (ReflectDaemon) from episodic clusters, or directly by the user.
+    Distilled, permanent knowledge. Created by sleep consolidation (ReflectDaemon) from episodic clusters, or directly by the user. Supports two storage modes:
     
-    - **Capacity**: Configurable (default: 5,000 records)
-    - **Storage**: Header-only slab (fast metadata scan)
+    - **Single-file** (in-memory mode): Fixed-capacity slab via `Arena.ofShared()`
+    - **Partitioned** (DISK mode, default): Rolling `semantic-NNN.mem` files with parallel per-partition recall via virtual threads
+    
+    - **Capacity**: Unbounded in partitioned mode (configurable per-partition, default: 10,000 records)
+    - **Recall**: Parallel scan — each partition searched on its own virtual thread
+    - **Compaction**: Per-partition rebuild (live during operation)
+    - **Migration**: Auto-migrates from single-file on first startup
     - **Use case**: "The user prefers dark mode."
 
 === "⚙️ Procedural Memory"

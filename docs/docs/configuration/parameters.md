@@ -186,6 +186,61 @@ mvn exec:java -pl spector-node \
 
 ---
 
+## 🧠 Memory Configuration
+
+### Operating Mode
+
+| Parameter | Default | Options | Description |
+|-----------|---------|---------|-------------|
+| `mode` | `SEARCH` | `SEARCH`, `MEMORY`, `HYBRID` | Which subsystems to initialize |
+
+| Mode | Engine | Memory | MCP Tools |
+|---|---|---|---|
+| `SEARCH` | ✅ | ❌ | 6 engine tools |
+| `MEMORY` | ❌ | ✅ | 11 memory tools |
+| `HYBRID` | ✅ | ✅ | All 17 tools |
+
+### Memory Tier Parameters
+
+| Parameter | Default | Range | Description |
+|-----------|---------|-------|-------------|
+| `nodesPerPartition` | 10,000 | 1,000–1,000,000 | Records per semantic partition file |
+| `workingCapacity` | 100 | 10–10,000 | Working memory slots (volatile circular buffer) |
+| `episodicPartitionCapacity` | 10,000 | 1,000–100,000 | Records per episodic partition |
+| `semanticCapacity` | 5,000 | 100–1,000,000 | Single-file semantic capacity (in-memory mode) |
+| `proceduralCapacity` | 500 | 10–100,000 | Procedural memory slots |
+
+### Partitioned Semantic Storage
+
+When using DISK persistence mode, semantic memories are stored in rolling partition files:
+
+```
+.spector/memory/semantic/
+  semantic-000.mem     ← partition 0 (oldest, immutable)
+  semantic-001.mem     ← partition 1 (immutable)
+  semantic-002.mem     ← partition 2 (active, accepts writes)
+```
+
+**Tuning `nodesPerPartition`:**
+
+- **Smaller partitions** (1K–5K) → faster compaction, more parallel search threads, more files
+- **Larger partitions** (10K–50K) → fewer files, slightly lower overhead per partition
+- **Default (10K)** → good balance for most workloads
+
+> [!TIP]
+> Existing single-file `semantic.mem` stores are automatically migrated to the partitioned format on first startup. No manual migration needed.
+
+### Cluster Replication for Partitions
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `partitionReplicationEnabled` | false | Enable file-level partition snapshot shipping |
+| `replicaCount` | 1 | Replicas per shard (1–5) |
+
+When enabled, immutable semantic partitions are shipped as snapshots to replica nodes. Only the active (mutable) partition requires WAL-based delta replication.
+
+---
+
 ## 🤖 RAG Pipeline Configuration
 
 | Parameter | Default | Range | Description |

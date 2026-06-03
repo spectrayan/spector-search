@@ -13,22 +13,30 @@
   --md-mermaid-font-family: var(--md-text-font-family, _);
 }
 
-/* Ensure mermaid nodes are readable on dark backgrounds */
+/* ── Dark mode: Node shapes ── */
+/* Override inline styles from mermaid `style` directives */
 [data-md-color-scheme="slate"] .mermaid .node rect,
 [data-md-color-scheme="slate"] .mermaid .node polygon,
-[data-md-color-scheme="slate"] .mermaid .node circle {
-  fill: #1e1e2e !important;
+[data-md-color-scheme="slate"] .mermaid .node circle,
+[data-md-color-scheme="slate"] .mermaid .node path {
+  fill: #313244 !important;
   stroke: #6c6c8a !important;
 }
 
+/* ── Dark mode: Node text ── */
 [data-md-color-scheme="slate"] .mermaid .node .label,
-[data-md-color-scheme="slate"] .mermaid span {
+[data-md-color-scheme="slate"] .mermaid .nodeLabel,
+[data-md-color-scheme="slate"] .mermaid .label,
+[data-md-color-scheme="slate"] .mermaid span,
+[data-md-color-scheme="slate"] .mermaid p {
   color: #cdd6f4 !important;
   fill: #cdd6f4 !important;
 }
 
-[data-md-color-scheme="slate"] .mermaid .edgePath .path {
-  stroke: #6c6c8a !important;
+/* ── Dark mode: Edges ── */
+[data-md-color-scheme="slate"] .mermaid .edgePath .path,
+[data-md-color-scheme="slate"] .mermaid .flowchart-link {
+  stroke: #89b4fa !important;
 }
 
 [data-md-color-scheme="slate"] .mermaid .edgeLabel {
@@ -36,32 +44,51 @@
   color: #cdd6f4 !important;
 }
 
+[data-md-color-scheme="slate"] .mermaid .edgeLabel rect {
+  fill: #1e1e2e !important;
+  opacity: 0.8;
+}
+
+/* ── Dark mode: Cluster/subgraph backgrounds ── */
+/* These override hardcoded fill colors from `style SubgraphName fill:...` */
 [data-md-color-scheme="slate"] .mermaid .cluster rect {
-  fill: #181825 !important;
+  fill: #1e1e2e !important;
   stroke: #45475a !important;
 }
 
-[data-md-color-scheme="slate"] .mermaid .cluster span {
+[data-md-color-scheme="slate"] .mermaid .cluster span,
+[data-md-color-scheme="slate"] .mermaid .cluster .nodeLabel {
   color: #a6adc8 !important;
+  fill: #a6adc8 !important;
 }
 
-/* Sequence diagram dark theme fixes */
+/* ── Dark mode: Sequence diagrams ── */
 [data-md-color-scheme="slate"] .mermaid .actor {
-  fill: #1e1e2e !important;
+  fill: #313244 !important;
   stroke: #6c6c8a !important;
 }
 
-[data-md-color-scheme="slate"] .mermaid text.actor {
+[data-md-color-scheme="slate"] .mermaid text.actor,
+[data-md-color-scheme="slate"] .mermaid .actor-man text {
   fill: #cdd6f4 !important;
 }
 
 [data-md-color-scheme="slate"] .mermaid .messageLine0,
 [data-md-color-scheme="slate"] .mermaid .messageLine1 {
-  stroke: #6c6c8a !important;
+  stroke: #89b4fa !important;
 }
 
 [data-md-color-scheme="slate"] .mermaid .messageText {
   fill: #cdd6f4 !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .loopText,
+[data-md-color-scheme="slate"] .mermaid .loopText > tspan {
+  fill: #cdd6f4 !important;
+}
+
+[data-md-color-scheme="slate"] .mermaid .loopLine {
+  stroke: #45475a !important;
 }
 
 [data-md-color-scheme="slate"] .mermaid .note {
@@ -73,7 +100,21 @@
   fill: #cdd6f4 !important;
 }
 
-/* Flowchart dark theme fixes */
-[data-md-color-scheme="slate"] .mermaid .flowchart-link {
+[data-md-color-scheme="slate"] .mermaid .activation {
+  fill: #45475a !important;
+  stroke: #89b4fa !important;
+}
+
+/* ── Dark mode: Label containers (used by styled nodes) ── */
+[data-md-color-scheme="slate"] .mermaid .label-container {
+  fill: #313244 !important;
   stroke: #6c6c8a !important;
 }
+
+/* ── Dark mode: Arrowheads ── */
+[data-md-color-scheme="slate"] .mermaid .marker,
+[data-md-color-scheme="slate"] .mermaid #arrowhead path {
+  fill: #89b4fa !important;
+  stroke: #89b4fa !important;
+}
+

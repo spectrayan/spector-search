@@ -19,7 +19,8 @@ SpectorMemory memory = SpectorMemory.builder()
     .embeddingProvider(EmbeddingProvider)    // Embedding provider (required)
     .workingCapacity(int)                   // Working memory slots (default: 100)
     .episodicPartitionCapacity(int)         // Records per episodic partition (default: 10,000)
-    .semanticCapacity(int)                  // Semantic memory slots (default: 5,000)
+    .nodesPerPartition(int)                 // Records per semantic partition file (default: 10,000)
+    .semanticCapacity(int)                  // Single-file semantic capacity (default: 5,000)
     .proceduralCapacity(int)                // Procedural memory slots (default: 500)
     .quantizer(ScalarQuantizer)             // Custom quantizer (default: identity)
     .persistenceDir(Path)                   // Episodic mmap directory (default: temp dir)
@@ -35,8 +36,10 @@ SpectorMemory memory = SpectorMemory.builder()
 | `forget(id)` | `void` | Tombstones a memory (permanent, excluded from all scans) |
 | `suppress(id, reason)` | `void` | Suppresses from recall results (reversible) |
 | `unsuppress(id)` | `void` | Removes suppression |
+| `whyNot(memoryId, query, options)` | `WhyNotExplanation` | Explains why a memory was not recalled |
+| `reflect()` | `ReflectReport` | Triggers sleep consolidation cycle |
+| `introspect(topic)` | `MemoryInsight` | Metamemory self-analysis on a topic |
 | `totalMemories()` | `int` | Total record count across all tiers |
-| `introspect()` | `MemoryIntrospector` | Memory health analytics |
 | `close()` | `void` | Releases all off-heap memory and file handles |
 
 ---

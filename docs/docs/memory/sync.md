@@ -86,7 +86,32 @@ public final class CrdtMergeStrategy {
 
 ---
 
+## PartitionReplicator — Partition Snapshot Shipping
+
+For clustered deployments, the `PartitionReplicator` handles file-level replication of semantic memory partitions:
+
+```
+Mode 1: WAL incremental (real-time, low latency)
+  Primary → WAL event → Replica replays locally
+
+Mode 2: Partition snapshot (post-compaction, bulk)
+  Primary compacts partition 3 → ships .mem file → Replica downloads + swaps
+```
+
+**Key behaviors:**
+
+| Event | Action |
+|---|---|
+| **Partition rolls** (becomes immutable) | Ship entire file to all replicas (one-time) |
+| **Partition compacted** | Re-ship compacted file to all replicas |
+| **New replica joins** | Full sync — ship all partition files |
+
+Immutable partitions are shipped exactly once per replica. Only the active (mutable) partition requires WAL-based delta replication via the `ReplicationManager`.
+
+---
+
 ## Next Steps
 
 - :material-memory: [**Off-Heap Panama Design**](panama-design.md) — how persistence interacts with mmap
 - :material-brain: [**Architecture**](architecture.md) — system overview
+- :material-cog: [**Configuration**](../configuration/parameters.md) — cluster and partition settings

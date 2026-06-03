@@ -152,6 +152,48 @@ spectorctl status --json
 
 ---
 
+### 🧠 `memory` — Cognitive Memory Operations
+
+Available when the server is running in `MEMORY` or `HYBRID` mode.
+
+```bash
+# Remember — store a cognitive memory
+spectorctl memory remember --id pref-dark --text "User prefers dark mode" \
+  --type EPISODIC --source USER_STATED --tags "ui,preferences"
+
+# Recall — cognitive search across all tiers
+spectorctl memory recall --query "dark theme settings" --topK 5
+
+# Forget — tombstone a memory
+spectorctl memory forget --id pref-dark
+
+# Reinforce — positive/negative feedback
+spectorctl memory reinforce --id fact-42 --valence 1
+
+# Suppress — hide from recall (reversible)
+spectorctl memory suppress --id noisy-fact --reason "Not relevant"
+
+# Introspect — how well does the system know a topic?
+spectorctl memory introspect "kubernetes"
+
+# Reminder — schedule a future reminder
+spectorctl memory reminder --text "check build logs" --delay 3600
+
+# Scratchpad — quick-write to working memory
+spectorctl memory scratchpad "working hypothesis: the issue is GC"
+
+# Why-Not — explain why a memory was not recalled
+spectorctl memory why-not --id fact-42 --query "pool config"
+
+# Reflect — trigger sleep consolidation
+spectorctl memory reflect
+
+# Status — memory tier counts
+spectorctl memory status --json
+```
+
+---
+
 ## 🎨 Output Formats
 
 ### 📋 Table Format (Default)

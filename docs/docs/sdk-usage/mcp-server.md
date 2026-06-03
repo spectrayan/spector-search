@@ -40,14 +40,14 @@ Add the following to your agent's MCP configuration (see per-agent sections belo
 
 ### 3. Start Using
 
-Your AI agent now has access to up to 13 tools. With cognitive memory enabled (`spector.memory.enabled: true`), all 13 tools are registered. Otherwise, the 6 search tools are available:
+Your AI agent now has access to up to 17 tools. With cognitive memory enabled (`spector.memory.enabled: true`), all tools are registered. In `SEARCH` mode, only the 6 engine tools are available:
 
-- *"Search for documents about SIMD acceleration"* → `semantic_search`
-- *"Find articles mentioning 'Panama' and related to memory management"* → `hybrid_search`
-- *"What does the codebase say about quantization?"* → `rag_query`
-- *"Add this document to the index: ..."* → `ingest_document`
-- *"Remember that the user prefers dark mode"* → `core_memory_append`
-- *"What do you remember about the user's preferences?"* → `recall_context`
+- *"Search for documents about SIMD acceleration"* → `engine_search`
+- *"Find articles mentioning 'Panama' and related to memory management"* → `engine_hybrid_search`
+- *"What does the codebase say about quantization?"* → `engine_rag`
+- *"Add this document to the index: ..."* → `engine_ingest`
+- *"Remember that the user prefers dark mode"* → `memory_remember`
+- *"What do you remember about the user's preferences?"* → `memory_recall`
 
 ---
 
@@ -73,6 +73,7 @@ All settings can be specified in a `spector.yml` file:
 
 ```yaml
 spector:
+  mode: HYBRID                   # SEARCH | MEMORY | HYBRID (default)
   engine:
     dimensions: 768
     capacity: 100000
@@ -82,8 +83,9 @@ spector:
     model: nomic-embed-text
     base-url: http://localhost:11434
   memory:
-    enabled: true              # Enable cognitive memory tools
+    enabled: true                  # Enable cognitive memory tools
     persistence-path: .spector/memory
+    nodes-per-partition: 10000     # Records per semantic partition file
 ```
 
 See the [Configuration Guide](../configuration/parameters.md) for the complete list of settings.
@@ -198,28 +200,32 @@ Any application implementing the [MCP client specification](https://modelcontext
 
 Once connected, your agent has access to these tools:
 
-### Search Tools (always available)
+### Engine Tools (available in SEARCH and HYBRID mode)
 
 | Tool | Description | Requires Embedding |
 |:---|:---|:---|
-| `semantic_search` | Vector similarity search | ✅ |
-| `hybrid_search` | Keyword + vector with RRF fusion | Partial (keyword mode works without) |
-| `rag_query` | Retrieval-Augmented Generation context | ✅ |
-| `ingest_document` | Add documents to the index | ✅ (for auto-embedding) |
-| `delete_document` | Remove documents by ID | ❌ |
+| `engine_search` | Vector similarity search | ✅ |
+| `engine_hybrid_search` | Keyword + vector with RRF fusion | Partial (keyword mode works without) |
+| `engine_rag` | Retrieval-Augmented Generation context | ✅ |
+| `engine_ingest` | Add documents to the index | ✅ (for auto-embedding) |
+| `engine_delete` | Remove documents by ID | ❌ |
 | `engine_status` | Engine capabilities and stats | ❌ |
 
-### Cognitive Memory Tools (enabled via `spector.memory.enabled: true`)
+### Memory Tools (available in MEMORY and HYBRID mode)
 
 | Tool | Description |
 |:---|:---|
-| `core_memory_append` | Store a semantic memory with tags and source |
-| `recall_context` | Cognitive recall with fused scoring across tiers |
-| `memory_status` | Memory tier counts and persistence info |
-| `memory_reinforce` | Report positive/negative outcome for a memory |
+| `memory_remember` | Store a cognitive memory with tags and source |
+| `memory_recall` | Cognitive recall with fused scoring across tiers |
 | `memory_forget` | Tombstone a memory by ID |
+| `memory_reinforce` | Report positive/negative outcome for a memory |
+| `memory_suppress` | Suppress a memory from recall results |
+| `memory_resolve` | Mark a memory as resolved |
 | `memory_introspect` | Metamemory self-analysis on a topic |
-| `working_memory_scratchpad` | Quick-write to working memory |
+| `memory_scratchpad` | Quick-write to working memory |
+| `memory_reminder` | Schedule a time-triggered reminder |
+| `memory_why_not` | Explain why a memory was not recalled |
+| `memory_status` | Memory tier counts and persistence info |
 
 > [!NOTE]
 > For full tool schemas and parameter details, see the [MCP Integration Architecture](../architecture/mcp-integration.md#tool-reference) page.
@@ -236,7 +242,7 @@ Once connected, your agent has access to these tools:
 
 ### "Embedding provider not configured" errors
 
-The `semantic_search` and `rag_query` tools require an embedding provider. Ensure:
+The `engine_search` and `engine_rag` tools require an embedding provider. Ensure:
 
 1. Ollama is running: `ollama serve`
 2. The model is pulled: `ollama pull nomic-embed-text`
@@ -284,7 +290,7 @@ public final class MyCustomTool extends McpToolHandler {
 
 ```java
 List.of(
-    new SemanticSearchTool(),
+    new EngineSearchTool(),
     // ... existing tools ...
     new MyCustomTool()  // ← add here
 );

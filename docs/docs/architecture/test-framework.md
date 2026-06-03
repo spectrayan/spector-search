@@ -22,9 +22,6 @@ flowchart LR
 
     Traditional --> Brittle["❌ Brittle: breaks when<br/>model changes ranking"]
     LLMJudge --> Semantic["✅ Semantic: validates<br/>meaning, not IDs"]
-
-    style Traditional fill:#fecaca,color:#991b1b
-    style LLMJudge fill:#dcfce7,color:#14532d
 ```
 
 ## Architecture
@@ -99,11 +96,6 @@ graph TB
     JudgeConfig --> Context
     Ollama -.-> EmbedAPI
 
-    style TestClasses fill:#dbeafe,color:#1e3a5f
-    style Infrastructure fill:#fef3c7,color:#78350f
-    style JudgeFramework fill:#dcfce7,color:#14532d
-    style Providers fill:#fce7f3,color:#831843
-    style SeedFiles fill:#f3e8ff,color:#581c87
 ```
 
 ## E2E Test Framework
@@ -242,10 +234,6 @@ flowchart TB
     J -->|isRelevantTo| K["❌ Fail test<br/>with reasoning"]
     J -->|warnIfIrrelevant| L["⚠️ Log warning<br/>test continues"]
 
-    style A fill:#dbeafe,color:#1e3a5f
-    style F fill:#dcfce7,color:#14532d
-    style K fill:#fecaca,color:#991b1b
-    style L fill:#fef3c7,color:#78350f
 ```
 
 ### Prompt Engineering

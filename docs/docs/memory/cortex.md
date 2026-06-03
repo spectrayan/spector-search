@@ -155,21 +155,47 @@ stateDiagram-v2
 
 **Biological Analog**: The **Neocortex** stores distilled, permanent world knowledge — facts, concepts, and generalized rules extracted from repeated experience.
 
+### Single-File Mode (legacy)
+
 | Property | Value |
 |---|---|
 | Storage | Header-only slab (`Arena.ofShared()`) |
 | Capacity | Configurable (default: 5,000) |
 | Eviction | None (permanent) |
 | Persistence | Via WAL replay |
-| Use case | "The user prefers dark mode", "Java uses garbage collection" |
+| Use case | Small deployments or in-memory mode |
 
-!!! info "Header-Only Storage"
-    Semantic memories store only the 32-byte synaptic header, not the full quantized vector. This enables fast metadata scans (tag match, importance, valence) at minimal memory cost. For vector similarity, the text is re-embedded at query time when needed.
+### Partitioned Mode (default for DISK persistence)
+
+| Property | Value |
+|---|---|
+| Storage | Rolling `semantic-NNN.mem` files in `semantic/` directory |
+| Capacity per partition | Configurable (default: 10,000 records) |
+| Total capacity | Unbounded (new partitions roll automatically) |
+| Eviction | Tombstone + per-partition compaction |
+| Persistence | **Full** — mmap-backed files survive restarts |
+| Recall | Parallel per-partition scan via virtual threads |
+| Use case | Production — "The user prefers dark mode", "Java uses garbage collection" |
+
+```
+.spector/memory/semantic/
+  semantic-000.mem     ← partition 0 (10K records, oldest)
+  semantic-001.mem     ← partition 1 (created when 0 fills up)
+  semantic-002.mem     ← partition 2 (active — accepts writes)
+```
+
+**Concurrency model**:
+
+- **Reads**: `CopyOnWriteArrayList` provides lock-free snapshot iteration. Each partition is searched independently on its own virtual thread.
+- **Writes**: `ReadWriteLock` — read lock for normal appends, write lock only when rolling to a new partition.
+- **Compaction**: Per-partition rebuild. Other partitions remain readable during compaction.
 
 **Creation**: Semantic memories are created either:
 
 1. **Directly** by the user (`MemoryType.SEMANTIC`)
 2. **By consolidation** — the `ReflectDaemon` clusters similar episodic memories during "sleep" and promotes the cluster centroid to semantic memory
+
+**Migration**: Existing single-file `semantic.mem` stores are automatically migrated to the partitioned format on first startup. The legacy file is renamed to `semantic.mem.migrated` as backup.
 
 ---
 

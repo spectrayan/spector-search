@@ -1,4 +1,4 @@
-# Importance Fusion (ICNU)
+﻿# Importance Fusion (ICNU)
 
 The **ICNU Importance Fusion** system computes a memory's importance score at ingestion time by blending four signals: **Interest**, **Challenge**, **Novelty**, and **Urgency**.
 
@@ -6,7 +6,7 @@ The **ICNU Importance Fusion** system computes a memory's importance score at in
 
 ## The Problem
 
-Without ICNU, importance is determined solely by the [Surprise Detector](dopamine.md) — a statistical outlier test based on how "surprising" a memory's embedding is relative to recent memories. This works well for detecting unusual information, but has blind spots:
+Without ICNU, importance is determined solely by the [Surprise Detector](dopamine.md) â€” a statistical outlier test based on how "surprising" a memory's embedding is relative to recent memories. This works well for detecting unusual information, but has blind spots:
 
 - A memory about a user's **urgent deadline** might not be statistically surprising
 - A memory about a **challenging technical problem** might have a common embedding
@@ -42,10 +42,10 @@ The weights $w_i$ are configurable and auto-normalize to sum=1.0:
 
 ### Output Range
 
-The formula maps to importance ∈ **[0.05, 10.0]**:
+The formula maps to importance âˆˆ **[0.05, 10.0]**:
 
-- **0.05** — All signals zero (routine, uninteresting, familiar, non-urgent)
-- **10.0** — All signals maximal (interesting, challenging, novel, urgent)
+- **0.05** â€” All signals zero (routine, uninteresting, familiar, non-urgent)
+- **10.0** â€” All signals maximal (interesting, challenging, novel, urgent)
 
 ---
 
@@ -53,13 +53,13 @@ The formula maps to importance ∈ **[0.05, 10.0]**:
 
 ### How It Works
 
-Novelty is computed using the **nearest-neighbor distance** in working memory — the minimum L2 distance between the incoming embedding and all existing working memory slots:
+Novelty is computed using the **nearest-neighbor distance** in working memory â€” the minimum L2 distance between the incoming embedding and all existing working memory slots:
 
 ```java
 float nearestDist = workingStore.nearestDistance(quantizedVector, mins, scales);
 ```
 
-`nearestDistance()` performs a SIMD-accelerated scan of all working memory slots (~0.5ms for 100 slots × 768 dims) and returns the minimum L2 distance. A high distance means the memory is genuinely novel — it's far from everything the agent has seen recently.
+`nearestDistance()` performs a SIMD-accelerated scan of all working memory slots (~0.5ms for 100 slots Ã— 768 dims) and returns the minimum L2 distance. A high distance means the memory is genuinely novel â€” it's far from everything the agent has seen recently.
 
 ### Normalization
 
@@ -97,7 +97,7 @@ cognitiveTarget.ingestCognitive(id, text, type, tags, source, hints);
 
 ### NONE Fallback
 
-When no hints are provided (`IngestionHints.NONE`), the system falls back to `IcnuWeights.NOVELTY_ONLY` — importance is determined solely by nearest-neighbor distance, matching the pre-ICNU behavior.
+When no hints are provided (`IngestionHints.NONE`), the system falls back to `IcnuWeights.NOVELTY_ONLY` â€” importance is determined solely by nearest-neighbor distance, matching the pre-ICNU behavior.
 
 ---
 
@@ -124,21 +124,21 @@ Weights are automatically normalized on construction:
 
 ```java
 var w = new IcnuWeights(1f, 1f, 1f, 1f);
-// → interest=0.25, challenge=0.25, novelty=0.25, urgency=0.25
+// â†’ interest=0.25, challenge=0.25, novelty=0.25, urgency=0.25
 ```
 
 ---
 
 ## Worked Example
 
-Agent ingests: *"User has a production outage — database connections exhausted"*
+Agent ingests: *"User has a production outage â€” database connections exhausted"*
 
 | Signal | Value | Source |
 |:---|:---:|:---|
-| Interest | 0.7 | LLM hint — agent finds this relevant |
-| Challenge | 0.5 | LLM hint — moderate complexity |
-| Novelty | 0.9 | Working memory scan — nothing like this recently |
-| Urgency | 1.0 | LLM hint — production outage |
+| Interest | 0.7 | LLM hint â€” agent finds this relevant |
+| Challenge | 0.5 | LLM hint â€” moderate complexity |
+| Novelty | 0.9 | Working memory scan â€” nothing like this recently |
+| Urgency | 1.0 | LLM hint â€” production outage |
 
 With default weights:
 
@@ -150,7 +150,7 @@ $$
 \text{importance} = 0.05 + 0.81 \times 9.95 = \mathbf{8.11}
 $$
 
-This is a high-importance memory (8.11 / 10.0) — it will be prioritized in future recalls and resist time decay.
+This is a high-importance memory (8.11 / 10.0) â€” it will be prioritized in future recalls and resist time decay.
 
 ---
 
@@ -160,7 +160,7 @@ When using the MCP tools, importance fusion happens automatically if the ingesti
 
 ```json
 {
-  "name": "core_memory_append",
+  "name": "memory_remember",
   "arguments": {
     "id": "outage-2024-01",
     "text": "Production database connections exhausted at 2AM",
@@ -175,4 +175,5 @@ When using the MCP tools, importance fusion happens automatically if the ingesti
 ```
 
 !!! note "Backward Compatibility"
-    The `hints` field is optional. When omitted, importance is computed using novelty-only mode — identical to the pre-ICNU behavior.
+    The `hints` field is optional. When omitted, importance is computed using novelty-only mode â€” identical to the pre-ICNU behavior.
+

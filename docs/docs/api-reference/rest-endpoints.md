@@ -386,6 +386,97 @@ curl -X POST http://localhost:7070/api/v1/index \
 
 ---
 
+## 🧠 Memory Endpoints
+
+> [!NOTE]
+> Memory endpoints are available when `spector.mode` is `MEMORY` or `HYBRID`. Note that some older engine paths have been consolidated under `/api/v1/memory`.
+
+### `POST /api/v1/memory/remember`
+
+Store a cognitive memory with tags and source provenance.
+
+```bash
+curl -X POST http://localhost:7070/api/v1/memory/remember \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "pref-dark-mode",
+    "text": "The user prefers dark mode for all editors",
+    "type": "EPISODIC",
+    "source": "USER_STATED",
+    "tags": ["ui", "preferences"]
+  }'
+```
+
+### `POST /api/v1/memory/recall`
+
+Cognitive recall with fused scoring across all memory tiers.
+
+```bash
+curl -X POST http://localhost:7070/api/v1/memory/recall \
+  -H "Content-Type: application/json" \
+  -d '{"query": "dark theme settings", "topK": 5}'
+```
+
+### `DELETE /api/v1/memory/{id}`
+
+Tombstone (forget) a memory by ID.
+
+### `POST /api/v1/memory/{id}/reinforce`
+
+Report positive/negative outcome for a memory.
+
+### `POST /api/v1/memory/{id}/suppress`
+
+Suppress or unsuppress a memory from recall results.
+
+### `POST /api/v1/memory/{id}/resolve`
+
+Mark a memory as resolved.
+
+### `POST /api/v1/memory/introspect`
+
+Metamemory self-analysis — how well does the system know a topic?
+
+```bash
+curl -X POST http://localhost:7070/api/v1/memory/introspect \
+  -H "Content-Type: application/json" \
+  -d '{"topic": "kubernetes"}'
+```
+
+### `POST /api/v1/memory/reminder`
+
+Schedule a time-triggered reminder.
+
+```bash
+curl -X POST http://localhost:7070/api/v1/memory/reminder \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Check build logs", "delaySeconds": 3600, "tags": "ci"}'
+```
+
+### `POST /api/v1/memory/scratchpad`
+
+Quick-write to working memory scratchpad.
+
+### `POST /api/v1/memory/why-not`
+
+Explain why a memory was not recalled for a given query.
+
+```bash
+curl -X POST http://localhost:7070/api/v1/memory/why-not \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": "fact-42", "query": "pool config", "topK": 5}'
+```
+
+### `POST /api/v1/memory/reflect`
+
+Manually trigger a sleep consolidation cycle.
+
+### `GET /api/v1/memory/status`
+
+Memory tier counts, partition info, and persistence status.
+
+---
+
 ## ❌ Error Responses
 
 | Status | Meaning |
