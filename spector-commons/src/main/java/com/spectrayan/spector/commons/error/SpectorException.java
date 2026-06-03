@@ -29,6 +29,10 @@ package com.spectrayan.spector.commons.error;
  *   ├── SpectorConfigException          (SPE-110-xxx)
  *   ├── SpectorIndexException           (SPE-200-xxx)
  *   ├── SpectorStorageException         (SPE-210-xxx)
+ *   │   ├── SpectorWalCorruptionException   (SPE-310-005)
+ *   │   ├── SPE-210-009  PARTITION_DIR_FAILED
+ *   │   ├── SPE-210-010  STORAGE_MIGRATION_FAILED
+ *   │   └── SPE-210-011  FILE_RENAME_FAILED
  *   ├── SpectorEmbeddingException       (SPE-300-xxx)
  *   ├── SpectorMemoryException          (SPE-310-xxx)
  *   │   ├── SpectorGraphException           (SPE-310-006..011)
@@ -40,12 +44,14 @@ package com.spectrayan.spector.commons.error;
  *   │   │   └── SpectorGraphDecayException      (SPE-310-011)
  *   │   ├── SpectorMemoryRecallException    (SPE-310-002)
  *   │   ├── SpectorMemoryConsolidationException (SPE-310-003)
- *   │   └── SpectorMemoryTierFullException  (SPE-310-001)
+ *   │   ├── SpectorMemoryTierFullException  (SPE-310-001)
+ *   │   └── SPE-310-013  PARTITION_INDEX_INVALID
  *   ├── SpectorGpuException             (SPE-400-xxx)
  *   ├── SpectorServerException          (SPE-500-xxx)
  *   ├── SpectorClientException          (SPE-510-xxx)
  *   ├── SpectorIngestionException       (SPE-600-xxx)
  *   ├── SpectorClusterException         (SPE-700-xxx)
+ *   │   └── SPE-700-004  PARTITION_REPLICATION_FAILED
  *   └── SpectorInternalException        (SPE-900-xxx)
  * }</pre>
  *

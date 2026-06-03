@@ -230,6 +230,18 @@ public enum ErrorCode {
     FILE_FORMAT_INVALID       (210_008, ErrorCategory.STORAGE,
             "Invalid index file format: {}"),
 
+    /** A partition or store directory could not be created or accessed. */
+    PARTITION_DIR_FAILED      (210_009, ErrorCategory.STORAGE,
+            "Partition directory operation failed: {}"),
+
+    /** Storage format migration from legacy to partitioned format failed. */
+    STORAGE_MIGRATION_FAILED  (210_010, ErrorCategory.STORAGE,
+            "Storage migration failed: {}"),
+
+    /** A file rename or move operation failed during compaction or migration. */
+    FILE_RENAME_FAILED        (210_011, ErrorCategory.STORAGE,
+            "File rename failed from {} to {}: {}"),
+
     // ══════════════════════════════════════════════════════════════════════
     // EMBEDDING (SPE-300-xxx)
     // ══════════════════════════════════════════════════════════════════════
@@ -301,6 +313,14 @@ public enum ErrorCode {
     /** Graph decay or pruning operation failed during consolidation. */
     GRAPH_DECAY_FAILED        (310_011, ErrorCategory.MEMORY,
             "Graph decay failed: {}"),
+
+    /** A requested RecallMode is not yet implemented. */
+    RECALL_MODE_NOT_IMPLEMENTED(310_012, ErrorCategory.MEMORY,
+            "RecallMode.{} is not yet implemented. {}"),
+
+    /** Partition index is out of the valid range for the partitioned store. */
+    PARTITION_INDEX_INVALID    (310_013, ErrorCategory.MEMORY,
+            "Partition index {} is out of range [0, {})"),
 
     // ══════════════════════════════════════════════════════════════════════
     // GPU (SPE-400-xxx)
@@ -417,6 +437,10 @@ public enum ErrorCode {
     /** A query could not be routed to the appropriate shard. */
     CLUSTER_ROUTING_FAILED    (700_003, ErrorCategory.CLUSTER,
             "Request routing failed: {}"),
+
+    /** Partition-level replication to a replica node failed. */
+    PARTITION_REPLICATION_FAILED(700_004, ErrorCategory.CLUSTER,
+            "Partition replication failed for {} to {}: {}"),
 
     // ══════════════════════════════════════════════════════════════════════
     // INTERNAL (SPE-900-xxx)
