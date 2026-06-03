@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.engine;
+
+import com.spectrayan.spector.mcp.tools.McpToolHandler;
 
 import java.util.Map;
 
@@ -32,11 +34,11 @@ import io.modelcontextprotocol.spec.McpSchema;
  * grounded responses — each retrieved chunk includes its document ID
  * and relevance score for citation.</p>
  */
-public final class RagQueryTool extends McpToolHandler {
+public final class EngineRagTool extends McpToolHandler {
 
     @Override
     public String name() {
-        return "rag_query";
+        return "engine_rag";
     }
 
     @Override

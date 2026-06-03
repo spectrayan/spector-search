@@ -13,14 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.memory;
 
 import java.util.Map;
 import java.util.List;
 
 import com.spectrayan.spector.engine.SpectorEngine;
+import com.spectrayan.spector.memory.ConfidenceBand;
+import com.spectrayan.spector.memory.CognitiveProfile;
 import com.spectrayan.spector.memory.CognitiveResult;
+import com.spectrayan.spector.memory.RecallMode;
 import com.spectrayan.spector.memory.RecallOptions;
+import com.spectrayan.spector.memory.ScoreBreakdown;
 import com.spectrayan.spector.memory.SpectorMemory;
 import com.spectrayan.spector.mcp.schema.ToolSchemaBuilder;
 
@@ -32,19 +36,20 @@ import io.modelcontextprotocol.spec.McpSchema;
  * <p>Performs the full 6-phase SIMD scoring pipeline across all memory tiers,
  * returning results with full provenance metadata for LLM grounding.</p>
  */
-public final class RecallContextTool extends MemoryToolHandler {
+public final class MemoryRecallTool extends MemoryToolHandler {
 
-    public RecallContextTool(SpectorMemory memory) {
+    public MemoryRecallTool(SpectorMemory memory) {
         super(memory);
     }
 
-    @Override public String name() { return "recall_context"; }
+    @Override public String name() { return "memory_recall"; }
 
     @Override
     public String description() {
         return "Recall relevant memories using fused cognitive scoring across all memory tiers "
                 + "(Working, Episodic, Semantic, Procedural). Returns results with full provenance: "
                 + "confidence, age, importance, valence, source, and decay factors. "
+                + "Use 'profile' for preset scoring modes (e.g., DEBUGGING, EXPLORING, HYPERFOCUS). "
                 + "Use synaptic_filter for contextual pre-filtering (e.g., 'debugging,database').";
     }
 
@@ -53,6 +58,14 @@ public final class RecallContextTool extends MemoryToolHandler {
         return ToolSchemaBuilder.object()
                 .requiredString("query", "Natural language query for memory recall.")
                 .optionalInt("top_k", "Number of results to return (1-50).", 5)
+                .optionalString("profile",
+                        "Cognitive scoring profile preset. Controls how memories are ranked. "
+                        + "Options: BALANCED (default), EXPLORING (creative/associative), "
+                        + "DEBUGGING (errors/failures), RECALLING (proven solutions), "
+                        + "CRITICAL (high-stakes), HYPERFOCUS (narrow deep-dive), "
+                        + "SYSTEMATIZER (encyclopedic detail), DIVERGENT (cross-domain), "
+                        + "PARANOID_SENTINEL (threat detection), THE_EXECUTOR (strict task), "
+                        + "HIGHLY_SENSITIVE (fine detail), DEFAULT_MODE_NETWORK (deep knowledge).", "")
                 .optionalString("synaptic_filter",
                         "Comma-separated tags for Bloom filter pre-filtering.", "")
                 .optionalString("min_importance",
@@ -61,6 +74,10 @@ public final class RecallContextTool extends MemoryToolHandler {
                         "Minimum valence filter (e.g., -128 for all, 10 for positive only).", "")
                 .optionalString("max_valence",
                         "Maximum valence filter (e.g., -10 for failures only).", "")
+                .optionalString("recall_mode",
+                        "Controls whether recall mutates memory state. "
+                        + "LEARN (default): full biological memory, recall strengthens memories. "
+                        + "OBSERVE: pure read, no side effects, deterministic results.", "LEARN")
                 .build();
     }
 
@@ -73,6 +90,13 @@ public final class RecallContextTool extends MemoryToolHandler {
 
         var builder = RecallOptions.builder().topK(topK);
 
+        // Apply cognitive profile preset (if specified)
+        String profileStr = optionalString(args, "profile", "");
+        CognitiveProfile profile = RecallOptions.parseProfile(profileStr);
+        if (profile != null) {
+            builder.profile(profile);
+        }
+
         String[] filterTags = optionalTags(args, "synaptic_filter");
         if (filterTags.length > 0) {
             builder.synapticFilter(filterTags);
@@ -81,12 +105,24 @@ public final class RecallContextTool extends MemoryToolHandler {
         float minImp = optionalFloat(args, "min_importance", 0.0f);
         if (minImp > 0) builder.minImportance(minImp);
 
+        // Valence overrides (applied after profile, so explicit values win)
         byte minVal = optionalByte(args, "min_valence", Byte.MIN_VALUE);
         byte maxVal = optionalByte(args, "max_valence", Byte.MAX_VALUE);
         builder.minValence(minVal).maxValence(maxVal);
 
+        // Parse recall mode (LEARN or OBSERVE)
+        String modeStr = optionalString(args, "recall_mode", "LEARN");
+        try {
+            builder.recallMode(RecallMode.valueOf(modeStr.strip().toUpperCase()));
+        } catch (IllegalArgumentException e) {
+            // Invalid mode name — fall back to LEARN
+        }
+
+        RecallOptions options = builder.build();
+        options.validate(); // logs warnings for conflicting combos
+
         long startNs = System.nanoTime();
-        List<CognitiveResult> results = memory.recall(query, builder.build());
+        List<CognitiveResult> results = memory.recall(query, options);
         long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
 
         if (results.isEmpty()) {
@@ -94,7 +130,9 @@ public final class RecallContextTool extends MemoryToolHandler {
         }
 
         var sb = new StringBuilder();
-        sb.append("🧠 Recalled ").append(results.size()).append(" memories (").append(elapsedMs).append("ms):\n\n");
+        ConfidenceBand confidence = ConfidenceBand.classify(results);
+        sb.append("🧠 Recalled ").append(results.size()).append(" memories (")
+                .append(elapsedMs).append("ms) — Confidence: ").append(confidence).append("\n\n");
 
         for (int i = 0; i < results.size(); i++) {
             CognitiveResult r = results.get(i);
@@ -103,7 +141,19 @@ public final class RecallContextTool extends MemoryToolHandler {
             sb.append("Text: ").append(r.text()).append("\n");
             sb.append("Score: ").append(String.format("%.4f", r.score())).append("\n");
 
-            // Rich provenance (from analysis doc §Explainability)
+            // Score breakdown (glass box)
+            if (r.hasBreakdown()) {
+                ScoreBreakdown bd = r.breakdown();
+                sb.append("Score Breakdown:\n");
+                sb.append("  similarity:      ").append(String.format("%.4f", bd.similarity())).append("\n");
+                sb.append("  imp×decay:       ").append(String.format("%.4f", bd.importanceDecay())).append("\n");
+                sb.append("  tag_boost:       ").append(String.format("%.2f×", bd.tagBoostFactor())).append("\n");
+                sb.append("  habituation:     ").append(String.format("%.2f×", bd.habituationPenalty())).append("\n");
+                sb.append("  graph_boost:     ").append(String.format("%.2f×", bd.graphBoost())).append("\n");
+                sb.append("  valence_align:   ").append(String.format("%.2f×", bd.valenceAlignment())).append("\n");
+            }
+
+            // Rich provenance
             sb.append("Provenance:\n");
             sb.append("  confidence: ").append(String.format("%.2f", r.ltpAdjustedDecay())).append("\n");
             sb.append("  age_days: ").append(String.format("%.1f", r.ageDays())).append("\n");

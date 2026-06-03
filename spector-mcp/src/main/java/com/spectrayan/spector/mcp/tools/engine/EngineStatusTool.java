@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.engine;
+
+import com.spectrayan.spector.mcp.tools.McpToolHandler;
 
 import java.util.Map;
 

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.memory;
 
 import java.util.Map;
 
@@ -24,26 +24,31 @@ import com.spectrayan.spector.mcp.schema.ToolSchemaBuilder;
 import io.modelcontextprotocol.spec.McpSchema;
 
 /**
- * MCP tool: {@code memory_forget} — explicitly forget a memory by ID.
+ * MCP tool: {@code working_memory_scratchpad} — stores in-progress reasoning.
+ *
+ * <p>Working memory is volatile (RAM-only). When capacity is reached,
+ * the oldest items are evicted via FIFO.</p>
  */
-public final class MemoryForgetTool extends MemoryToolHandler {
+public final class MemoryScratchpadTool extends MemoryToolHandler {
 
-    public MemoryForgetTool(SpectorMemory memory) {
+    public MemoryScratchpadTool(SpectorMemory memory) {
         super(memory);
     }
 
-    @Override public String name() { return "memory_forget"; }
+    @Override public String name() { return "memory_scratchpad"; }
 
     @Override
     public String description() {
-        return "Explicitly forget a memory by ID. The memory is tombstoned (logical deletion) "
-                + "and will be cleaned up during the next Deep Sleep consolidation cycle.";
+        return "Store a short-lived scratchpad note in working memory. "
+                + "Use this for in-progress reasoning, temporary hypotheses, "
+                + "or chain-of-thought steps. Working memory is volatile and "
+                + "auto-evicts old entries when capacity is reached.";
     }
 
     @Override
     public Map<String, Object> inputSchema() {
         return ToolSchemaBuilder.object()
-                .requiredString("memory_id", "The ID of the memory to forget.")
+                .requiredString("text", "The scratchpad note to store.")
                 .build();
     }
 
@@ -51,8 +56,8 @@ public final class MemoryForgetTool extends MemoryToolHandler {
     protected McpSchema.CallToolResult executeMemory(SpectorMemory memory,
                                                        SpectorEngine engine,
                                                        Map<String, Object> args) throws Exception {
-        String memoryId = requireString(args, "memory_id");
-        memory.forget(memoryId);
-        return textResult("🗑️ Memory '" + memoryId + "' has been forgotten (tombstoned).");
+        String text = requireString(args, "text");
+        memory.scratchpad(text).join();
+        return textResult("📝 Stored in working memory scratchpad.");
     }
 }

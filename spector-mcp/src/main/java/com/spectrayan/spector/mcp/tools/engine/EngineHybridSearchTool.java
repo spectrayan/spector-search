@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.engine;
+
+import com.spectrayan.spector.mcp.tools.McpToolHandler;
 
 import java.util.Map;
 
@@ -37,11 +39,11 @@ import io.modelcontextprotocol.spec.McpSchema;
  * <p>Falls back to keyword-only if no embedding provider is configured
  * and {@code hybrid} mode is requested.</p>
  */
-public final class HybridSearchTool extends McpToolHandler {
+public final class EngineHybridSearchTool extends McpToolHandler {
 
     @Override
     public String name() {
-        return "hybrid_search";
+        return "engine_hybrid_search";
     }
 
     @Override

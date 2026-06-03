@@ -35,11 +35,10 @@
             <artifactId>spector-ingestion</artifactId>
         </dependency>
 
-        <!-- ── Ollama Embedding Provider (runtime — loaded via reflection by SpectorMcpMain) ── -->
+        <!-- ── Ollama Embedding + Text Generation Provider ── -->
         <dependency>
             <groupId>com.spectrayan</groupId>
             <artifactId>spector-embed-ollama</artifactId>
-            <scope>runtime</scope>
         </dependency>
 
         <!-- ── Official Anthropic MCP Java SDK ── -->

@@ -82,11 +82,11 @@ class SpectorToolRegistryTest {
                 .map(t -> t.tool().name())
                 .toList();
         assertThat(names).containsExactlyInAnyOrder(
-                "semantic_search",
-                "hybrid_search",
-                "rag_query",
-                "ingest_document",
-                "delete_document",
+                "engine_search",
+                "engine_hybrid_search",
+                "engine_rag",
+                "engine_ingest",
+                "engine_delete",
                 "engine_status"
         );
     }
@@ -114,7 +114,7 @@ class SpectorToolRegistryTest {
 
     @Test
     void semanticSearchShouldReturnResults() {
-        var result = callTool("semantic_search",
+        var result = callTool("engine_search",
                 Map.of("query", "vector search", "top_k", 3));
 
         assertThat(result.isError()).isNotEqualTo(true);
@@ -123,13 +123,13 @@ class SpectorToolRegistryTest {
 
     @Test
     void semanticSearchShouldRejectEmptyQuery() {
-        var result = callTool("semantic_search", Map.of("query", ""));
+        var result = callTool("engine_search", Map.of("query", ""));
         assertThat(result.isError()).isTrue();
     }
 
     @Test
     void semanticSearchInvalidTopKShouldReturnStructuredError() {
-        var result = callTool("semantic_search",
+        var result = callTool("engine_search",
                 Map.of("query", "vector search", "top_k", 0));
 
         assertThat(result.isError()).isTrue();
@@ -138,7 +138,7 @@ class SpectorToolRegistryTest {
 
     @Test
     void hybridSearchShouldWork() {
-        var result = callTool("hybrid_search",
+        var result = callTool("engine_hybrid_search",
                 Map.of("query", "machine learning", "top_k", 2, "mode", "hybrid"));
 
         assertThat(result.isError()).isNotEqualTo(true);
@@ -147,7 +147,7 @@ class SpectorToolRegistryTest {
 
     @Test
     void hybridSearchKeywordModeShouldWork() {
-        var result = callTool("hybrid_search",
+        var result = callTool("engine_hybrid_search",
                 Map.of("query", "kubernetes", "mode", "keyword"));
 
         assertThat(result.isError()).isNotEqualTo(true);
@@ -155,7 +155,7 @@ class SpectorToolRegistryTest {
 
     @Test
     void ragQueryShouldReturnContext() {
-        var result = callTool("rag_query",
+        var result = callTool("engine_rag",
                 Map.of("query", "Panama SIMD", "top_k", 5));
 
         assertThat(result.isError()).isNotEqualTo(true);
@@ -165,7 +165,7 @@ class SpectorToolRegistryTest {
     @Test
     void ingestDocumentShouldAddDocument() {
         int countBefore = engine.documentCount();
-        var result = callTool("ingest_document",
+        var result = callTool("engine_ingest",
                 Map.of("id", "test-mcp-doc", "content", "Test document for MCP"));
 
         assertThat(result.isError()).isNotEqualTo(true);
@@ -177,7 +177,7 @@ class SpectorToolRegistryTest {
     void deleteDocumentShouldRemoveDocument() {
         engine.ingest("to-delete", "Document to be deleted via MCP");
 
-        var result = callTool("delete_document", Map.of("id", "to-delete"));
+        var result = callTool("engine_delete", Map.of("id", "to-delete"));
 
         assertThat(result.isError()).isNotEqualTo(true);
         assertText(result).contains("deleted");
@@ -185,7 +185,7 @@ class SpectorToolRegistryTest {
 
     @Test
     void deleteNonexistentDocumentShouldReportNotFound() {
-        var result = callTool("delete_document",
+        var result = callTool("engine_delete",
                 Map.of("id", "nonexistent-doc"));
 
         assertThat(result.isError()).isNotEqualTo(true);

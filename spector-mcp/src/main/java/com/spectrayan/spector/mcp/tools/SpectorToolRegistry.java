@@ -18,20 +18,40 @@ package com.spectrayan.spector.mcp.tools;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.spectrayan.spector.config.SpectorMode;
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.memory.SpectorMemory;
 import com.spectrayan.spector.runtime.SpectorRuntime;
+
+import com.spectrayan.spector.mcp.tools.engine.EngineSearchTool;
+import com.spectrayan.spector.mcp.tools.engine.EngineHybridSearchTool;
+import com.spectrayan.spector.mcp.tools.engine.EngineRagTool;
+import com.spectrayan.spector.mcp.tools.engine.EngineIngestTool;
+import com.spectrayan.spector.mcp.tools.engine.EngineDeleteTool;
+import com.spectrayan.spector.mcp.tools.engine.EngineStatusTool;
+
+import com.spectrayan.spector.mcp.tools.memory.MemoryRememberTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryScratchpadTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryRecallTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryReinforceTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryForgetTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryStatusTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryIntrospectTool;
+import com.spectrayan.spector.mcp.tools.memory.MemorySuppressTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryResolveTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryReminderTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryWhyNotTool;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
 
 /**
  * Central registry for all Spector MCP tool handlers.
  *
- * <p>To add a new tool:</p>
- * <ol>
- *   <li>Create a class extending {@link McpToolHandler}</li>
- *   <li>Add a single entry to the handlers list below</li>
- * </ol>
+ * <p>Tools are organized into two sub-packages:</p>
+ * <ul>
+ *   <li>{@code tools.engine} — search, ingest, RAG, and engine status tools</li>
+ *   <li>{@code tools.memory} — cognitive memory tools (remember, recall, forget, etc.)</li>
+ * </ul>
  *
  * <p>All tools are instantiated once and reused across requests.
  * The {@link McpToolHandler} base class ensures thread-safe execution
@@ -61,19 +81,19 @@ public final class SpectorToolRegistry {
     public static List<McpToolHandler> handlers(String serverVersion, SpectorMemory memory) {
         var handlers = new ArrayList<McpToolHandler>();
 
-        // Core search/ingest tools
-        handlers.add(new SemanticSearchTool());
-        handlers.add(new HybridSearchTool());
-        handlers.add(new RagQueryTool());
-        handlers.add(new IngestDocumentTool());
-        handlers.add(new DeleteDocumentTool());
+        // Engine tools (search, ingest, RAG)
+        handlers.add(new EngineSearchTool());
+        handlers.add(new EngineHybridSearchTool());
+        handlers.add(new EngineRagTool());
+        handlers.add(new EngineIngestTool());
+        handlers.add(new EngineDeleteTool());
         handlers.add(new EngineStatusTool(serverVersion));
 
         // Memory tools (available when SpectorMemory is configured)
         if (memory != null) {
-            handlers.add(new CoreMemoryAppendTool(memory));
-            handlers.add(new WorkingMemoryScratchpadTool(memory));
-            handlers.add(new RecallContextTool(memory));
+            handlers.add(new MemoryRememberTool(memory));
+            handlers.add(new MemoryScratchpadTool(memory));
+            handlers.add(new MemoryRecallTool(memory));
             handlers.add(new MemoryReinforceTool(memory));
             handlers.add(new MemoryForgetTool(memory));
             handlers.add(new MemoryStatusTool(memory));
@@ -81,6 +101,7 @@ public final class SpectorToolRegistry {
             handlers.add(new MemorySuppressTool(memory));
             handlers.add(new MemoryResolveTool(memory));
             handlers.add(new MemoryReminderTool(memory));
+            handlers.add(new MemoryWhyNotTool(memory));
         }
 
         return List.copyOf(handlers);
@@ -114,19 +135,49 @@ public final class SpectorToolRegistry {
     }
 
     /**
-     * Creates all tool specifications with mode-aware runtime support.
+     * Creates mode-aware tool specifications from a runtime.
      *
-     * <p>When a {@link SpectorRuntime} is provided, tools can access the
-     * runtime for mode-aware search and ingestion routing.</p>
+     * <p>In {@code SEARCH} mode, only engine tools are registered.
+     * In {@code MEMORY} mode, only memory tools are registered.
+     * In {@code HYBRID} mode, both are registered.</p>
      *
      * @param runtime       the Spector runtime (engine + optional memory)
      * @param serverVersion the server version string
-     * @return list of MCP tool specifications
+     * @return list of MCP tool specifications filtered by mode
      */
     public static List<McpServerFeatures.SyncToolSpecification> createAll(
             SpectorRuntime runtime, String serverVersion) {
+        SpectorMode mode = runtime.mode();
         SpectorMemory memory = runtime.hasMemory() ? runtime.memory() : null;
-        return handlers(serverVersion, memory).stream()
+
+        var handlers = new ArrayList<McpToolHandler>();
+
+        // Engine tools — registered when engine is enabled
+        if (mode.engineEnabled()) {
+            handlers.add(new EngineSearchTool());
+            handlers.add(new EngineHybridSearchTool());
+            handlers.add(new EngineRagTool());
+            handlers.add(new EngineIngestTool());
+            handlers.add(new EngineDeleteTool());
+            handlers.add(new EngineStatusTool(serverVersion));
+        }
+
+        // Memory tools — registered when memory is enabled and available
+        if (mode.memoryEnabled() && memory != null) {
+            handlers.add(new MemoryRememberTool(memory));
+            handlers.add(new MemoryScratchpadTool(memory));
+            handlers.add(new MemoryRecallTool(memory));
+            handlers.add(new MemoryReinforceTool(memory));
+            handlers.add(new MemoryForgetTool(memory));
+            handlers.add(new MemoryStatusTool(memory));
+            handlers.add(new MemoryIntrospectTool(memory));
+            handlers.add(new MemorySuppressTool(memory));
+            handlers.add(new MemoryResolveTool(memory));
+            handlers.add(new MemoryReminderTool(memory));
+            handlers.add(new MemoryWhyNotTool(memory));
+        }
+
+        return handlers.stream()
                 .map(handler -> handler.toToolSpecification(runtime.engine(), runtime))
                 .toList();
     }

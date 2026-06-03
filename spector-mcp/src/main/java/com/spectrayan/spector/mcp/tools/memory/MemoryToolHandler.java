@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.memory;
 
 import java.util.Map;
 
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.memory.SpectorMemory;
+import com.spectrayan.spector.mcp.tools.McpToolHandler;
 
 import io.modelcontextprotocol.spec.McpSchema;
 

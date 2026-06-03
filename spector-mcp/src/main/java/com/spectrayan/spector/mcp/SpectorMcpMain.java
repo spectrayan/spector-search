@@ -21,6 +21,8 @@ import org.slf4j.LoggerFactory;
 import com.spectrayan.spector.config.SpectorProperties;
 import com.spectrayan.spector.config.SpectorConfigFactory;
 import com.spectrayan.spector.embed.EmbeddingProvider;
+import com.spectrayan.spector.embed.TextGenerationProvider;
+import com.spectrayan.spector.embed.ollama.OllamaLlmProvider;
 import com.spectrayan.spector.ingestion.EmbeddingProviderFactory;
 import com.spectrayan.spector.runtime.SpectorRuntime;
 
@@ -106,8 +108,20 @@ public class SpectorMcpMain {
                 embedDefaults.baseUrl(), embedDefaults.model());
         log.info("[Spector MCP] Embedding: {} @ {}", embedDefaults.model(), embedDefaults.baseUrl());
 
+        // ── Create text generation provider for LLM tag extraction (if configured) ──
+        TextGenerationProvider textGenProvider = null;
+        var memoryConfig = SpectorConfigFactory.memoryDefaults(props);
+        if ("llm".equalsIgnoreCase(memoryConfig.tagExtractor())) {
+            String tagModel = memoryConfig.tagExtractorModel();
+            if (tagModel == null || tagModel.isBlank()) {
+                tagModel = "qwen3:1.7b";
+            }
+            textGenProvider = OllamaLlmProvider.create(tagModel, embedDefaults.baseUrl());
+            log.info("[Spector MCP] LLM tag extraction: {} @ {}", tagModel, embedDefaults.baseUrl());
+        }
+
         // ── Create runtime (engine + optional memory) ──
-        SpectorRuntime runtime = SpectorRuntime.from(props, embedder);
+        SpectorRuntime runtime = SpectorRuntime.from(props, embedder, textGenProvider);
 
         // ── Start the MCP server ──
         String transportArg = getStringArg(args, "--transport", "stdio");

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.memory;
 
 import java.util.Map;
 
@@ -27,7 +27,7 @@ import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.neurodivergent.IngestionHints;
 
 /**
- * MCP tool: Store a memory with full cognitive metadata.
+ * MCP tool: {@code memory_remember} — store a memory with full cognitive metadata.
  *
  * <p>Supports all 4 memory tiers (WORKING, EPISODIC, SEMANTIC, PROCEDURAL),
  * ICNU importance hints (Interest, Challenge, Urgency — Novelty is computed
@@ -38,13 +38,13 @@ import com.spectrayan.spector.memory.neurodivergent.IngestionHints;
  *
  * <p>Maps to {@link SpectorMemory#remember} with optional {@link IngestionHints}.</p>
  */
-public final class CoreMemoryAppendTool extends MemoryToolHandler {
+public final class MemoryRememberTool extends MemoryToolHandler {
 
-    public CoreMemoryAppendTool(SpectorMemory memory) {
+    public MemoryRememberTool(SpectorMemory memory) {
         super(memory);
     }
 
-    @Override public String name() { return "core_memory_append"; }
+    @Override public String name() { return "memory_remember"; }
 
     @Override
     public String description() {

@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.engine;
+
+import com.spectrayan.spector.mcp.tools.McpToolHandler;
 
 import java.util.Map;
 
@@ -29,11 +31,11 @@ import io.modelcontextprotocol.spec.McpSchema;
  * automatically generates vectors from the document content. For large
  * documents, enable {@code chunked} mode for automatic splitting.</p>
  */
-public final class IngestDocumentTool extends McpToolHandler {
+public final class EngineIngestTool extends McpToolHandler {
 
     @Override
     public String name() {
-        return "ingest_document";
+        return "engine_ingest";
     }
 
     @Override

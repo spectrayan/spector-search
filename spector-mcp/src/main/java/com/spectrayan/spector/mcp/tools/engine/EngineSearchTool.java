@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.engine;
+
+import com.spectrayan.spector.mcp.tools.McpToolHandler;
 
 import java.util.Map;
 
@@ -31,11 +33,11 @@ import io.modelcontextprotocol.spec.McpSchema;
  * {@link com.spectrayan.spector.embed.EmbeddingProvider} and matched
  * against the HNSW/IVF-SVASQ index for sub-millisecond latency.</p>
  */
-public final class SemanticSearchTool extends McpToolHandler {
+public final class EngineSearchTool extends McpToolHandler {
 
     @Override
     public String name() {
-        return "semantic_search";
+        return "engine_search";
     }
 
     @Override

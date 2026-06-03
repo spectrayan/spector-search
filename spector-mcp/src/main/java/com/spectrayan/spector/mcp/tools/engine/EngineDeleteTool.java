@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.spectrayan.spector.mcp.tools;
+package com.spectrayan.spector.mcp.tools.engine;
+
+import com.spectrayan.spector.mcp.tools.McpToolHandler;
 
 import java.util.Map;
 
@@ -29,11 +31,11 @@ import io.modelcontextprotocol.spec.McpSchema;
  * Vector index entries become orphaned and are excluded from future
  * search results.</p>
  */
-public final class DeleteDocumentTool extends McpToolHandler {
+public final class EngineDeleteTool extends McpToolHandler {
 
     @Override
     public String name() {
-        return "delete_document";
+        return "engine_delete";
     }
 
     @Override
