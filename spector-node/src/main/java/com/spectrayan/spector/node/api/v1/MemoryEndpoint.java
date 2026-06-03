@@ -15,11 +15,21 @@ import com.spectrayan.spector.memory.RecallOptions;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.neurodivergent.IngestionHints;
 import com.spectrayan.spector.node.api.ApiModule;
+import com.spectrayan.spector.node.api.dto.IntrospectRequest;
+import com.spectrayan.spector.node.api.dto.IntrospectResponseDto;
 import com.spectrayan.spector.node.api.dto.MemoryRequest;
 import com.spectrayan.spector.node.api.dto.RecallRequest;
 import com.spectrayan.spector.node.api.dto.RecallResponseDto;
+import com.spectrayan.spector.node.api.dto.ReflectResponseDto;
+import com.spectrayan.spector.node.api.dto.ReminderRequest;
+import com.spectrayan.spector.node.api.dto.ReminderResponseDto;
+import com.spectrayan.spector.node.api.dto.ScratchpadRequest;
+import com.spectrayan.spector.node.api.dto.WhyNotRequest;
+import com.spectrayan.spector.node.api.dto.WhyNotResponseDto;
 import com.spectrayan.spector.node.exception.ApiExceptionHandler;
 import com.spectrayan.spector.node.service.MemoryService;
+
+import java.time.Duration;
 
 /**
  * Armeria endpoints for cognitive memory v1 REST API.
@@ -126,5 +136,42 @@ public class MemoryEndpoint implements ApiModule {
     public HttpResponse status() {
         var status = memoryService.getStatus();
         return HttpResponse.ofJson(status);
+    }
+
+    // ── New endpoints (API parity with MCP tools) ───────────────────────
+
+    @Post("/introspect")
+    public HttpResponse introspect(IntrospectRequest request) {
+        var insight = memoryService.introspect(request.topic());
+        return HttpResponse.ofJson(IntrospectResponseDto.from(insight));
+    }
+
+    @Post("/reminder")
+    public HttpResponse reminder(ReminderRequest request) {
+        var reminder = memoryService.scheduleReminder(
+                request.text(),
+                Duration.ofSeconds(request.delaySeconds()),
+                request.tagsArray());
+        return HttpResponse.ofJson(ReminderResponseDto.from(reminder, request.delaySeconds()));
+    }
+
+    @Post("/scratchpad")
+    public HttpResponse scratchpad(ScratchpadRequest request) {
+        memoryService.scratchpad(request.text()).join();
+        return HttpResponse.of(HttpStatus.OK, MediaType.PLAIN_TEXT_UTF_8,
+                "Stored in working memory scratchpad");
+    }
+
+    @Post("/why-not")
+    public HttpResponse whyNot(WhyNotRequest request) {
+        var options = RecallOptions.builder().topK(request.effectiveTopK()).build();
+        var explanation = memoryService.whyNot(request.memoryId(), request.query(), options);
+        return HttpResponse.ofJson(WhyNotResponseDto.from(explanation));
+    }
+
+    @Post("/reflect")
+    public HttpResponse reflect() {
+        var report = memoryService.reflect();
+        return HttpResponse.ofJson(ReflectResponseDto.from(report));
     }
 }

@@ -31,7 +31,7 @@ public class DocumentEndpoint implements ApiModule {
     }
 
     @Override
-    public String pathPrefix() { return ""; }
+    public String pathPrefix() { return "/engine"; }
 
     @Delete("/documents/{id}")
     public HttpResponse delete(@Param("id") String id) throws SpectorApiException {

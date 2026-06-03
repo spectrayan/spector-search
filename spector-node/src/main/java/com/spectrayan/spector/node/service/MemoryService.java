@@ -189,4 +189,27 @@ public class MemoryService {
 
         return new MemoryStatusDto(total, counts, hebbian, temporalLinks, entityNodes, entityEdges);
     }
+
+    /** Introspects the agent's knowledge about a topic. */
+    public com.spectrayan.spector.memory.metamemory.MemoryInsight introspect(String topic) {
+        return memory.introspect(topic);
+    }
+
+    /** Schedules a prospective memory reminder. */
+    public com.spectrayan.spector.memory.prospective.Reminder scheduleReminder(
+            String text, java.time.Duration delay, String... tags) {
+        return memory.scheduleReminder(text, delay, tags);
+    }
+
+    /** Stores a note in working memory scratchpad. */
+    public java.util.concurrent.CompletableFuture<Void> scratchpad(String text) {
+        return memory.scratchpad(text);
+    }
+
+    /** Explains why a specific memory was not returned for a query. */
+    public com.spectrayan.spector.memory.WhyNotExplanation whyNot(
+            String memoryId, String query, RecallOptions options) {
+        return memory.whyNot(memoryId, query, options);
+    }
 }
+

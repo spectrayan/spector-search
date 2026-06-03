@@ -33,7 +33,7 @@ public class IngestEndpoint implements ApiModule {
     }
 
     @Override
-    public String pathPrefix() { return ""; }
+    public String pathPrefix() { return "/engine"; }
 
     @Post("/ingest")
     public HttpResponse ingest(IngestRequest request) throws com.spectrayan.spector.commons.error.SpectorException {

@@ -29,7 +29,8 @@ public record ClusterConfig(
         int shardCount,
         List<NodeEndpoint> nodes,
         int replicaCount,
-        ShardStrategy shardStrategy
+        ShardStrategy shardStrategy,
+        boolean partitionReplicationEnabled
 ) {
     /**
      * A shard node endpoint.
@@ -55,12 +56,12 @@ public record ClusterConfig(
     public static ClusterConfig singleNode(String host, int port) {
         return new ClusterConfig(1,
                 List.of(new NodeEndpoint("shard-0", host, port)),
-                0, ShardStrategy.HASH);
+                0, ShardStrategy.HASH, false);
     }
 
     /** Creates a multi-shard configuration. */
     public static ClusterConfig multiNode(List<NodeEndpoint> nodes) {
-        return new ClusterConfig(nodes.size(), nodes, 0, ShardStrategy.HASH);
+        return new ClusterConfig(nodes.size(), nodes, 0, ShardStrategy.HASH, false);
     }
 
     /**

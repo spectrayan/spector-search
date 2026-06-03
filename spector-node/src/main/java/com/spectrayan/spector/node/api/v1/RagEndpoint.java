@@ -27,7 +27,7 @@ public class RagEndpoint implements ApiModule {
     }
 
     @Override
-    public String pathPrefix() { return ""; }
+    public String pathPrefix() { return "/engine"; }
 
     @Post("/rag")
     public HttpResponse rag(RagRequest request) throws com.spectrayan.spector.commons.error.SpectorException {

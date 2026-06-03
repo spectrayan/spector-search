@@ -42,7 +42,7 @@ public class StatusEndpoint implements ApiModule {
     }
 
     @Override
-    public String pathPrefix() { return ""; }
+    public String pathPrefix() { return "/engine"; }
 
     @Get("/status")
     public HttpResponse status() {

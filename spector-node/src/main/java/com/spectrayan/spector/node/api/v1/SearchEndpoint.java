@@ -44,7 +44,7 @@ public class SearchEndpoint implements ApiModule {
     }
 
     @Override
-    public String pathPrefix() { return ""; }
+    public String pathPrefix() { return "/engine"; }
 
     @Post("/search")
     public HttpResponse search(SearchRequest request) throws com.spectrayan.spector.commons.error.SpectorException {
