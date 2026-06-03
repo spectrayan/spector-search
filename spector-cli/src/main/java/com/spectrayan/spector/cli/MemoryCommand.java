@@ -41,7 +41,12 @@ import java.util.Map;
                 MemoryCommand.SuppressSubcommand.class,
                 MemoryCommand.UnsuppressSubcommand.class,
                 MemoryCommand.ResolveSubcommand.class,
-                MemoryCommand.StatusSubcommand.class
+                MemoryCommand.StatusSubcommand.class,
+                MemoryCommand.IntrospectSubcommand.class,
+                MemoryCommand.ReminderSubcommand.class,
+                MemoryCommand.ScratchpadSubcommand.class,
+                MemoryCommand.WhyNotSubcommand.class,
+                MemoryCommand.ReflectSubcommand.class
         }
 )
 public class MemoryCommand extends BaseCommand {
@@ -316,6 +321,172 @@ public class MemoryCommand extends BaseCommand {
                             {"Temporal Sequence Links", String.valueOf(status.get("temporalLinks"))},
                             {"Semantic Entity Nodes", String.valueOf(status.get("entityNodes"))},
                             {"Semantic Entity Relations", String.valueOf(status.get("entityEdges"))}
+                    };
+                    OutputFormatter.printKeyValue(out(), entries);
+                }
+            } catch (SpectorConnectionException e) {
+                handleConnectionError(e);
+            } catch (SpectorClientException e) {
+                err().println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    // ── New subcommands (API parity with MCP tools) ─────────────────────
+
+    @Command(name = "introspect", description = "Introspect the agent's knowledge about a topic.", mixinStandardHelpOptions = true)
+    static class IntrospectSubcommand extends BaseCommand {
+        @CommandLine.Parameters(index = "0", description = "Topic to introspect (e.g., 'kubernetes', 'user preferences').")
+        private String topic;
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void run() {
+            try (SpectorClient client = createClient()) {
+                Map<String, Object> response = client.introspect(topic);
+                if (isJson()) {
+                    OutputFormatter.printJson(out(), response);
+                } else {
+                    out().println("🔍 Memory Introspection: '" + topic + "'");
+                    out().println();
+                    String[][] entries = {
+                            {"Known", String.valueOf(response.get("known"))},
+                            {"Confidence", String.valueOf(response.get("confidence"))},
+                            {"Total Memories", String.valueOf(response.get("totalMemories"))},
+                            {"Avg Importance", String.valueOf(response.get("avgImportance"))},
+                            {"Avg Age (days)", String.valueOf(response.get("avgAgeDays"))},
+                            {"Staleness", String.valueOf(response.get("staleness"))},
+                            {"Stale", String.valueOf(response.get("stale"))},
+                            {"Recommendation", String.valueOf(response.get("recommendation"))}
+                    };
+                    OutputFormatter.printKeyValue(out(), entries);
+                }
+            } catch (SpectorConnectionException e) {
+                handleConnectionError(e);
+            } catch (SpectorClientException e) {
+                err().println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    @Command(name = "reminder", description = "Schedule a prospective memory reminder.", mixinStandardHelpOptions = true)
+    static class ReminderSubcommand extends BaseCommand {
+        @CommandLine.Option(names = {"--text"}, required = true, description = "The reminder text.")
+        private String text;
+
+        @CommandLine.Option(names = {"--delay"}, required = true, description = "Delay in seconds until the reminder triggers.")
+        private int delaySeconds;
+
+        @CommandLine.Option(names = {"--tags"}, description = "Comma-separated contextual tags.")
+        private String tags;
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void run() {
+            try (SpectorClient client = createClient()) {
+                Map<String, Object> req = new HashMap<>();
+                req.put("text", text);
+                req.put("delaySeconds", delaySeconds);
+                if (tags != null) req.put("tags", tags);
+
+                Map<String, Object> response = client.scheduleReminder(req);
+                if (isJson()) {
+                    OutputFormatter.printJson(out(), response);
+                } else {
+                    out().println("⏰ Reminder scheduled: \"" + text + "\"");
+                    out().println("Triggers in: " + delaySeconds + "s");
+                    out().println("Tags: " + (tags != null ? tags : "none"));
+                }
+            } catch (SpectorConnectionException e) {
+                handleConnectionError(e);
+            } catch (SpectorClientException e) {
+                err().println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    @Command(name = "scratchpad", description = "Store a note in the working memory scratchpad.", mixinStandardHelpOptions = true)
+    static class ScratchpadSubcommand extends BaseCommand {
+        @CommandLine.Parameters(index = "0", description = "The scratchpad note text.")
+        private String text;
+
+        @Override
+        public void run() {
+            try (SpectorClient client = createClient()) {
+                String response = client.scratchpad(text);
+                if (isJson()) {
+                    OutputFormatter.printJson(out(), Map.of("message", response, "status", "success"));
+                } else {
+                    out().println(response);
+                }
+            } catch (SpectorConnectionException e) {
+                handleConnectionError(e);
+            } catch (SpectorClientException e) {
+                err().println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    @Command(name = "why-not", description = "Explain why a specific memory was NOT recalled for a query.", mixinStandardHelpOptions = true)
+    static class WhyNotSubcommand extends BaseCommand {
+        @CommandLine.Option(names = {"--id"}, required = true, description = "ID of the memory to investigate.")
+        private String memoryId;
+
+        @CommandLine.Option(names = {"--query"}, required = true, description = "The query it was expected to match.")
+        private String query;
+
+        @CommandLine.Option(names = {"-k", "--top-k"}, description = "The topK used in the original recall.", defaultValue = "5")
+        private int topK;
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void run() {
+            try (SpectorClient client = createClient()) {
+                Map<String, Object> req = new HashMap<>();
+                req.put("memoryId", memoryId);
+                req.put("query", query);
+                req.put("topK", topK);
+
+                Map<String, Object> response = client.whyNot(req);
+                if (isJson()) {
+                    OutputFormatter.printJson(out(), response);
+                } else {
+                    out().println("🔍 Why-Not Analysis for memory '" + memoryId + "'");
+                    out().println("Query: '" + query + "'");
+                    out().println();
+                    String[][] entries = {
+                            {"Reason", String.valueOf(response.get("reason"))},
+                            {"Exists", String.valueOf(response.get("exists"))},
+                            {"Suppressed", String.valueOf(response.get("suppressed"))},
+                            {"Score Gap", String.valueOf(response.get("scoreGap"))},
+                            {"Summary", String.valueOf(response.get("summary"))}
+                    };
+                    OutputFormatter.printKeyValue(out(), entries);
+                }
+            } catch (SpectorConnectionException e) {
+                handleConnectionError(e);
+            } catch (SpectorClientException e) {
+                err().println("Error: " + e.getMessage());
+            }
+        }
+    }
+
+    @Command(name = "reflect", description = "Trigger a manual memory reflection/consolidation cycle.", mixinStandardHelpOptions = true)
+    static class ReflectSubcommand extends BaseCommand {
+        @Override
+        @SuppressWarnings("unchecked")
+        public void run() {
+            try (SpectorClient client = createClient()) {
+                Map<String, Object> response = client.reflect();
+                if (isJson()) {
+                    OutputFormatter.printJson(out(), response);
+                } else {
+                    out().println("🧠 Reflection Cycle Complete");
+                    out().println();
+                    String[][] entries = {
+                            {"Tombstoned", String.valueOf(response.get("tombstonedCount"))},
+                            {"Temporal Pruned", String.valueOf(response.get("temporalPrunedCount"))},
+                            {"Duration (ms)", String.valueOf(response.get("durationMs"))}
                     };
                     OutputFormatter.printKeyValue(out(), entries);
                 }

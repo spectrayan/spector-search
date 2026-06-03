@@ -99,7 +99,7 @@ public class SpectorClient implements AutoCloseable {
      * @throws SpectorConnectionException if the server is unreachable
      */
     public IngestResponse ingest(IngestRequest request) {
-        return post("/api/v1/ingest", request, IngestResponse.class);
+        return post("/api/v1/engine/ingest", request, IngestResponse.class);
     }
 
     /**
@@ -112,7 +112,7 @@ public class SpectorClient implements AutoCloseable {
      */
     public IngestResponse bulkIngest(List<IngestRequest> requests) {
         var bulkRequest = new BulkIngestRequest(requests);
-        return post("/api/v1/ingest/bulk", bulkRequest, IngestResponse.class);
+        return post("/api/v1/engine/ingest/bulk", bulkRequest, IngestResponse.class);
     }
 
     /**
@@ -124,7 +124,7 @@ public class SpectorClient implements AutoCloseable {
      * @throws SpectorConnectionException if the server is unreachable
      */
     public SearchResponse search(SearchRequest request) {
-        return post("/api/v1/search", request, SearchResponse.class);
+        return post("/api/v1/engine/search", request, SearchResponse.class);
     }
 
     /**
@@ -136,7 +136,7 @@ public class SpectorClient implements AutoCloseable {
      * @throws SpectorConnectionException if the server is unreachable
      */
     public DeleteResponse delete(String documentId) {
-        String path = "/api/v1/documents/" + documentId;
+        String path = "/api/v1/engine/documents/" + documentId;
         return executeRequest(buildRequest("DELETE", path, null), path, DeleteResponse.class);
     }
 
@@ -148,7 +148,7 @@ public class SpectorClient implements AutoCloseable {
      * @throws SpectorConnectionException if the server is unreachable
      */
     public StatusResponse status() {
-        return get("/api/v1/status", StatusResponse.class);
+        return get("/api/v1/engine/status", StatusResponse.class);
     }
 
     /**
@@ -215,6 +215,45 @@ public class SpectorClient implements AutoCloseable {
     @SuppressWarnings("unchecked")
     public Map<String, Object> memoryStatus() {
         return get("/api/v1/memory/status", Map.class);
+    }
+
+    /**
+     * Introspects the agent's knowledge about a topic.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> introspect(String topic) {
+        return post("/api/v1/memory/introspect", Map.of("topic", topic), Map.class);
+    }
+
+    /**
+     * Schedules a prospective memory reminder.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> scheduleReminder(Map<String, Object> request) {
+        return post("/api/v1/memory/reminder", request, Map.class);
+    }
+
+    /**
+     * Stores a note in the working memory scratchpad.
+     */
+    public String scratchpad(String text) {
+        return post("/api/v1/memory/scratchpad", Map.of("text", text), String.class);
+    }
+
+    /**
+     * Explains why a specific memory was not returned for a query.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> whyNot(Map<String, Object> request) {
+        return post("/api/v1/memory/why-not", request, Map.class);
+    }
+
+    /**
+     * Triggers a manual reflection cycle.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> reflect() {
+        return post("/api/v1/memory/reflect", Map.of(), Map.class);
     }
 
     @Override

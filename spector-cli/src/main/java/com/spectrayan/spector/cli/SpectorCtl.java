@@ -87,7 +87,14 @@ public class SpectorCtl implements Runnable {
         @Override
         public int handleExecutionException(Exception ex, CommandLine commandLine,
                                             CommandLine.ParseResult parseResult) {
-            commandLine.getErr().println("Error: " + ex.getMessage());
+            String msg = ex.getMessage();
+            if (msg == null || msg.isBlank()) {
+                // NPE and similar exceptions have null messages — print the class + stack trace
+                commandLine.getErr().println("Error: " + ex.getClass().getSimpleName());
+                ex.printStackTrace(commandLine.getErr());
+            } else {
+                commandLine.getErr().println("Error: " + msg);
+            }
             return 1;
         }
     }
