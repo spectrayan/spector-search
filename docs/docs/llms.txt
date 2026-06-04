@@ -1,0 +1,51 @@
+# Spector
+
+> The Zero-Overhead, Agent-Ready AI Memory Backbone.
+
+Spector is a Java-native AI search engine and cognitive memory system. It uses Project Panama for off-heap memory (zero GC), Java Vector API for SIMD-accelerated search (AVX2/AVX-512/NEON), and includes a built-in MCP server for AI agent integration.
+
+## Key Features
+
+- SIMD-accelerated vector search: 88µs p50, 61K QPS
+- Cognitive Memory: biologically-inspired 4-tier memory engine with 0.13ms recall at 1M memories
+- Built-in MCP Server with 13 tools (6 search + 7 cognitive memory)
+- 100% off-heap Panama storage — zero garbage collection pressure
+- SVASQ quantization: Float32 recall at INT8 memory sizes (99.5%+ recall)
+- Hybrid search: semantic (HNSW) + keyword (BM25) with RRF fusion
+- Embedded or standalone deployment
+- Spring AI integration
+- GPU acceleration via CUDA/Panama FFM
+- Distributed mode via gRPC
+
+## Cognitive Memory Architecture
+
+Spector Memory implements a 4-tier cognitive architecture:
+- Working Memory → Episodic → Semantic → Procedural
+- Scoring based on simplified ACT-R (Anderson, 1993)
+- Power-law decay (Wixted, 2004) with 12-bucket lookup
+- Two-Factor strengthening (Bjork & Bjork, 1992)
+- Hebbian co-activation learning
+- Emotional valence (amygdala-inspired)
+- Sleep consolidation (hippocampus-inspired)
+
+## Links
+
+- Repository: https://github.com/spectrayan/spector
+- Documentation: https://spectrayan.github.io/spector/
+- Quick Start: https://spectrayan.github.io/spector/getting-started/quickstart/
+- MCP Server Guide: https://spectrayan.github.io/spector/sdk-usage/mcp-server/
+- Cognitive Memory: https://spectrayan.github.io/spector/memory/
+- Architecture: https://spectrayan.github.io/spector/architecture/overview/
+- Contributing: https://github.com/spectrayan/spector/blob/main/CONTRIBUTING.md
+
+## Technical Details
+
+- Language: Java 25
+- Build: Maven 3.9+
+- License: Apache 2.0 (core) / BSL 1.1 (memory module)
+- SIMD: AVX2 / AVX-512 / NEON via jdk.incubator.vector
+- Off-heap: Project Panama FFM API
+- Concurrency: Virtual Threads (Project Loom)
+- Modules: 25 Maven modules
+- Tests: 685+ tests
+- Dependencies: Zero (JDK only)

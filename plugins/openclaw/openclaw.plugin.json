@@ -1,0 +1,70 @@
+{
+  "id": "memory-spector",
+  "name": "Spector Cognitive Memory",
+  "description": "Biologically-inspired AI memory with 4-tier cognitive architecture (Working → Episodic → Semantic → Procedural), SIMD-accelerated scoring, and sub-millisecond recall. Replaces OpenClaw's default memory with cross-session persistence, emotional valence, habituation, temporal decay, and associative recall via Hebbian/Entity/Temporal graphs.",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "spectorJarPath": {
+        "type": "string",
+        "description": "Path to spector.jar. Leave empty to auto-download from GitHub Releases."
+      },
+      "javaHome": {
+        "type": "string",
+        "description": "Path to Java 25+ installation. Leave empty to auto-download Eclipse Temurin JDK."
+      },
+      "dimensions": {
+        "type": "number",
+        "default": 768,
+        "description": "Vector embedding dimensions. Must match your embedding model (e.g., 768 for nomic-embed-text, 4096 for qwen3-embedding, 1536 for text-embedding-3-small)."
+      },
+      "embeddingProvider": {
+        "type": "string",
+        "enum": ["ollama", "openai-compatible"],
+        "default": "ollama",
+        "description": "Embedding provider type. 'ollama' for local Ollama server. 'openai-compatible' for any OpenAI-compatible API (OpenAI, Together, Groq, vLLM, etc.)."
+      },
+      "embeddingBaseUrl": {
+        "type": "string",
+        "default": "http://localhost:11434",
+        "description": "Base URL for the embedding provider. For Ollama: http://localhost:11434. For OpenAI: https://api.openai.com. For custom: your endpoint URL."
+      },
+      "embeddingModel": {
+        "type": "string",
+        "default": "nomic-embed-text",
+        "description": "Model name for generating embeddings (e.g., nomic-embed-text, qwen3-embedding, text-embedding-3-small)."
+      },
+      "embeddingApiKey": {
+        "type": "string",
+        "description": "API key for embedding provider (required for OpenAI-compatible providers, not needed for local Ollama)."
+      },
+      "dataDirectory": {
+        "type": "string",
+        "description": "Directory for Spector's persistent index and memory data. Defaults to ~/.openclaw/spector/data/"
+      },
+      "capacity": {
+        "type": "number",
+        "default": 100000,
+        "description": "Maximum number of memories to store."
+      },
+      "jvmArgs": {
+        "type": "string",
+        "default": "-Xms256m -Xmx1g",
+        "description": "Additional JVM arguments for the Spector subprocess."
+      },
+      "tagExtractor": {
+        "type": "string",
+        "enum": ["content", "llm", "none"],
+        "default": "content",
+        "description": "How to extract synaptic tags from memories. 'content' = keyword extraction, 'llm' = LLM-powered extraction (requires Ollama), 'none' = disabled."
+      },
+      "logLevel": {
+        "type": "string",
+        "enum": ["DEBUG", "INFO", "WARN", "ERROR"],
+        "default": "INFO",
+        "description": "Spector server log level."
+      }
+    },
+    "additionalProperties": false
+  }
+}

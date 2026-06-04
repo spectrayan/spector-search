@@ -1,0 +1,72 @@
+# ═══════════════════════════════════════════════════════════════
+# Spector Cognitive Memory — Docker Sidecar for Odysseus
+#
+# Usage (from the Odysseus project root):
+#   docker compose -f docker-compose.yml \
+#     -f plugins/odysseus/docker/docker-compose.spector.yml up -d
+#
+# Or add to your .env:
+#   COMPOSE_FILE=docker-compose.yml:plugins/odysseus/docker/docker-compose.spector.yml
+# ═══════════════════════════════════════════════════════════════
+
+services:
+  spector:
+    image: eclipse-temurin:25-jre
+    container_name: odysseus-spector
+    restart: unless-stopped
+
+    # Download spector.jar on first run if not present
+    entrypoint: >
+      sh -c '
+        if [ ! -f /opt/spector/spector.jar ]; then
+          echo "[Spector] Downloading spector.jar..."
+          wget -q -O /opt/spector/spector.jar
+            https://github.com/spectrayan/spector/releases/latest/download/spector.jar
+        fi
+        exec java
+          --add-modules jdk.incubator.vector
+          --enable-native-access=ALL-UNNAMED
+          --enable-preview
+          -Xms256m -Xmx1g
+          -jar /opt/spector/spector.jar
+          --config /opt/spector/spector.yml
+          --mode odysseus
+      '
+
+    volumes:
+      # Persistent data (index + memory)
+      - spector-data:/opt/spector/data
+      # JAR cache (survives container recreation)
+      - spector-bin:/opt/spector
+      # Config file (mounted from this plugin)
+      - ./spector.yml:/opt/spector/spector.yml:ro
+
+    # Spector MCP uses stdio — no ports needed for MCP.
+    # But we expose the health-check endpoint if HTTP transport is enabled.
+    # ports:
+    #   - "127.0.0.1:8090:8080"
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 512M
+
+    # Health check via process liveness
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "spector.jar"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    networks:
+      - default
+
+volumes:
+  spector-data:
+    driver: local
+  spector-bin:
+    driver: local

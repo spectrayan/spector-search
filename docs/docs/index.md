@@ -2,75 +2,59 @@
 
 > **The Zero-Overhead, Agent-Ready AI Memory Backbone.**
 
-Welcome to the Spector documentation — your central hub for the high-performance, agent-native AI search engine. Whether you're connecting AI agents via MCP, building RAG pipelines, powering recommendation systems, or need sub-millisecond search with zero infrastructure, you're in the right place.
+Welcome to the Spector documentation. Whether you're connecting AI agents via MCP, building RAG pipelines, or need sub-millisecond search with zero infrastructure — you're in the right place.
 
 ---
 
-## 🔥 Why Spector?
+## 🗺️ Choose Your Path
 
-| Metric | Value |
-|--------|-------|
-| 🤖 MCP Tools | **6 agent-ready tools** (semantic, hybrid, RAG, ingest, delete, status) |
-| ⚡ Vector Search Latency | **0.05 ms** avg @ 10K docs (128-dim) |
-| 🔍 Keyword Search Latency | **0.98 ms** avg @ 100K docs |
-| 🧬 Hybrid Search Latency | **0.17 ms** avg @ 10K docs |
-| 🚀 Vector Throughput | **18,800 queries/sec** @ 10K |
-| 🧵 Concurrent Hybrid | **14,000+ ops/sec** @ 16 threads (384-dim) |
-| 🗜️ IVF-PQ + TurboQuant | **8–32× memory reduction** |
-| ✅ Test Suite | **331+ tests**, all passing |
-| 📦 Dependencies | **Zero** (JDK only) |
-
----
-
-## 🗺️ Quick Navigation
-
-### 🚀 Getting Started
+### 🚀 I want to use Spector
 
 | Page | Description |
 |------|-------------|
-| [Getting Started](getting-started/quickstart.md) | Build, run, and search in 5 minutes |
-| [What is Spector](about.md) | Product overview, use cases, and comparisons |
-| [JDK API Status](getting-started/jdk-api-status.md) | Vector API, Panama FFM, and preview feature compatibility |
-| [FAQ](faq.md) | Common questions answered |
+| [Quick Start](getting-started/quickstart.md) | Build, run, and search in 5 minutes |
+| [Installation](getting-started/installation.md) | Prerequisites and setup options |
+| [MCP Server Guide](sdk-usage/mcp-server.md) | Connect Claude Desktop, Cursor, or custom agents |
+| [Configuration](configuration/parameters.md) | All parameters with tuning advice |
+| [REST API Reference](api-reference/rest-endpoints.md) | All endpoints with curl examples |
+| [Cognitive Memory](memory/index.md) | Getting started with AI agent memory |
 
-### 🤖 Agent Integration (MCP)
-
-| Page | Description |
-|------|-------------|
-| [MCP Integration Architecture](architecture/mcp-integration.md) | How the MCP server works under the hood |
-| [MCP Server Guide](sdk-usage/mcp-server.md) | Setup for Claude Desktop, Cursor, and custom agents |
-
-### 🏗️ Architecture & Concepts
+### 🧠 I want to understand how it works
 
 | Page | Description |
 |------|-------------|
 | [Architecture Overview](architecture/overview.md) | Module diagram, data flow, threading model |
 | [Core Concepts](architecture/core-concepts.md) | HNSW, IVF-PQ, BM25, RRF, SIMD deep-dives |
-| [Ingestion Pipeline](architecture/ingestion-pipeline.md) | Document → chunk → embed → index pipeline |
-| [RAG Pipeline](architecture/rag-pipeline.md) | End-to-end retrieval-augmented generation |
-| [Distributed Mode](architecture/distributed-mode.md) | Clustering, sharding, and replication |
-| [GPU Acceleration](architecture/gpu-acceleration.md) | CUDA setup and kernel details |
+| [SVASQ Quantization](deep-dives/svasq-deep-dive.md) | Our proprietary SIMD-first quantization engine |
+| [Memory Internals](memory/architecture.md) | How cognitive memory works under the hood |
+| [6-Phase Scoring Pipeline](memory/scoring-pipeline.md) | Fused SIMD scoring across memory tiers |
+| [Real-Embedding Benchmarks](deep-dives/real-embedding-benchmarks.md) | Empirical sweeps on 4096-dim embeddings |
 
-### 📖 Reference
-
-| Page | Description |
-|------|-------------|
-| [REST API Reference](api-reference/rest-endpoints.md) | All endpoints with curl examples |
-| [Java SDK Guide](sdk-usage/java-client.md) | Programmatic usage (client + embedded) |
-| [Spring AI Integration](sdk-usage/spring-ai.md) | Spring AI VectorStore adapter |
-| [CLI Reference](cli-reference/spectorctl.md) | `spectorctl` commands |
-| [Configuration Guide](configuration/parameters.md) | All parameters with tuning advice |
-
-### ⚙️ Operations & Community
+### 🤝 I want to contribute
 
 | Page | Description |
 |------|-------------|
-| [Performance Tuning](operations/performance-tuning.md) | Benchmarks and optimization strategies |
-| [Contributing](operations/contributing.md) | Development setup and PR process |
+| [Contributing Guide](operations/contributing.md) | Development setup and PR process |
+| [JDK API Status](getting-started/jdk-api-status.md) | Vector API, Panama FFM compatibility |
+| [FAQ](faq.md) | Common questions answered |
 
 ---
 
-## 💡 Highlights at a Glance
+## 🔥 Key Numbers
+
+| Metric | Value |
+|--------|-------|
+| 🧠 Cognitive Recall | **0.13ms** p50 at 1M memories |
+| ⚡ Vector Search | **88µs** p50 (10K docs, 128-dim) |
+| 🚀 Peak QPS | **61,011** concurrent searches |
+| 🤖 MCP Tools | **13 tools** (6 search + 7 cognitive memory) |
+| 🗜️ Compression | **4×–32×** (SVASQ-8 to IVF-PQ) |
+| ✅ Test Suite | **685+ tests**, all passing |
+| 📦 Dependencies | **Zero** (JDK only) |
+
+---
+
+## 💡 How It Works
 
 ```mermaid
 graph LR
@@ -87,7 +71,7 @@ graph LR
 ```
 
 > [!TIP]
-> New here? Start with [Getting Started](getting-started/quickstart.md) to build and run your first search in under 5 minutes. Want to connect an AI agent? See the [MCP Server Guide](sdk-usage/mcp-server.md).
+> New here? Start with [Quick Start](getting-started/quickstart.md) to build and run your first search in under 5 minutes. Want to connect an AI agent? See the [MCP Server Guide](sdk-usage/mcp-server.md).
 
 ---
 
@@ -97,11 +81,11 @@ graph LR
 |---|---|
 | **Language** | Java 25 |
 | **License** | Apache 2.0 · [BSL 1.1](https://github.com/spectrayan/spector/blob/main/spector-memory/LICENSE) (memory module) |
-| **Modules** | 18 Maven modules |
+| **Modules** | 25 Maven modules |
 | **Dependencies** | Zero (JDK only) |
 | **SIMD** | AVX2 / AVX-512 / NEON |
 | **GPU** | CUDA via Panama FFM |
-| **MCP** | Built-in, 6 agent-ready tools |
+| **MCP** | Built-in, 13 agent-ready tools |
 | **Distributed** | gRPC fan-out + consistent hashing |
 
 ---

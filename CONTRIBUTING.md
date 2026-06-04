@@ -1,6 +1,6 @@
-# Contributing to Spector
+# Contributing to Spector ⚡
 
-Thank you for your interest in contributing to Spector! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Spector! We welcome contributions of all kinds — code, docs, tests, benchmarks, and ideas. **AI-assisted PRs are welcome! 🤖**
 
 ## Table of Contents
 
@@ -52,6 +52,17 @@ Signed-off-by: Your Name <your.email@example.com>
 3. **Create a branch** for your change
 4. **Make your changes** with appropriate tests
 5. **Submit a pull request**
+
+### Good First Areas
+
+Not sure where to start? Here are beginner-friendly contribution areas:
+
+- 📖 **Documentation improvements** — fix typos, improve examples, add diagrams
+- 🧪 **Additional test coverage** — especially edge cases in `spector-core` and `spector-index`
+- 🧬 **New embedding providers** — implement the `EmbeddingProvider` SPI for a new service
+- 🖥️ **CLI enhancements** — add new commands or improve output formatting in `spector-cli`
+- 🌱 **Spring AI adapter extensions** — improve the Spring AI integration in `spector-spring`
+- 📊 **Benchmark scenarios** — add new benchmark cases to `spector-bench`
 
 ## Development Setup
 
@@ -215,4 +226,4 @@ Use the [Feature Request template](https://github.com/spectrayan/spector/issues/
 
 ---
 
-Thank you for contributing to Spector! ⚡
+Thank you for contributing to Spector! ⚡ Every contribution — no matter how small — makes a difference.

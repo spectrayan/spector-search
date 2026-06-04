@@ -1,48 +1,48 @@
-﻿# ðŸ—ºï¸ Roadmap
+# 🗺️ Roadmap
 
 Spector is under active development. This page details planned improvements, their projected impact, and implementation status.
 
 ---
 
-## ðŸ”œ Priority: OpenClaw Integration
+## 📜 Priority: OpenClaw Integration
 
-### ðŸ”œ OpenClaw Integration â€” Spector as Main Memory {#openclaw}
+### 📜 OpenClaw Integration — Spector as Main Memory {#openclaw}
 
 !!! info "Status: Planned"
     Medium effort. First-class integration with the OpenClaw autonomous agent framework.
 
-Integrate Spector Memory as the **primary long-term memory backend** for [OpenClaw](https://openclaw.ai) â€” the open-source autonomous AI agent framework that runs as a local gateway across WhatsApp, Telegram, Slack, and Discord.
+Integrate Spector Memory as the **primary long-term memory backend** for [OpenClaw](https://openclaw.ai) — the open-source autonomous AI agent framework that runs as a local gateway across WhatsApp, Telegram, Slack, and Discord.
 
 **Why OpenClaw + Spector:**
 
-OpenClaw provides the agentic loop (observe â†’ reason â†’ act) and multi-channel interface, but lacks a biologically-inspired long-term memory system. Currently, OpenClaw agents lose context across sessions or rely on simple key-value stores. Spector Memory gives OpenClaw agents:
+OpenClaw provides the agentic loop (observe → reason → act) and multi-channel interface, but lacks a biologically-inspired long-term memory system. Currently, OpenClaw agents lose context across sessions or rely on simple key-value stores. Spector Memory gives OpenClaw agents:
 
-- **Cross-session persistence** â€” memories survive across conversations and channels
-- **Cognitive recall** â€” biologically-inspired scoring (decay, importance, valence) instead of naive vector search
-- **Emotional context** â€” valence-filtered recall for empathetic responses
-- **Anti-repetition** â€” habituation prevents the agent from repeating the same responses
-- **Associative recall** â€” Hebbian + Temporal + Entity graphs surface connected memories
+- **Cross-session persistence** — memories survive across conversations and channels
+- **Cognitive recall** — biologically-inspired scoring (decay, importance, valence) instead of naive vector search
+- **Emotional context** — valence-filtered recall for empathetic responses
+- **Anti-repetition** — habituation prevents the agent from repeating the same responses
+- **Associative recall** — Hebbian + Temporal + Entity graphs surface connected memories
 
 **Architecture:**
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  OpenClaw Agent (Python)                      â”‚
-â”‚  Observe â†’ Reason â†’ Act loop                  â”‚
-â”‚  Multi-channel: WhatsApp, Telegram, Slack     â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚  â†•  MCP stdio / HTTP transport                â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚  Spector MCP Server (Java)                    â”‚
-â”‚  memory_recall Â· memory_remember          â”‚
-â”‚  memory_reinforce Â· memory_introspect         â”‚
-â”‚  memory_why_not Â· memory_status               â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚  Spector Memory Engine                        â”‚
-â”‚  4-tier storage Â· SIMD scoring Â· Bloom filter â”‚
-â”‚  Cognitive graph Â· Decay Â· Habituation        â”‚
-â”‚  âš¡ Local, private, off-heap, sub-ms recall    â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌──────────────────────────────────────────────┐
+│  OpenClaw Agent (Python)                      │
+│  Observe → Reason → Act loop                  │
+│  Multi-channel: WhatsApp, Telegram, Slack     │
+├──────────────────────────────────────────────┤
+│  ↕  MCP stdio / HTTP transport                │
+├──────────────────────────────────────────────┤
+│  Spector MCP Server (Java)                    │
+│  memory_recall · memory_remember          │
+│  memory_reinforce · memory_introspect         │
+│  memory_why_not · memory_status               │
+├──────────────────────────────────────────────┤
+│  Spector Memory Engine                        │
+│  4-tier storage · SIMD scoring · Bloom filter │
+│  Cognitive graph · Decay · Habituation        │
+│  ⚡ Local, private, off-heap, sub-ms recall    │
+└──────────────────────────────────────────────┘
 ```
 
 **Integration points:**
@@ -56,7 +56,7 @@ OpenClaw provides the agentic loop (observe â†’ reason â†’ act) and mu
 | Conversation context | `memory_recall` with `BALANCED` profile |
 | User preference learning | `memory_reinforce` on confirmed preferences |
 | Security-sensitive context | `PARANOID_SENTINEL` for audit/compliance queries |
-| Multi-channel persistence | Same Spector instance across all channels â€” WhatsApp memory available in Telegram |
+| Multi-channel persistence | Same Spector instance across all channels — WhatsApp memory available in Telegram |
 
 **Profile mapping for OpenClaw modes:**
 
@@ -77,13 +77,13 @@ OpenClaw provides the agentic loop (observe â†’ reason â†’ act) and mu
 4. **Consolidation**: Spector's `reflect()` daemon runs on a schedule, consolidating episodic memories into semantic knowledge across all channels
 5. **Python SDK**: The planned [Python SDK](#python-sdk) wraps the MCP transport for native OpenClaw integration
 
-**Privacy advantage:** Both OpenClaw and Spector run locally â€” the most personal conversations never leave the user's machine.
+**Privacy advantage:** Both OpenClaw and Spector run locally — the most personal conversations never leave the user's machine.
 
 ---
 
-## ðŸ”œ Planned â€” Client SDKs & Documentation
+## 📜 Planned — Client SDKs & Documentation
 
-### ðŸ”œ Python SDK â€” MCP Client Wrapper {#python-sdk}
+### 📜 Python SDK — MCP Client Wrapper {#python-sdk}
 
 !!! info "Status: Planned"
     Low-medium effort. Thin wrapper over MCP stdio transport.
@@ -96,10 +96,10 @@ from spector import Memory
 mem = Memory()
 mem.remember("user likes dark mode", tags=["pref", "ui"])
 results = mem.recall("theme preference?")
-# â†’ [MemoryResult(text="user likes dark mode", score=0.92, confidence=HIGH)]
+# → [MemoryResult(text="user likes dark mode", score=0.92, confidence=HIGH)]
 
 explanation = mem.why_not("mem-42", "theme preference?")
-# â†’ WhyNot(reason=OUTRANKED, score_gap=0.15, ...)
+# → WhyNot(reason=OUTRANKED, score_gap=0.15, ...)
 ```
 
 **Implementation:**
@@ -113,7 +113,7 @@ explanation = mem.why_not("mem-42", "theme preference?")
 
 ---
 
-### ðŸ”œ Documentation Split â€” User Guide vs Architecture Guide {#docs-split}
+### 📜 Documentation Split — User Guide vs Architecture Guide {#docs-split}
 
 !!! info "Status: Planned"
     Low effort. Critical for reducing complexity-intimidation.
@@ -129,9 +129,9 @@ Separate documentation into two tracks to prevent the "19 packages overwhelm dev
 
 ---
 
-## ðŸ”œ Planned â€” Agentic AI
+## 📜 Planned — Agentic AI
 
-### ðŸ”œ ProfileAdaptor â€” Self-Tuning Cognitive Profiles {#profile-adaptor}
+### 📜 ProfileAdaptor — Self-Tuning Cognitive Profiles {#profile-adaptor}
 
 !!! info "Status: Planned"
     Low-medium effort. High impact for autonomous agent deployments.
@@ -174,39 +174,39 @@ When `profile=auto`, the system queries `ProfileAdaptor.suggest("payments", "err
 
 **Design considerations:**
 
-- **Cold start**: Falls back to `BALANCED` until â‰¥10 reinforcement signals are recorded for a context
-- **Exploration**: Îµ-greedy strategy (10% random profile selection) to avoid local optima
+- **Cold start**: Falls back to `BALANCED` until ≥10 reinforcement signals are recorded for a context
+- **Exploration**: ε-greedy strategy (10% random profile selection) to avoid local optima
 - **Persistence**: Stats serialized to WAL for cross-session learning
 - **Multi-tenant**: Per-user stats isolation via the planned `userId` field
 
 ---
 
-## ðŸ”œ Planned â€” Compute & Hardware
+## 📜 Planned — Compute & Hardware
 
-### ðŸ”œ GPU Kernel Dispatch {#gpu-dispatch}
+### 📜 GPU Kernel Dispatch {#gpu-dispatch}
 
 !!! info "Status: Infrastructure Ready"
     CUDA context management and Panama FFM bridge are implemented. The compute kernel dispatch is pending.
 
-Ship actual CUDA compute kernels for batch cosine similarity and HNSW neighbor selection. The existing `spector-gpu` module provides context management, memory allocation, and kernel loading via Panama FFM â€” the remaining work is the CUDA kernel code itself.
+Ship actual CUDA compute kernels for batch cosine similarity and HNSW neighbor selection. The existing `spector-gpu` module provides context management, memory allocation, and kernel loading via Panama FFM — the remaining work is the CUDA kernel code itself.
 
 **Prerequisites:** CUDA Toolkit 12+ on the host machine.
 
-**Expected impact:** 10â€“100Ã— throughput improvement for batch similarity computation on large datasets (> 100K vectors).
+**Expected impact:** 10–100× throughput improvement for batch similarity computation on large datasets (> 100K vectors).
 
 ---
 
-### ðŸ”„ Project Valhalla Value Classes {#valhalla}
+### 🔄 Project Valhalla Value Classes {#valhalla}
 
-!!! tip "Status: Prepared â€” Awaiting JDK 28+"
+!!! tip "Status: Prepared — Awaiting JDK 28+"
     Migration TODOs added to all 5 hot-path records. Manual flat-array optimizations serve as bridge patterns until value classes are available.
 
-Migrate hot-path intermediate records to `value class` (or `value record`). JDK 25 does not include JEP 401 â€” Valhalla value classes are expected in JDK 28+.
+Migrate hot-path intermediate records to `value class` (or `value record`). JDK 25 does not include JEP 401 — Valhalla value classes are expected in JDK 28+.
 
 **Current preparation:**
 
 - **Javadoc TODOs** added to all 5 hot-path records: `CognitiveHeader`, `ScoredRecord`, `HebbianEdge`, `EntityEdge`, `TraversalResult`
-- **Manual flat-array optimization** (`FlatMinHeap`) serves as the bridge pattern â€” will be replaceable with `PriorityQueue<value ScoredRecord>` once specialized generics land
+- **Manual flat-array optimization** (`FlatMinHeap`) serves as the bridge pattern — will be replaceable with `PriorityQueue<value ScoredRecord>` once specialized generics land
 - **Performance optimizations** implemented as stop-gap: autoboxing elimination (`int[]` vs `List<Integer>`), `boolean[]` vs `HashSet<Integer>`, LUT-based `Math.pow` replacement
 
 **Benefits (when JDK 28+ lands):**
@@ -216,9 +216,9 @@ Migrate hot-path intermediate records to `value class` (or `value record`). JDK 
 
 ---
 
-## ðŸ”¬ Research & Future
+## 🔬 Research & Future
 
-### ðŸ”¬ TypeScript/JavaScript SDK {#typescript-sdk}
+### 🔬 TypeScript/JavaScript SDK {#typescript-sdk}
 
 !!! note "Status: Future"
     Medium effort. Wraps MCP HTTP transport.
@@ -237,7 +237,7 @@ const results = await mem.recall('theme preference?');
 
 ---
 
-### ðŸ”¬ RecallMode.REPLAY â€” WAL Time-Travel Recall {#recall-replay}
+### 🔬 RecallMode.REPLAY — WAL Time-Travel Recall {#recall-replay}
 
 !!! note "Status: Future Research"
     High effort. Requires WAL event replay and off-heap snapshot reconstruction.
@@ -254,8 +254,8 @@ Replay recall from a frozen point-in-time state by reconstructing memory state f
 
 **Implementation options:**
 
-- **Option A â€” Full replay**: Read all WAL events from start to target timestamp, apply each mutation to a temporary segment. Expensive compute, but minimal storage overhead.
-- **Option B â€” Periodic snapshots**: Periodically snapshot the full off-heap state. Replay only needs events between the last snapshot and the target timestamp. More storage, faster replay.
+- **Option A — Full replay**: Read all WAL events from start to target timestamp, apply each mutation to a temporary segment. Expensive compute, but minimal storage overhead.
+- **Option B — Periodic snapshots**: Periodically snapshot the full off-heap state. Replay only needs events between the last snapshot and the target timestamp. More storage, faster replay.
 
 **Prerequisites:**
 
@@ -267,7 +267,7 @@ Replay recall from a frozen point-in-time state by reconstructing memory state f
 
 ---
 
-### ðŸ”¬ LoRA Adapter Routing {#lora-routing}
+### 🔬 LoRA Adapter Routing {#lora-routing}
 
 !!! note "Status: Future Research"
     Requires LoRA weight format specification and SIMD matrix multiply implementation.
@@ -276,7 +276,7 @@ Multi-tenant query projection via SIMD matrix multiply. Instead of creating sepa
 
 **How it works:**
 - Ingest base model embeddings once
-- Each tenant uploads a small LoRA matrix ($W_A$, typically 768Ã—32 or similar)
+- Each tenant uploads a small LoRA matrix ($W_A$, typically 768×32 or similar)
 - At query time: $q_{tenant} = q_{base} \times W_A$ (microseconds via Panama SIMD)
 - Search the same index with the projected query
 
@@ -284,7 +284,7 @@ Multi-tenant query projection via SIMD matrix multiply. Instead of creating sepa
 
 ---
 
-### ðŸ”¬ ColBERT Late Interaction Reranking {#colbert}
+### 🔬 ColBERT Late Interaction Reranking {#colbert}
 
 !!! note "Status: Future Research"
     Requires token-level vector storage and MaxSim SIMD kernel.
@@ -295,12 +295,12 @@ Native ColBERT reranking using Panama FMA loops. ColBERT stores a vector for eve
 
 ---
 
-### ðŸ”¬ SVASQ-PQ Hybrid â€” Product Quantization of SVASQ Residuals {#svasq-pq}
+### 🔬 SVASQ-PQ Hybrid — Product Quantization of SVASQ Residuals {#svasq-pq}
 
 !!! note "Status: Future Research"
     Very high implementation effort. Most aggressive compression option.
 
-After FWHT rotation, instead of scalar INT8/INT4 quantization, apply **Product Quantization** to the rotated coordinates. The FWHT rotation makes coordinates near-independent (isotropized), which is the ideal input distribution for PQ â€” similar to how Optimized PQ (OPQ) works with learned rotations, but using FWHT instead of an expensive SVD-based rotation matrix.
+After FWHT rotation, instead of scalar INT8/INT4 quantization, apply **Product Quantization** to the rotated coordinates. The FWHT rotation makes coordinates near-independent (isotropized), which is the ideal input distribution for PQ — similar to how Optimized PQ (OPQ) works with learned rotations, but using FWHT instead of an expensive SVD-based rotation matrix.
 
 **Memory layout:**
 ```
@@ -311,16 +311,16 @@ With M=16 subspaces, K=256 centroids:
 
 | Dims | Float32 | SVASQ-8 | SVASQ-PQ (M=16) | Compression vs float32 |
 |------|---------|--------|----------------|----------------------|
-| 768 | 3,072 B | 1,028 B | 20 B | **154Ã—** |
-| 4096 | 16,384 B | 4,100 B | 68 B | **241Ã—** |
+| 768 | 3,072 B | 1,028 B | 20 B | **154×** |
+| 4096 | 16,384 B | 4,100 B | 68 B | **241×** |
 
 **Recall impact:**
 
-- PQ on FWHT-rotated residuals: ~85â€“93% recall@10
-- FWHT rotation gives ~3â€“5% recall advantage over naive PQ (pre-decorrelates dimensions)
+- PQ on FWHT-rotated residuals: ~85–93% recall@10
+- FWHT rotation gives ~3–5% recall advantage over naive PQ (pre-decorrelates dimensions)
 - Rescore with exact float32 residuals pushes recall to 95%+
 
-**Why it works:** The FWHT rotation is essentially a free, lossless "Optimized PQ" rotation â€” it decorrelates dimensions without requiring an expensive SVD or learned rotation matrix. This means PQ subspaces can be independent slices of the rotated vector, which is information-theoretically optimal.
+**Why it works:** The FWHT rotation is essentially a free, lossless "Optimized PQ" rotation — it decorrelates dimensions without requiring an expensive SVD or learned rotation matrix. This means PQ subspaces can be independent slices of the rotated vector, which is information-theoretically optimal.
 
 **Implementation scope:**
 
@@ -330,27 +330,27 @@ With M=16 subspaces, K=256 centroids:
 - Integration with existing `ProductQuantizer` in `spector-index`
 
 !!! danger "Complexity Warning"
-    This is essentially building a new quantization mode. The existing `ProductQuantizer` could be adapted, but integrating it with the FWHT rotation pipeline is non-trivial. Estimated effort: 2â€“4 weeks.
+    This is essentially building a new quantization mode. The existing `ProductQuantizer` could be adapted, but integrating it with the FWHT rotation pipeline is non-trivial. Estimated effort: 2–4 weeks.
 
 ---
 
-### ðŸ”¬ Flat-Mode SVASQ â€” Compress Flat-Shard Storage {#flat-svasq}
+### 🔬 Flat-Mode SVASQ — Compress Flat-Shard Storage {#flat-svasq}
 
 !!! note "Status: Future Research"
     Medium effort, good payoff for large flat shards.
 
-In `SpectorShard`'s flat mode, residuals are stored as raw `float32[]`. Since all residuals in a shard share the same centroid, they have similar statistical distributions. **SVASQ quantization of flat residuals** could compress flat-mode storage by ~3Ã— without changing the shard architecture.
+In `SpectorShard`'s flat mode, residuals are stored as raw `float32[]`. Since all residuals in a shard share the same centroid, they have similar statistical distributions. **SVASQ quantization of flat residuals** could compress flat-mode storage by ~3× without changing the shard architecture.
 
 **Savings:**
 
 | Scenario | Current (float32) | With SVASQ | Savings |
 |----------|-------------------|-----------|---------
-| 10K vectors Ã— 768 dims | 30 MB/shard | 10 MB/shard | **3Ã—** |
-| 50K vectors Ã— 4096 dims | 781 MB/shard | 195 MB/shard | **4Ã—** |
+| 10K vectors × 768 dims | 30 MB/shard | 10 MB/shard | **3×** |
+| 50K vectors × 4096 dims | 781 MB/shard | 195 MB/shard | **4×** |
 
 **Recall impact:**
 
-- If applied only to storage (decode for search): **None** â€” search uses decoded float32
+- If applied only to storage (decode for search): **None** — search uses decoded float32
 - If applied to search (scan quantized codes directly): Same as SVASQ-8 (~99.5%)
 
 **Implementation scope:**
@@ -361,7 +361,7 @@ In `SpectorShard`'s flat mode, residuals are stored as raw `float32[]`. Since al
 
 ---
 
-### ðŸ”¬ NPU Acceleration {#npu}
+### 🔬 NPU Acceleration {#npu}
 
 !!! note "Status: Exploratory"
     Depends on Intel/AMD NPU SDK maturity.
@@ -372,42 +372,42 @@ Leverage Intel NPU (via OpenVINO) or AMD XDNA (via DirectML) for INT8 batch oper
 
 ---
 
-### ðŸ”¬ WASM Runtime for Edge Deployment {#wasm}
+### 🔬 WASM Runtime for Edge Deployment {#wasm}
 
 !!! note "Status: Exploratory"
-    Depends on GraalWasm or Chicory maturity for JVM â†’ WASM compilation.
+    Depends on GraalWasm or Chicory maturity for JVM → WASM compilation.
 
 Compile the core SIMD kernels and HNSW index to WebAssembly for browser-based or edge deployment. This would enable client-side semantic search without a server round-trip.
 
 ---
 
-### ðŸ”´ Adaptive Bit-Width SVASQ {#adaptive-bw}
+### 🔴 Adaptive Bit-Width SVASQ {#adaptive-bw}
 
 !!! warning "Status: Not Recommended"
     Very high effort, marginal benefit due to FWHT already equalizing variance.
 
 Instead of uniform INT8 across all dimensions, assign more bits to high-variance dimensions and fewer to low-variance ones (after FWHT rotation):
 
-- Dimensions with Ïƒ > 2Ã— median: 8 bits
-- Dimensions with Ïƒ < 0.5Ã— median: 4 bits
+- Dimensions with σ > 2× median: 8 bits
+- Dimensions with σ < 0.5× median: 4 bits
 - Others: 6 bits
 
-**Projected savings:** ~10â€“15% additional compression.
+**Projected savings:** ~10–15% additional compression.
 
-**Recall impact:** Minimal (< 0.5%) â€” allocating bits proportionally to variance is information-theoretically optimal.
+**Recall impact:** Minimal (< 0.5%) — allocating bits proportionally to variance is information-theoretically optimal.
 
-**Why it's not recommended:** FWHT already equalizes variance by design, so the marginal gain from adaptive bit-widths is small. The implementation requires variable-length encoding, non-aligned SIMD reads, and per-dimension bit-width bookkeeping â€” the worst effort-to-benefit ratio of all proposed improvements.
+**Why it's not recommended:** FWHT already equalizes variance by design, so the marginal gain from adaptive bit-widths is small. The implementation requires variable-length encoding, non-aligned SIMD reads, and per-dimension bit-width bookkeeping — the worst effort-to-benefit ratio of all proposed improvements.
 
 ---
 
-## âœ… Completed
+## ✅ Completed
 
-### âœ… Native MCP Server {#mcp-server}
+### ✅ Native MCP Server {#mcp-server}
 
 !!! success "Completed"
     Implemented in `spector-mcp` module. 6 tools, stdio transport, agent-native search.
 
-Built-in [Model Context Protocol](https://modelcontextprotocol.io/) server that gives AI agents (Claude Desktop, Cursor, autonomous agents) direct, in-process access to Spector's search engine. Zero network overhead â€” tool handlers call `SpectorEngine` directly via virtual threads.
+Built-in [Model Context Protocol](https://modelcontextprotocol.io/) server that gives AI agents (Claude Desktop, Cursor, autonomous agents) direct, in-process access to Spector's search engine. Zero network overhead — tool handlers call `SpectorEngine` directly via virtual threads.
 
 **Tools:** `semantic_search`, `hybrid_search`, `rag_query`, `ingest_document`, `delete_document`, `engine_status`
 
@@ -420,7 +420,7 @@ Built-in [Model Context Protocol](https://modelcontextprotocol.io/) server that 
 
 ---
 
-### âœ… Streamable HTTP Transport {#mcp-http}
+### ✅ Streamable HTTP Transport {#mcp-http}
 
 !!! success "Completed"
     `TransportMode` enum with `STDIO` and `HTTP` modes. CLI: `--transport=http --port=8080`.
@@ -438,12 +438,12 @@ HTTP-based MCP transport for remote/cloud deployments. Same 6 tools exposed over
 
 ---
 
-### âœ… 3-Layer Cognitive Graph {#cognitive-graph}
+### ✅ 3-Layer Cognitive Graph {#cognitive-graph}
 
 !!! success "Completed"
     All four phases implemented and merged. 357 tests pass, 0 failures.
 
-Full graph augmentation layer for `spector-memory` â€” three biologically-inspired graph structures that augment vector recall with associative, temporal, and relational signals.
+Full graph augmentation layer for `spector-memory` — three biologically-inspired graph structures that augment vector recall with associative, temporal, and relational signals.
 
 **Architecture:**
 ```
@@ -455,34 +455,34 @@ RecallPipeline
   Step 5e: Entity graph traversal (EntityGraph, 2-hop BFS)
 ```
 
-**Layer 1 â€” Hebbian Association Graph:**
+**Layer 1 — Hebbian Association Graph:**
 
 - Off-heap adjacency list (164B/node, MAX_DEGREE=20) via Panama `MemorySegment`
 - Edge strengthening, decay (0.9 factor per consolidation), spreading activation
 - Persistence via `HGPH` magic header, chunked 64KB FileChannel I/O
 - CoActivationTracker migrated to off-heap: `OffHeapPairTable` (32B/slot) + `OffHeapEdgeTable` (40B/slot)
-- Persistence via `COAX` magic header with hashâ†’tag reverse map
+- Persistence via `COAX` magic header with hash→tag reverse map
 
-**Layer 2 â€” Entity-Relationship Graph:**
+**Layer 2 — Entity-Relationship Graph:**
 
 - Off-heap entity store (48B/entity, 16B/edge), BFS traversal with typed edge filtering
-- 22 entity types Ã— 21 relation types
+- 22 entity types × 21 relation types
 - `EntityExtractor` SPI with `LlmEntityExtractor` (externalized prompt template) and `NoOpEntityExtractor`
 - Persistence via `ENTG` magic header with nameIndex reconstruction
 
-**Layer 3 â€” Temporal Causal Chain:**
+**Layer 3 — Temporal Causal Chain:**
 
 - Off-heap linked list (16B/node: prevIdx + nextIdx + sessionId + pad)
 - Session-local memory linking at ingestion, forward/backward traversal at recall
 - Persistence via `TPCH` magic header
 
-**Error framework:** 6 error codes (`SPE-310-006..011`), 7 granular exception classes extending `SpectorGraphException`. All catch sites use `catch(RuntimeException)` â†’ create exception â†’ `log(ex.getMessage())`. No string concatenation.
+**Error framework:** 6 error codes (`SPE-310-006..011`), 7 granular exception classes extending `SpectorGraphException`. All catch sites use `catch(RuntimeException)` → create exception → `log(ex.getMessage())`. No string concatenation.
 
-**Each graph step is additive and gracefully degrading** â€” if the graph is null/empty or the operation throws, the step is a no-op.
+**Each graph step is additive and gracefully degrading** — if the graph is null/empty or the operation throws, the step is a no-op.
 
 ---
 
-### âœ… Temporal Chain Pruning {#temporal-pruning}
+### ✅ Temporal Chain Pruning {#temporal-pruning}
 
 !!! success "Completed"
     `pruneOlderThan(long cutoffEpochMs)` implemented. Integrated into `reflect()` cycle with configurable `temporalRetentionDays(int)`.
@@ -491,30 +491,30 @@ Temporal chain links now support automatic pruning during the `reflect()` consol
 
 **Implementation:**
 
-- `TemporalChain.pruneOlderThan(long cutoffEpochMs)`: Scans all nodes, unlinks stale entries, re-stitches prev â†’ next pointers
+- `TemporalChain.pruneOlderThan(long cutoffEpochMs)`: Scans all nodes, unlinks stale entries, re-stitches prev → next pointers
 - `pad:4B` field in node layout replaced with `epochSec:4B` (seconds since epoch)
 - Configurable via Builder: `temporalRetentionDays(int)` (default: 7)
 - Pruned count reported in `ReflectReport`
 
 ---
 
-### âœ… Cross-Layer Promotion (Hebbian â†’ Entity) {#cross-layer-promotion}
+### ✅ Cross-Layer Promotion (Hebbian → Entity) {#cross-layer-promotion}
 
 !!! success "Completed"
     `promoteHebbianToEntity()` implemented in `DefaultSpectorMemory.reflect()`. Uses reverse index for O(1) entity lookup per memory.
 
-Strong statistical Hebbian associations are automatically promoted to explicit entity relations during the `reflect()` consolidation cycle â€” analogous to hippocampal replay.
+Strong statistical Hebbian associations are automatically promoted to explicit entity relations during the `reflect()` consolidation cycle — analogous to hippocampal replay.
 
 **Implementation:**
 
-- During `reflect()`, scans HebbianGraph for edges with weight â‰¥ threshold
-- Builds `memoryIdx â†’ entityIds` reverse index for O(1) lookup (vs previous O(EÃ—R) scan)
+- During `reflect()`, scans HebbianGraph for edges with weight ≥ threshold
+- Builds `memoryIdx → entityIds` reverse index for O(1) lookup (vs previous O(E×R) scan)
 - If shared entities exist, strengthens the entity relation edge; if none, creates a `RELATED_TO` relation
 - Cross-promotion count reported in `ReflectReport`
 
 ---
 
-### âœ… Entity Graph Decay + Node Merging {#entity-decay}
+### ✅ Entity Graph Decay + Node Merging {#entity-decay}
 
 !!! success "Completed"
     `decayRelations()`, `mergeSimilarEntities()`, and `levenshteinDistance()` implemented with off-heap optimizations.
@@ -530,7 +530,7 @@ Entity graph edges now decay during consolidation, and near-duplicate entities a
 
 ---
 
-### âœ… Graph-Aware Scoring Weights {#graph-scoring}
+### ✅ Graph-Aware Scoring Weights {#graph-scoring}
 
 !!! success "Completed"
     `GraphScoringPolicy` record implemented. Configurable via `DefaultSpectorMemory.Builder.graphScoringPolicy()`.
@@ -558,44 +558,44 @@ public record GraphScoringPolicy(
 
 ---
 
-### âœ… SVASQ-4 â€” Half-Precision SVASQ (INT4 Codes) {#svasq-4}
+### ✅ SVASQ-4 — Half-Precision SVASQ (INT4 Codes) {#svasq-4}
 
 !!! success "Completed"
     Implemented and merged. Available via `SpectorEngine.builder().svasq4()` or `QuantizedHnswIndex.svasq4(...)`.
 
-Replace INT8 `[-127, 127]` codes with INT4 `[-7, 7]` codes in the SVASQ pipeline. The FWHT rotation still equalizes variance, so INT4 quantization error remains uniformly distributed â€” just at a coarser granularity (15 levels vs 255).
+Replace INT8 `[-127, 127]` codes with INT4 `[-7, 7]` codes in the SVASQ pipeline. The FWHT rotation still equalizes variance, so INT4 quantization error remains uniformly distributed — just at a coarser granularity (15 levels vs 255).
 
 **Memory layout:**
 ```
-[float32 normSq (4 bytes)] [INT4 Ã— paddedDim nibble-packed (paddedDim/2 bytes)]
+[float32 normSq (4 bytes)] [INT4 × paddedDim nibble-packed (paddedDim/2 bytes)]
 ```
 
 | Dims | Current SVASQ-8 | SVASQ-4 | Compression vs float32 |
 |------|---------------|--------|----------------------|
-| 384 â†’ 512 | 516 B | 260 B | **5.9Ã—** |
-| 768 â†’ 1024 | 1028 B | 516 B | **6.0Ã—** |
-| 4096 | 4100 B | 2052 B | **8.0Ã—** |
+| 384 → 512 | 516 B | 260 B | **5.9×** |
+| 768 → 1024 | 1028 B | 516 B | **6.0×** |
+| 4096 | 4100 B | 2052 B | **8.0×** |
 
 **Recall:**
 
-- Without rescore: ~95â€“97% recall@10
-- With 3Ã— oversampling rescore: **~97â€“99% recall@10**
+- Without rescore: ~95–97% recall@10
+- With 3× oversampling rescore: **~97–99% recall@10**
 
 **Key design decisions:**
 
 - Separate `Svasq4Encoder` / `Svasq4SimdKernel` classes (not parameterizing SVASQ-8) to avoid impacting existing code
 - Offset encoding `[0, 14]` keeps byte values non-negative for correct `castShape` sign extension
 - Deinterleaved hi/lo query arrays match nibble layout for natural SIMD ILP
-- Tighter clipping (2.5Ïƒ vs 3.0Ïƒ) optimizes for 15 quantization levels
+- Tighter clipping (2.5σ vs 3.0σ) optimizes for 15 quantization levels
 
 ---
 
-### âœ… Padding-Aware Storage â€” Skip Zero Dimensions {#padding-aware}
+### ✅ Padding-Aware Storage — Skip Zero Dimensions {#padding-aware}
 
 !!! success "Completed"
     Implemented in `SvasqEncoder`, `Svasq4Encoder`, `SvasqParams.storedDim()`. SIMD-aligned to 16-byte boundary (Option A).
 
-SVASQ pads vectors to the next power-of-two dimensionality (e.g., 768 â†’ 1024), adding wasted bytes. The padded dimensions are zero-filled before FWHT, so their rotated codes are predictable. We now **store only the first `originalDim` codes** (aligned to the next SIMD boundary) and reconstruct padded codes at query time.
+SVASQ pads vectors to the next power-of-two dimensionality (e.g., 768 → 1024), adding wasted bytes. The padded dimensions are zero-filled before FWHT, so their rotated codes are predictable. We now **store only the first `originalDim` codes** (aligned to the next SIMD boundary) and reconstruct padded codes at query time.
 
 | Dims | paddedDim | Before | After (Padding-Aware) | Savings |
 |------|-----------|---------------|---------------|---------
@@ -604,9 +604,9 @@ SVASQ pads vectors to the next power-of-two dimensionality (e.g., 768 â†’ 1
 | 1536 | 2048 | 2052 B | 1540 B | **25%** |
 | 4096 | 4096 | 4100 B | 4100 B | 0% (already pow2) |
 
-**Recall impact:** **None** for L2 distance â€” padded dimensions contribute a constant offset that doesn't affect ranking.
+**Recall impact:** **None** for L2 distance — padded dimensions contribute a constant offset that doesn't affect ranking.
 
-**Implementation:** SIMD-aligned stored codes (Option A â€” aligns `storedDim` to next 16-byte boundary). Zero SIMD tail loop overhead.
+**Implementation:** SIMD-aligned stored codes (Option A — aligns `storedDim` to next 16-byte boundary). Zero SIMD tail loop overhead.
 
 **Changes:**
 
@@ -616,7 +616,7 @@ SVASQ pads vectors to the next power-of-two dimensionality (e.g., 768 â†’ 1
 
 ---
 
-### âœ… Norm Header Compression â€” float32 â†’ float16 {#norm-f16}
+### ✅ Norm Header Compression — float32 → float16 {#norm-f16}
 
 !!! success "Completed"
     Implemented via `Float.floatToFloat16()` / `Float.float16ToFloat()` in all SVASQ encoders and kernels.
@@ -630,7 +630,7 @@ The 4-byte `float32 exactNormSq` header is now compressed to 2 bytes using `floa
 | SVASQ-8 (768-dim) | 1028 B | 770 B | **25%** |
 | SVASQ-4 (768-dim) | 516 B | 386 B | **25%** |
 
-**Recall impact:** < 0.01% â€” `float16` has ~3 decimal digits of precision.
+**Recall impact:** < 0.01% — `float16` has ~3 decimal digits of precision.
 
 **Changes:**
 
@@ -640,7 +640,7 @@ The 4-byte `float32 exactNormSq` header is now compressed to 2 bytes using `floa
 
 ---
 
-### âœ… Structured Concurrency (JEP 505) {#structured-concurrency}
+### ✅ Structured Concurrency (JEP 505) {#structured-concurrency}
 
 !!! success "Completed"
     Implemented via `ConcurrentTasks` in `spector-commons`. Dual-mode: structured concurrency (default) with classic `ExecutorService` fallback via `-Dspector.concurrency.structured=false`.
@@ -649,7 +649,7 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 
 | Site | Module | Pattern | Benefit |
 |------|--------|---------|---------|
-| `HybridSearchOrchestrator` | spector-query | 2-way fan-out (keyword âˆ¥ vector) | Auto-cancel sibling on failure |
+| `HybridSearchOrchestrator` | spector-query | 2-way fan-out (keyword ∥ vector) | Auto-cancel sibling on failure |
 | `ClusterCoordinator` | spector-node | N-way shard fan-out | Auto-cancel all on shard failure |
 | `DistributedQueryCoordinator` | spector-node | N-way with timeout + partial results | Clean timeout via `awaitAll()` + `withTimeout()` |
 | `ParallelEmbeddingPipeline` | spector-embed-api | N-way batch embedding | Scope-per-call, no executor lifecycle |
@@ -667,32 +667,32 @@ Migrated all 6 concurrency sites from unstructured `ExecutorService` + `Future` 
 
 ## Summary Table
 
-### ðŸ”œ Active & Planned
+### 📜 Active & Planned
 
 | # | Improvement | Category | Effort | Status |
 |---|------------|----------|--------|--------|
-| 1 | **OpenClaw integration** | Agentic AI | Medium | ðŸ”œ Planned |
-| 2 | **Python SDK (MCP wrapper)** | Client SDKs | Low-Medium | ðŸ”œ Planned |
-| 3 | **ProfileAdaptor (contextual bandit)** | Agentic AI | Low-Medium | ðŸ”œ Planned |
-| 4 | **Documentation split** | Documentation | Low | ðŸ”œ Planned |
-| 5 | **GPU kernel dispatch** | Compute | Medium | ðŸ”œ Infra ready |
-| 6 | **Project Valhalla** | Runtime | Medium | ðŸ”„ Prepared |
+| 1 | **OpenClaw integration** | Agentic AI | Medium | 📜 Planned |
+| 2 | **Python SDK (MCP wrapper)** | Client SDKs | Low-Medium | 📜 Planned |
+| 3 | **ProfileAdaptor (contextual bandit)** | Agentic AI | Low-Medium | 📜 Planned |
+| 4 | **Documentation split** | Documentation | Low | 📜 Planned |
+| 5 | **GPU kernel dispatch** | Compute | Medium | 📜 Infra ready |
+| 6 | **Project Valhalla** | Runtime | Medium | 🔄 Prepared |
 
-### ðŸ”¬ Research & Future
+### 🔬 Research & Future
 
 | # | Improvement | Category | Effort | Status |
 |---|------------|----------|--------|--------|
-| 7 | **TypeScript/JS SDK** | Client SDKs | Medium | ðŸ”¬ Future |
-| 8 | **RecallMode.REPLAY (WAL time-travel)** | Agentic AI | High | ðŸ”¬ Research |
-| 9 | **LoRA adapter routing** | Agentic AI | High | ðŸ”¬ Research |
-| 10 | **ColBERT late interaction** | Agentic AI | High | ðŸ”¬ Research |
-| 11 | **SVASQ-PQ hybrid** | Compression | Very High | ðŸ”¬ Research |
-| 12 | **Flat-mode SVASQ** | Compression | Medium | ðŸ”¬ Research |
-| 13 | **NPU acceleration** | Compute | High | ðŸ”¬ Exploratory |
-| 14 | **WASM edge runtime** | Runtime | High | ðŸ”¬ Exploratory |
-| 15 | **Adaptive bit-width** | Compression | Very High | ðŸ”´ Not planned |
+| 7 | **TypeScript/JS SDK** | Client SDKs | Medium | 🔬 Future |
+| 8 | **RecallMode.REPLAY (WAL time-travel)** | Agentic AI | High | 🔬 Research |
+| 9 | **LoRA adapter routing** | Agentic AI | High | 🔬 Research |
+| 10 | **ColBERT late interaction** | Agentic AI | High | 🔬 Research |
+| 11 | **SVASQ-PQ hybrid** | Compression | Very High | 🔬 Research |
+| 12 | **Flat-mode SVASQ** | Compression | Medium | 🔬 Research |
+| 13 | **NPU acceleration** | Compute | High | 🔬 Exploratory |
+| 14 | **WASM edge runtime** | Runtime | High | 🔬 Exploratory |
+| 15 | **Adaptive bit-width** | Compression | Very High | 🔴 Not planned |
 
-### âœ… Completed
+### ✅ Completed
 
 | # | Improvement | Category | Effort |
 |---|------------|----------|--------|

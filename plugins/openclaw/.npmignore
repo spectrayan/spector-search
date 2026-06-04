@@ -1,0 +1,16 @@
+# Source files (dist/ is published)
+src/
+tests/
+
+# Config and development files
+tsconfig.json
+vitest.config.ts
+vitest.integration.config.ts
+.eslintrc.*
+
+# IDE
+.vscode/
+.idea/
+
+# Build artifacts
+*.tsbuildinfo

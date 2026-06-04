@@ -62,3 +62,4 @@ RnD
 .test-data/
 
 openclaw/
+!plugins/openclaw

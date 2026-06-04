@@ -1,0 +1,54 @@
+{
+  "name": "@spectrayan/spector",
+  "version": "1.0.0",
+  "description": "Spector Cognitive Memory — biologically-inspired AI memory backend for OpenClaw with 4-tier cognitive architecture, SIMD-accelerated scoring, and sub-millisecond recall",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:integration": "vitest --config vitest.integration.config.ts",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "openclaw",
+    "memory",
+    "spector",
+    "cognitive",
+    "vector-search",
+    "ai-agent",
+    "mcp",
+    "semantic-search",
+    "long-term-memory"
+  ],
+  "author": "Spectrayan <hello@spectrayan.com>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/spectrayan/spector",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spectrayan/spector.git",
+    "directory": "plugins/openclaw"
+  },
+  "bugs": {
+    "url": "https://github.com/spectrayan/spector/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "openclaw": "^2026.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
