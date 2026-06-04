@@ -113,11 +113,17 @@ public final class SemanticMemoryStore extends AbstractTierStore {
 
         long offset = dataOffset() + (long) count * layout.stride();
         layout.writeHeader(segment, offset, header);
-        MemorySegment.copy(
-                MemorySegment.ofArray(quantizedVec), 0,
-                segment, layout.vectorOffset(offset),
-                quantizedVec.length
-        );
+
+        // Write vector payload (if available — ReflectDaemon promotes with null vec)
+        if (quantizedVec != null) {
+            MemorySegment.copy(
+                    MemorySegment.ofArray(quantizedVec), 0,
+                    segment, layout.vectorOffset(offset),
+                    quantizedVec.length
+            );
+        }
+        // else: vector region stays zeroed (header-only consolidation)
+
         count++;
         persistCount();
     }
