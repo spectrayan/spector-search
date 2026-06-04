@@ -1151,7 +1151,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         private boolean persistWorkingMemory = false;
         private CircadianPolicy circadianPolicy = CircadianPolicy.DEFAULT;
         private int workingCapacity = 100;
-        private int episodicPartitionCapacity = 10_000;
+        private int episodicPartitionCapacity = 1_000;  // 1K per daily partition (~4MB at 4160B/record)
         private int semanticCapacity = 10_000;  // 10K per partition (~40MB at 4160B/record)
         private int nodesPerPartition = 10_000;
         private int proceduralCapacity = 1_000;
