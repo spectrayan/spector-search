@@ -75,9 +75,14 @@ public final class TierRouter implements AutoCloseable {
     /**
      * Creates a TierRouter with partitioned semantic storage.
      *
-     * <p>In this mode, semantic memories are distributed across rolling
-     * partitions for improved compaction and parallel recall.</p>
+     * @deprecated Since V4 (directory-level partition rolling). Use the
+     * single-file constructor instead. Each colocated partition directory
+     * now contains a single {@code semantic.mem} file, and rolling is
+     * handled by {@code DefaultSpectorMemory.rollPartition()}. The
+     * sub-file rolling ({@code semantic-NNN.mem}) in
+     * {@link PartitionedSemanticStore} is no longer needed.
      */
+    @Deprecated(since = "4.0", forRemoval = true)
     public TierRouter(WorkingMemoryStore workingStore,
                        EpisodicMemoryStore episodicStore,
                        PartitionedSemanticStore partitionedSemanticStore,
@@ -188,10 +193,18 @@ public final class TierRouter implements AutoCloseable {
     /** Returns the Semantic Memory store (for header slab access). Null in partitioned mode. */
     public SemanticMemoryStore semantic() { return semanticStore; }
 
-    /** Returns the Partitioned Semantic store (for parallel recall). Null in single-file mode. */
+    /**
+     * Returns the Partitioned Semantic store.
+     * @deprecated Since V4 — use {@link #semantic()} with directory-level partitioning.
+     */
+    @Deprecated(since = "4.0", forRemoval = true)
     public PartitionedSemanticStore semanticPartitioned() { return partitionedSemantic; }
 
-    /** Returns true if semantic storage is partitioned. */
+    /**
+     * Returns true if semantic storage uses the old sub-file partitioning.
+     * @deprecated Since V4 — directory-level rolling replaces sub-file partitioning.
+     */
+    @Deprecated(since = "4.0", forRemoval = true)
     public boolean isSemanticPartitioned() { return partitionedSemantic != null; }
 
     /** Returns the Procedural Memory store (for flat scan). */

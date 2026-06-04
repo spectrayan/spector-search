@@ -56,7 +56,13 @@ import java.nio.file.StandardCopyOption;
  *       log.info("Migrated {} records", result.migratedRecords());
  *   }
  * }</pre>
+ *
+ * @deprecated Since V4. Migrates to the now-deprecated {@link PartitionedSemanticStore}
+ * format ({@code semantic/semantic-NNN.mem}). The current architecture uses
+ * directory-level partition rolling with a single {@code semantic.mem} per
+ * colocated partition directory.
  */
+@Deprecated(since = "4.0", forRemoval = true)
 public final class StorageMigrator {
 
     private static final Logger log = LoggerFactory.getLogger(StorageMigrator.class);

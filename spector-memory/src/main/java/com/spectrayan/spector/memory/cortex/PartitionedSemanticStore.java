@@ -66,8 +66,14 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * <p>When tombstoned records accumulate, individual partitions can be
  * compacted (rebuilt) without blocking reads on other partitions.</p>
  *
+ * @deprecated Since V4. Directory-level partition rolling replaces sub-file
+ * rolling. Each colocated partition directory ({@code 000_epoch/}) now
+ * contains a single {@code semantic.mem}. Partition rolling is handled
+ * at the {@code DefaultSpectorMemory} level. Use {@link SemanticMemoryStore}
+ * directly.
  * @see SemanticMemoryStore for individual partition implementation
  */
+@Deprecated(since = "4.0", forRemoval = true)
 public final class PartitionedSemanticStore implements TierStore {
 
     private static final Logger log = LoggerFactory.getLogger(PartitionedSemanticStore.class);
