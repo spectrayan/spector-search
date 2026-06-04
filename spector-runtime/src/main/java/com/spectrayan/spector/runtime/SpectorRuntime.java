@@ -160,7 +160,7 @@ public final class SpectorRuntime implements AutoCloseable {
                     .embeddingProvider(embedder)
                     .persistenceMode(MemoryPersistenceMode.valueOf(memoryConfig.persistenceMode()))
                     .persistence(memoryConfig.persistencePath())
-                    .semanticCapacity(Math.min(5_000, memoryConfig.capacity()))
+                    .semanticCapacity(10_000)  // 10K per partition; auto-rolls to new partition dir when full
                     .nodesPerPartition(memoryConfig.nodesPerPartition());
 
             if (mode.memoryEnabled()) {

@@ -41,6 +41,7 @@ import com.spectrayan.spector.storage.VectorStore;
 
 import com.spectrayan.spector.memory.error.SpectorEntityGraphException;
 import com.spectrayan.spector.memory.error.SpectorHebbianException;
+import com.spectrayan.spector.memory.error.SpectorMemoryTierFullException;
 import com.spectrayan.spector.memory.error.SpectorTemporalChainException;
 
 import org.slf4j.Logger;
@@ -89,7 +90,7 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
     private final ScalarQuantizer quantizer;
     private final SurpriseDetector surpriseDetector;
     private final FlashbulbPolicy flashbulbPolicy;
-    private final TierRouter tierRouter;
+    private volatile TierRouter tierRouter;  // volatile: swapped on partition roll
     private final MemoryIndex index;
     private final MemoryWal wal;
     private final WorkingMemoryStore workingStore;  // nullable
@@ -113,6 +114,9 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
     // ── Session tracking for Hebbian co-ingestion and temporal chains ──
     private final AtomicInteger lastIngestedMemoryIdx = new AtomicInteger(-1);
     private volatile int currentSessionId = 0;
+
+    // ── Partition rolling callback (nullable) ──
+    private volatile Runnable partitionRollCallback;
 
     public CognitiveIngestionTarget(ScalarQuantizer quantizer,
                                      SurpriseDetector surpriseDetector,
@@ -152,6 +156,21 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         this.bm25Index = bm25Index;
         this.textDataStore = textDataStore;
         this.activePartitionIndex = activePartitionIndex;
+    }
+
+    /**
+     * Updates the tier router after a partition roll.
+     * Called by DefaultSpectorMemory.rollPartition() under lock.
+     */
+    public void updateTierRouter(TierRouter newRouter) {
+        this.tierRouter = newRouter;
+    }
+
+    /**
+     * Sets the partition roll callback, invoked when a tier store is full.
+     */
+    public void setPartitionRollCallback(Runnable callback) {
+        this.partitionRollCallback = callback;
     }
 
     /**
@@ -284,8 +303,21 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                 System.currentTimeMillis(), synapticTags, l2Norm, importance,
                 0, (short) 0, valence, flags, arousal, 1.0f);
 
-        // Step 7: Route to tier store and write
-        long offset = tierRouter.write(type, header, quantized);
+        // Step 7: Route to tier store and write (with automatic partition rolling)
+        long offset;
+        try {
+            offset = tierRouter.write(type, header, quantized);
+        } catch (SpectorMemoryTierFullException e) {
+            if (partitionRollCallback != null) {
+                log.info("Tier {} full ({} records) — rolling to new partition",
+                        type, e.getCapacity());
+                partitionRollCallback.run();
+                // Retry with the new router (swapped by callback)
+                offset = tierRouter.write(type, header, quantized);
+            } else {
+                throw e;  // No rolling configured — propagate
+            }
+        }
 
         // Step 7b: Add to shared HNSW index for semantic recall.
         // The HNSW is store-backed — must populate the engine's VectorStore first

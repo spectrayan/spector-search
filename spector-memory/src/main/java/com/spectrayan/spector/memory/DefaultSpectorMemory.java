@@ -123,7 +123,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     private final CognitiveIngestionTarget cognitiveTarget;
     private final EmbeddingProvider embeddingProvider;
     private final RecallPipeline recallPipeline;
-    private final TierRouter tierRouter;
+    private volatile TierRouter tierRouter;  // volatile: swapped on partition roll
     private final MemoryIndex index;
     private final ScalarQuantizer quantizer;
 
@@ -147,7 +147,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     private final int dimensions;
     private final MemoryPersistenceMode persistenceMode;
     private final Path persistencePath;
-    private final Path activePartitionDir;  // colocated partition dir for this instance
+
     private final CircadianPolicy circadianPolicy;
     private final CognitiveProfileConfig profileConfig;
     private final int temporalRetentionDays;
@@ -157,6 +157,15 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
     // ── Multi-Tenant Namespace ──
     private final SpectorNamespaceManager namespaceManager;
+
+    // ── Partition Rolling Config (retained for rollPartition) ──
+    private final Path basePath;
+    private final int quantizedVecBytes;
+    private final int semanticCapacity;
+    private final int episodicPartitionCapacity;
+    private final int proceduralCapacity;
+    private volatile Path activePartitionDir;  // volatile: updated on partition roll
+    private final Object partitionRollLock = new Object();
 
     private DefaultSpectorMemory(Builder builder) {
         this.dimensions = builder.dimensions;
@@ -217,6 +226,13 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         // On a fresh start with no existing data, we create partition 000.
 
         int quantizedVecBytes = dimensions;
+
+        // Store partition rolling config
+        this.basePath = basePath;
+        this.quantizedVecBytes = quantizedVecBytes;
+        this.semanticCapacity = builder.semanticCapacity;
+        this.episodicPartitionCapacity = builder.episodicPartitionCapacity;
+        this.proceduralCapacity = builder.proceduralCapacity;
 
         // ── Resolve the active partition directory (DISK mode) ──
         Path resolvedPartitionDir = null;
@@ -420,6 +436,12 @@ public final class DefaultSpectorMemory implements SpectorMemory {
                 hebbianGraph, temporalChain, entityExtractor, entityGraph,
                 bm25Index, textDataStore, activePartitionIndex);
 
+        // Wire automatic partition rolling: when any tier store is full,
+        // roll to a new colocated partition directory and retry the write
+        if (isDisk) {
+            this.cognitiveTarget.setPartitionRollCallback(this::rollPartition);
+        }
+
         // Build optional fused semantic recall strategy
         SemanticRecallStrategy semanticStrategy = null;
         if (builder.semanticIndex != null && tierRouter.semantic() != null) {
@@ -483,6 +505,75 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         java.nio.file.Files.createDirectories(newPartition);
         log.info("Created initial partition: {}", newPartition.getFileName());
         return newPartition;
+    }
+
+    /**
+     * Rolls to a new colocated partition directory.
+     *
+     * <p>Called automatically when a tier store reaches capacity during ingestion.
+     * Creates a new partition directory, fresh tier stores, and atomically swaps
+     * the TierRouter so subsequent writes go to the new partition.</p>
+     *
+     * <p>Thread-safe: synchronized on {@code partitionRollLock} so concurrent
+     * ingestion threads see a consistent swap.</p>
+     */
+    void rollPartition() {
+        synchronized (partitionRollLock) {
+            if (basePath == null) {
+                log.warn("Cannot roll partition — no basePath (IN_MEMORY mode)");
+                return;
+            }
+
+            try {
+                // Determine next sequence number
+                Path partitionsDir = StorageLayout.partitionsDir(basePath);
+                int maxSeq = -1;
+                try (var stream = java.nio.file.Files.newDirectoryStream(partitionsDir)) {
+                    for (Path dir : stream) {
+                        if (java.nio.file.Files.isDirectory(dir)
+                                && StorageLayout.isPartitionDir(dir.getFileName().toString())) {
+                            maxSeq = Math.max(maxSeq,
+                                    StorageLayout.parsePartitionSeqNo(dir.getFileName().toString()));
+                        }
+                    }
+                }
+
+                int nextSeq = maxSeq + 1;
+                long epochSecs = java.time.Instant.now().getEpochSecond();
+                Path newPartition = StorageLayout.partitionDir(basePath, nextSeq, epochSecs);
+                java.nio.file.Files.createDirectories(newPartition);
+
+                // Create fresh tier stores in new partition
+                EpisodicMemoryStore newEpisodic = new EpisodicMemoryStore(
+                        StorageLayout.episodicMem(newPartition).getParent(),
+                        quantizedVecBytes, episodicPartitionCapacity);
+
+                ProceduralMemoryStore newProcedural = new ProceduralMemoryStore(
+                        quantizedVecBytes, proceduralCapacity,
+                        StorageLayout.proceduralMem(newPartition));
+
+                SemanticMemoryStore newSemantic = new SemanticMemoryStore(
+                        quantizedVecBytes, semanticCapacity,
+                        StorageLayout.semanticMem(newPartition));
+
+                // Preserve working memory (global, not partitioned)
+                WorkingMemoryStore workingStore = tierRouter.working();
+
+                // Atomic swap
+                this.tierRouter = new TierRouter(workingStore, newEpisodic, newSemantic, newProcedural);
+                this.activePartitionDir = newPartition;
+
+                // Update ingestion target's router reference
+                cognitiveTarget.updateTierRouter(this.tierRouter);
+
+                log.info("Rolled to new partition: {} (seq={}, semantic capacity={})",
+                        newPartition.getFileName(), nextSeq, semanticCapacity);
+
+            } catch (java.io.IOException e) {
+                throw new SpectorServerException(ErrorCode.INTERNAL_ERROR,
+                        "Failed to roll partition: " + e.getMessage(), e);
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1061,7 +1152,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         private CircadianPolicy circadianPolicy = CircadianPolicy.DEFAULT;
         private int workingCapacity = 100;
         private int episodicPartitionCapacity = 10_000;
-        private int semanticCapacity = 100_000;
+        private int semanticCapacity = 10_000;  // 10K per partition (~40MB at 4160B/record)
         private int nodesPerPartition = 10_000;
         private int proceduralCapacity = 1_000;
         private int surpriseWarmup = 20;
