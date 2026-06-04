@@ -62,7 +62,7 @@
 
         <!-- Dependency versions -->
         <javalin.version>6.6.0</javalin.version>
-        <jackson.version>3.1.3</jackson.version>
+        <jackson.version>3.1.4</jackson.version>
         <jackson2.version>2.21.3</jackson2.version>
         <slf4j.version>2.0.17</slf4j.version>
         <logback.version>1.5.18</logback.version>
