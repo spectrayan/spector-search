@@ -67,3 +67,8 @@ openclaw/
 
 node_modules/
 dist/
+datasets/
+.spector-bench/
+.spector-bench-bge/
+.jqwik
+.jqwik-database
