@@ -47,7 +47,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * vectors are distributed across fixed-capacity partition files. When the active
  * (write) partition fills up, a new one is created automatically — identical to
  * the rolling partition model used by
- * {@code com.spectrayan.spector.memory.cortex.PartitionedSemanticStore}.</p>
+ * the directory-level partition model used by Spector Memory.</p>
  *
  * <h3>Partition Layout</h3>
  * <p>Each partition is a memory-mapped file named {@code partition-NNN.mmap}
@@ -78,7 +78,11 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * partition N.</p>
  *
  * @see PartitionMetadata
+ * @deprecated Since V4. Sub-file partition rolling is replaced by directory-level
+ * partitioning (see {@code memory-storage-architecture.md}). Engine will also
+ * migrate to dir-based partitions. Use per-partition {@code semantic.mem} files instead.
  */
+@Deprecated(since = "4.0", forRemoval = true)
 public class ShardedMappedVectorStore implements VectorStore {
 
     private static final Logger log = LoggerFactory.getLogger(ShardedMappedVectorStore.class);

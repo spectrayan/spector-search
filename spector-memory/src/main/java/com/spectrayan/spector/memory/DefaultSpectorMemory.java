@@ -22,9 +22,7 @@ import com.spectrayan.spector.memory.cortex.CentroidRouter;
 import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.ProceduralMemoryStore;
-import com.spectrayan.spector.memory.cortex.PartitionedSemanticStore;
 import com.spectrayan.spector.memory.cortex.SemanticMemoryStore;
-import com.spectrayan.spector.memory.cortex.StorageMigrator;
 import com.spectrayan.spector.memory.cortex.PartitionLayoutMigrator;
 import com.spectrayan.spector.memory.cortex.SemanticRecallStrategy;
 import com.spectrayan.spector.memory.cortex.TierRouter;
@@ -429,7 +427,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         this.cognitiveTarget = new CognitiveIngestionTarget(
                 quantizer, surpriseDetector, flashbulbPolicy,
                 tierRouter, index, wal, workingStore, builder.icnuWeights,
-                builder.semanticIndex, builder.vectorStore, builder.tagExtractor, true,
+                builder.semanticIndex, builder.tagExtractor, true,
                 hebbianGraph, temporalChain, entityExtractor, entityGraph,
                 bm25Index, textDataStore, activePartitionIndex);
 
@@ -443,6 +441,44 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         SemanticRecallStrategy semanticStrategy = null;
         if (builder.semanticIndex != null && tierRouter.semantic() != null) {
             semanticStrategy = new SemanticRecallStrategy(builder.semanticIndex, tierRouter.semantic(), index);
+
+            // Rebuild HNSW from persisted semantic store if it has data but HNSW is empty
+            var semStore = tierRouter.semantic();
+            int storeSize = semStore.size();
+            if (storeSize > 0 && builder.semanticIndex.size() == 0) {
+                log.info("Rebuilding HNSW index from {} persisted semantic records...", storeSize);
+                long startMs = System.currentTimeMillis();
+                var seg = semStore.primarySegment();
+                var recLayout = semStore.layout();
+                int stride = recLayout.stride();
+                int vecBytes = recLayout.quantizedVecBytes();
+                long baseOffset = semStore.filePath() != null
+                        ? com.spectrayan.spector.memory.cortex.AbstractTierStore.METADATA_HEADER_BYTES : 0;
+
+                int rebuilt = 0;
+                for (int i = 0; i < storeSize; i++) {
+                    long recordOff = baseOffset + (long) i * stride;
+                    // Read quantized vector bytes
+                    byte[] quantized = new byte[vecBytes];
+                    java.lang.foreign.MemorySegment.copy(
+                            seg, java.lang.foreign.ValueLayout.JAVA_BYTE,
+                            recLayout.vectorOffset(recordOff),
+                            java.lang.foreign.MemorySegment.ofArray(quantized), java.lang.foreign.ValueLayout.JAVA_BYTE,
+                            0, vecBytes);
+
+                    // Dequantize to float[]
+                    float[] vector = quantizer.decode(quantized);
+
+                    // Find the ID for this record from the MemoryIndex
+                    String id = index.findIdByOffset(MemoryType.SEMANTIC, recordOff);
+                    if (id != null && !builder.semanticIndex.isReadOnly()) {
+                        builder.semanticIndex.add(id, i, vector);
+                        rebuilt++;
+                    }
+                }
+                long elapsed = System.currentTimeMillis() - startMs;
+                log.info("HNSW rebuild complete: {}/{} vectors added in {}ms", rebuilt, storeSize, elapsed);
+            }
         }
 
         this.recallPipeline = new RecallPipeline(
@@ -556,6 +592,27 @@ public final class DefaultSpectorMemory implements SpectorMemory {
                 // Preserve working memory (global, not partitioned)
                 WorkingMemoryStore workingStore = tierRouter.working();
 
+                // ── Flush index + graphs to the OLD partition before rolling ──
+                Path oldPartition = this.activePartitionDir;
+                if (oldPartition != null) {
+                    try {
+                        index.save(StorageLayout.indexMidx(oldPartition));
+                        log.info("Flushed MemoryIndex to rolling partition: {}", oldPartition.getFileName());
+                    } catch (Exception e) {
+                        log.error("Failed to flush MemoryIndex during partition roll: {}", e.getMessage(), e);
+                    }
+                    try {
+                        hebbianGraph.save(StorageLayout.hebbianGraph(oldPartition));
+                    } catch (Exception e) {
+                        log.error("Failed to flush HebbianGraph during partition roll: {}", e.getMessage(), e);
+                    }
+                    try {
+                        temporalChain.save(StorageLayout.temporalChain(oldPartition));
+                    } catch (Exception e) {
+                        log.error("Failed to flush TemporalChain during partition roll: {}", e.getMessage(), e);
+                    }
+                }
+
                 // Atomic swap
                 this.tierRouter = new TierRouter(workingStore, newEpisodic, newSemantic, newProcedural);
                 this.activePartitionDir = newPartition;
@@ -666,9 +723,8 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     @Override
     public ReflectReport reflect() {
         log.info("Manual reflection triggered");
-        // Get the semantic TierStore (works for both single-file and partitioned modes)
-        var semanticTarget = tierRouter.isSemanticPartitioned()
-                ? tierRouter.semanticPartitioned() : tierRouter.semantic();
+        // Get the semantic TierStore (dir-level partitioning, single .mem per partition)
+        var semanticTarget = tierRouter.semantic();
         ReflectReport report = reflectDaemon.runCycle(
                 tierRouter.episodic(), semanticTarget,
                 offset -> index.findTextByOffset(MemoryType.EPISODIC, offset));
@@ -1165,7 +1221,6 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         private boolean pinSourceEpisodes = false;
         private int pinnedQuota = 10_000;
         private com.spectrayan.spector.memory.pipeline.TagExtractor tagExtractor;
-        private com.spectrayan.spector.storage.VectorStore vectorStore;
         private CognitiveProfileConfig profileConfig = CognitiveProfileConfig.allEnabled();
 
         // 3-Layer Cognitive Graph configuration
@@ -1205,8 +1260,6 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         /** Optional HNSW/IVF index for fused semantic recall (default: null = header-only fallback). */
         public Builder semanticIndex(com.spectrayan.spector.index.VectorIndex idx) { this.semanticIndex = idx; return this; }
 
-        /** Engine's VectorStore for store-backed HNSW population (default: null). */
-        public Builder vectorStore(com.spectrayan.spector.storage.VectorStore vs) { this.vectorStore = vs; return this; }
 
         /** Inhibition of Return TTL in millis (default: 300_000 = 5 minutes). */
         public Builder inhibitionTtlMs(long ms) { this.inhibitionTtlMs = ms; return this; }

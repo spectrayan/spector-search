@@ -86,20 +86,29 @@ public final class LlmTagExtractor implements TagExtractor {
     @Override
     public String[] extract(String id, String text) {
         if (generator == null || !generator.isAvailable()) {
+            log.info("[TagExtract] LLM unavailable for '{}', using fallback", truncId(id));
             return fallback.extract(id, text);
         }
 
+        long startNs = System.nanoTime();
         try {
             String content = text != null && text.length() > MAX_CONTENT_FOR_PROMPT
                     ? text.substring(0, MAX_CONTENT_FOR_PROMPT) : text;
 
             String prompt = String.format(PROMPT_TEMPLATE, content != null ? content : id);
+            log.debug("[TagExtract] LLM prompt for '{}': {} chars", truncId(id), prompt.length());
+
             String response = generator.generate(prompt);
+            long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
 
             if (response == null || response.isBlank()) {
-                log.debug("LLM returned empty tags for '{}', falling back", id);
+                log.info("[TagExtract] LLM returned empty for '{}' ({}ms), using fallback",
+                        truncId(id), elapsedMs);
                 return fallback.extract(id, text);
             }
+
+            log.debug("[TagExtract] LLM raw response for '{}': '{}'", truncId(id),
+                    response.length() > 200 ? response.substring(0, 200) + "..." : response);
 
             // Parse comma-separated tags
             String[] tags = Arrays.stream(response.split("[,;\\n]"))
@@ -112,18 +121,26 @@ public final class LlmTagExtractor implements TagExtractor {
                     .toArray(String[]::new);
 
             if (tags.length == 0) {
-                log.debug("LLM tags parsed to empty for '{}', falling back", id);
+                log.info("[TagExtract] LLM tags parsed to empty for '{}' (raw='{}', {}ms), using fallback",
+                        truncId(id), response.trim(), elapsedMs);
                 return fallback.extract(id, text);
             }
 
-            log.debug("LLM extracted {} tags for '{}': {}", tags.length, id,
-                    String.join(", ", tags));
+            log.info("[TagExtract] LLM extracted {} tags for '{}' in {}ms: [{}]",
+                    tags.length, truncId(id), elapsedMs, String.join(", ", tags));
             return tags;
 
         } catch (Exception e) {
-            log.warn("LLM tag extraction failed for '{}': {}, falling back",
-                    id, e.getMessage());
+            long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+            log.warn("[TagExtract] LLM failed for '{}' in {}ms: {}, using fallback",
+                    truncId(id), elapsedMs, e.getMessage());
             return fallback.extract(id, text);
         }
+    }
+
+    /** Truncate long IDs (file paths) for readable logs. */
+    private static String truncId(String id) {
+        if (id == null) return "null";
+        return id.length() > 60 ? "..." + id.substring(id.length() - 57) : id;
     }
 }

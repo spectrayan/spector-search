@@ -20,6 +20,9 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Default tag extractor: derives synaptic tags from document path and content.
  *
@@ -40,6 +43,8 @@ import java.util.regex.Pattern;
  * @see TagExtractor
  */
 public final class ContentTagExtractor implements TagExtractor {
+
+    private static final Logger log = LoggerFactory.getLogger(ContentTagExtractor.class);
 
     /** Maximum tags per record (Bloom filter sweet spot). */
     private static final int MAX_TAGS = 10;
@@ -79,14 +84,24 @@ public final class ContentTagExtractor implements TagExtractor {
 
         // Phase 1: Path-based tags from document ID
         extractPathTags(id, tags);
+        int pathTagCount = tags.size();
 
         // Phase 2: Content-based significant words
         if (tags.size() < MAX_TAGS && text != null && !text.isBlank()) {
             extractContentTags(text, tags);
         }
+        int contentTagCount = tags.size() - pathTagCount;
 
         // Cap at MAX_TAGS
-        return tags.stream().limit(MAX_TAGS).toArray(String[]::new);
+        String[] result = tags.stream().limit(MAX_TAGS).toArray(String[]::new);
+
+        String truncId = id != null && id.length() > 60
+                ? "..." + id.substring(id.length() - 57) : id;
+        log.info("[TagExtract] Content extracted {} tags for '{}' (path={}, content={}): [{}]",
+                result.length, truncId, pathTagCount, contentTagCount,
+                String.join(", ", result));
+
+        return result;
     }
 
     /**

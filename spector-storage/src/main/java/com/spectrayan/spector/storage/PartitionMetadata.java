@@ -40,7 +40,10 @@ import java.lang.foreign.ValueLayout;
  * call — no separate I/O needed.</p>
  *
  * @see ShardedMappedVectorStore
+ * @deprecated Since V4. Used by {@link ShardedMappedVectorStore} which is being replaced
+ * by directory-level partitioning.
  */
+@Deprecated(since = "4.0", forRemoval = true)
 public final class PartitionMetadata {
 
     /** Magic bytes: "VPAR" — Vector PARtition. */

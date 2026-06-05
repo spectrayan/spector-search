@@ -43,7 +43,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * <ul>
  *   <li>Extends {@link AbstractTierStore} for common Arena/layout/segment lifecycle</li>
  *   <li>Full cognitive records — header + quantized vector in one slab</li>
- *   <li>When partitioned via {@link PartitionedSemanticStore}, sub-partitions auto-roll</li>
+ *   <li>Directory-level partitioning: each partition dir has its own {@code semantic.mem}</li>
  *   <li>Flat scan with {@code CognitiveScorer} for distance computation</li>
  * </ul>
  */

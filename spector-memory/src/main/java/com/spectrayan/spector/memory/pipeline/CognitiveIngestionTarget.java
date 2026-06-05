@@ -37,7 +37,6 @@ import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
 import com.spectrayan.spector.memory.temporal.TemporalChain;
 import com.spectrayan.spector.memory.cortex.MemoryBM25Index;
 import com.spectrayan.spector.memory.cortex.TextDataStore;
-import com.spectrayan.spector.storage.VectorStore;
 
 import com.spectrayan.spector.memory.error.SpectorEntityGraphException;
 import com.spectrayan.spector.memory.error.SpectorHebbianException;
@@ -95,8 +94,7 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
     private final MemoryWal wal;
     private final WorkingMemoryStore workingStore;  // nullable
     private final IcnuWeights icnuWeights;
-    private final VectorIndex semanticIndex;  // nullable — shared HNSW for semantic recall
-    private final VectorStore vectorStore;    // nullable — engine's off-heap vector storage
+    private final VectorIndex semanticIndex;  // nullable — HNSW for semantic recall
     private final TagExtractor tagExtractor;
     private final boolean normalizeAtIngest;
 
@@ -127,7 +125,6 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                                      WorkingMemoryStore workingStore,
                                      IcnuWeights icnuWeights,
                                      VectorIndex semanticIndex,
-                                     VectorStore vectorStore,
                                      TagExtractor tagExtractor,
                                      boolean normalizeAtIngest,
                                      HebbianGraph hebbianGraph,
@@ -146,7 +143,6 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         this.workingStore = workingStore;
         this.icnuWeights = icnuWeights != null ? icnuWeights : IcnuWeights.DEFAULT;
         this.semanticIndex = semanticIndex;
-        this.vectorStore = vectorStore;
         this.tagExtractor = tagExtractor != null ? tagExtractor : new ContentTagExtractor();
         this.normalizeAtIngest = normalizeAtIngest;
         this.hebbianGraph = hebbianGraph;
@@ -185,11 +181,10 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                                      WorkingMemoryStore workingStore,
                                      IcnuWeights icnuWeights,
                                      VectorIndex semanticIndex,
-                                     VectorStore vectorStore,
                                      TagExtractor tagExtractor) {
         this(quantizer, surpriseDetector, flashbulbPolicy, tierRouter,
                 index, wal, workingStore, icnuWeights, semanticIndex,
-                vectorStore, tagExtractor, true,
+                tagExtractor, true,
                 null, null, null, null,
                 null, null, -1);
     }
@@ -208,7 +203,16 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
     @Override
     public void ingest(String id, String text, float[] vector) {
         // Step 1b: Auto-extract synaptic tags from document ID and content
+        long tagStartNs = System.nanoTime();
         String[] tags = tagExtractor.extract(id, text);
+        long tagMs = (System.nanoTime() - tagStartNs) / 1_000_000;
+
+        log.info("[Ingest] '{}' → {} tags in {}ms via {} [{}]",
+                id.length() > 60 ? "..." + id.substring(id.length() - 57) : id,
+                tags.length, tagMs,
+                tagExtractor.getClass().getSimpleName(),
+                String.join(", ", tags));
+
         ingestCognitive(id, text, vector, MemoryType.SEMANTIC,
                 tags, MemorySource.OBSERVED, null);
     }
@@ -319,18 +323,13 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
             }
         }
 
-        // Step 7b: Add to shared HNSW index for semantic recall.
-        // The HNSW is store-backed — must populate the engine's VectorStore first
-        // so the HNSW can read vectors during graph construction and persistence.
+        // Step 7b: Add to HNSW index for semantic recall.
+        // Memory owns its vectors in tier .mem files (dir-level partitioning).
+        // The HNSW index uses the tier's semantic record offset as the store index.
         int storeIndex = -1;
         if (type == MemoryType.SEMANTIC && semanticIndex != null
                 && !semanticIndex.isReadOnly()) {
-            // Put vector in engine's VectorStore (returns the store index)
-            if (vectorStore != null) {
-                storeIndex = vectorStore.put(id, vector);
-            } else {
-                storeIndex = tierRouter.countFor(MemoryType.SEMANTIC) - 1;
-            }
+            storeIndex = tierRouter.countFor(MemoryType.SEMANTIC) - 1;
             semanticIndex.add(id, storeIndex, vector);
         }
 

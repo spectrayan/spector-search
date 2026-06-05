@@ -28,6 +28,7 @@ import com.spectrayan.spector.memory.CognitiveResult;
 import com.spectrayan.spector.memory.CognitiveResult.RetrievalMode;
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.RecallMode;
+import com.spectrayan.spector.memory.ScoringMode;
 import com.spectrayan.spector.memory.RecallOptions;
 import com.spectrayan.spector.memory.ScoreBreakdown;
 import com.spectrayan.spector.memory.TextSearchMode;
@@ -338,9 +339,16 @@ public final class RecallPipeline {
             }
         }
 
-        // Step 4: Filter suppressed memories (inhibition)
+        // Step 4: Filter suppressed memories (inhibition) — always active
         allResults.removeIf(r -> suppressionSet.isSuppressed(r.id()));
 
+        // ── Steps 5-5e: Cognitive post-processing ──
+        // In SIMILARITY mode, skip ALL cognitive scoring modifications:
+        // habituation, causal boost, Hebbian, temporal chains, entity graph.
+        // This ensures benchmarks measure pure retrieval quality.
+        boolean cognitiveScoring = options.scoringMode() != ScoringMode.SIMILARITY;
+
+        if (cognitiveScoring) {
         // Step 5: Apply habituation penalty + inhibition of return + semantic satiation
         for (int i = 0; i < allResults.size(); i++) {
             CognitiveResult r = allResults.get(i);
@@ -410,10 +418,12 @@ public final class RecallPipeline {
                 }
             }
         }
+        } // end cognitiveScoring
 
         // Build existingIds ONCE for graph expansion steps 5c/5d/5e
         // (previously rebuilt 3 times — eliminated 2 redundant full-list scans)
-        boolean needsGraphExpansion = (hebbianGraph != null || temporalChain != null
+        boolean needsGraphExpansion = cognitiveScoring
+                && (hebbianGraph != null || temporalChain != null
                 || (entityGraph != null && entityExtractor != null && entityExtractor.isAvailable()))
                 && !allResults.isEmpty();
         Set<String> existingIds = needsGraphExpansion ? new HashSet<>(allResults.size()) : null;
@@ -613,66 +623,89 @@ public final class RecallPipeline {
     private void fuseBM25Candidates(List<CognitiveResult> vectorResults,
                                      List<BM25Candidate> bm25Hits,
                                      RecallOptions options, long nowMs) {
-        float gamma = options.gamma();
+        // ── Reciprocal Rank Fusion (RRF) ──
+        // Industry-standard fusion: RRF_score(d) = Σ 1/(k + rank(d))
+        // where k=60 prevents top-1 from dominating. Used by Elasticsearch,
+        // Weaviate, Qdrant. Much better than additive score fusion because
+        // it normalizes heterogeneous score distributions.
+        final int RRF_K = 60;
 
-        // Index existing vector results by ID for O(1) lookup
-        Map<String, Integer> existingById = new java.util.HashMap<>(vectorResults.size());
+        // Build rank maps: id → rank (1-based)
+        Map<String, Integer> vectorRanks = new java.util.LinkedHashMap<>();
         for (int i = 0; i < vectorResults.size(); i++) {
-            CognitiveResult r = vectorResults.get(i);
-            if (r.id() != null) {
-                existingById.put(r.id(), i);
+            String id = vectorResults.get(i).id();
+            if (id != null && !vectorRanks.containsKey(id)) {
+                vectorRanks.put(id, i + 1); // 1-based rank
             }
         }
 
-        for (BM25Candidate bm25 : bm25Hits) {
-            Integer existingIdx = existingById.get(bm25.id());
+        Map<String, Integer> bm25Ranks = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < bm25Hits.size(); i++) {
+            String id = bm25Hits.get(i).id();
+            if (id != null && !bm25Ranks.containsKey(id)) {
+                bm25Ranks.put(id, i + 1);
+            }
+        }
 
-            if (existingIdx != null) {
-                // Case 1: Found by both vector AND BM25 — boost the existing result
-                CognitiveResult existing = vectorResults.get(existingIdx);
-                float boostedScore = existing.score() + gamma * bm25.bm25Score();
+        // Collect all unique IDs
+        java.util.Set<String> allIds = new java.util.LinkedHashSet<>();
+        allIds.addAll(vectorRanks.keySet());
+        allIds.addAll(bm25Ranks.keySet());
 
-                ScoreBreakdown bd = existing.breakdown();
-                ScoreBreakdown newBd = bd != null
-                        ? new ScoreBreakdown(
-                                bd.similarity(), bd.importanceDecay(), bd.tagBoostFactor(),
-                                bd.habituationPenalty(), bd.graphBoost(), bd.valenceAlignment(),
-                                boostedScore)
-                        : null;
+        // Compute RRF score for each ID
+        Map<String, Float> rrfScores = new java.util.HashMap<>();
+        for (String id : allIds) {
+            float score = 0f;
+            Integer vr = vectorRanks.get(id);
+            Integer br = bm25Ranks.get(id);
+            if (vr != null) score += 1.0f / (RRF_K + vr);
+            if (br != null) score += 1.0f / (RRF_K + br);
+            rrfScores.put(id, score);
+        }
 
-                vectorResults.set(existingIdx, new CognitiveResult(
-                        existing.id(), existing.text(), boostedScore, existing.importance(),
+        // Index existing vector results by ID for metadata lookup
+        Map<String, CognitiveResult> existingById = new java.util.LinkedHashMap<>();
+        for (CognitiveResult r : vectorResults) {
+            if (r.id() != null && !existingById.containsKey(r.id())) {
+                existingById.put(r.id(), r);
+            }
+        }
+
+        // Rebuild result list with RRF scores
+        vectorResults.clear();
+        for (String id : allIds) {
+            float rrfScore = rrfScores.get(id);
+            CognitiveResult existing = existingById.get(id);
+
+            if (existing != null) {
+                // Re-score existing result with RRF
+                vectorResults.add(new CognitiveResult(
+                        existing.id(), existing.text(), rrfScore, existing.importance(),
                         existing.ageDays(), existing.recallCount(), existing.valence(),
                         existing.memoryType(), existing.source(), existing.synapticTags(),
-                        existing.decayFactor(), existing.ltpAdjustedDecay(),
-                        existing.retrievalMode(), newBd));
-
+                        existing.decayFactor(), existing.ltpAdjustedDecay()));
             } else {
-                // Case 2: BM25-only — create a new result from index metadata
-                String text = index.text(bm25.id());
+                // BM25-only result — create from index metadata
+                String text = index.text(id);
                 if (text == null || text.isEmpty()) continue;
 
-                MemorySource source = index.source(bm25.id());
-                String[] tags = index.tags(bm25.id());
-
-                // Infer memory type from location
-                MemoryIndex.MemoryLocation loc = index.locate(bm25.id());
+                MemorySource source = index.source(id);
+                String[] tags = index.tags(id);
+                MemoryIndex.MemoryLocation loc = index.locate(id);
                 MemoryType type = loc != null ? loc.type() : MemoryType.SEMANTIC;
 
-                float bm25Score = gamma * bm25.bm25Score();
-
                 vectorResults.add(new CognitiveResult(
-                        bm25.id(), text, bm25Score, 0f, 0f,
+                        id, text, rrfScore, 0f, 0f,
                         (short) 0, (byte) 0, type, source,
                         tags, 1.0f, 1.0f));
-
-                // Track for dedup
-                existingById.put(bm25.id(), vectorResults.size() - 1);
             }
         }
 
-        log.debug("Fused {} BM25 candidates (gamma={}), total results now: {}",
-                bm25Hits.size(), gamma, vectorResults.size());
+        // Sort by RRF score descending
+        vectorResults.sort(java.util.Comparator.comparing(CognitiveResult::score).reversed());
+
+        log.debug("RRF fused {} vector + {} BM25 candidates → {} unique results",
+                vectorRanks.size(), bm25Ranks.size(), vectorResults.size());
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -706,18 +739,7 @@ public final class RecallPipeline {
 
         // Semantic Memory — fused HNSW+cognitive if strategy available, else header slab
         if (TierRouter.shouldScan(MemoryType.SEMANTIC, targetTypes)) {
-            if (tierRouter.isSemanticPartitioned()) {
-                // Partitioned mode: one task per partition for parallel recall
-                var partitions = tierRouter.semanticPartitioned().partitions();
-                for (var partition : partitions) {
-                    if (partition.store().size() > 0) {
-                        tasks.add(() -> scoreHeaderSlabToList(
-                                partition.headerSlab(), partition.store().size(),
-                                partition.store().layout(), queryVector, options, nowMs,
-                                partition.store().isPersistent() ? AbstractTierStore.METADATA_HEADER_BYTES : 0));
-                    }
-                }
-            } else if (tierRouter.semantic() != null && tierRouter.semantic().size() > 0) {
+            if (tierRouter.semantic() != null && tierRouter.semantic().size() > 0) {
                 if (semanticRecallStrategy != null && semanticRecallStrategy.isAvailable()) {
                     // Fused pipeline: HNSW search → cognitive re-ranking
                     tasks.add(() -> semanticRecallStrategy.recall(queryVector, options, nowMs));
@@ -764,17 +786,7 @@ public final class RecallPipeline {
             }
         }
         if (TierRouter.shouldScan(MemoryType.SEMANTIC, targetTypes)) {
-            if (tierRouter.isSemanticPartitioned()) {
-                // Partitioned mode: scan each partition sequentially
-                for (var partition : tierRouter.semanticPartitioned().partitions()) {
-                    if (partition.store().size() > 0) {
-                        results.addAll(scoreHeaderSlabToList(partition.headerSlab(),
-                                partition.store().size(), partition.store().layout(),
-                                queryVector, options, nowMs,
-                                partition.store().isPersistent() ? AbstractTierStore.METADATA_HEADER_BYTES : 0));
-                    }
-                }
-            } else if (tierRouter.semantic() != null && tierRouter.semantic().size() > 0) {
+            if (tierRouter.semantic() != null && tierRouter.semantic().size() > 0) {
                 if (semanticRecallStrategy != null && semanticRecallStrategy.isAvailable()) {
                     results.addAll(semanticRecallStrategy.recall(queryVector, options, nowMs));
                 } else {

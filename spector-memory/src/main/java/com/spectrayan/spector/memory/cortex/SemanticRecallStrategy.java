@@ -17,6 +17,7 @@ import com.spectrayan.spector.index.VectorIndex;
 import com.spectrayan.spector.memory.CognitiveResult;
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.RecallOptions;
+import com.spectrayan.spector.memory.ScoringMode;
 import com.spectrayan.spector.memory.index.MemoryIndex;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
@@ -114,6 +115,9 @@ public final class SemanticRecallStrategy {
         byte minValence = options.minValence();
         byte maxValence = options.maxValence();
         float minImportance = options.minImportance();
+        boolean pureSimilarity = options.scoringMode() == ScoringMode.SIMILARITY;
+
+        // Cognitive scoring weights (ignored in SIMILARITY mode)
         float alpha = options.alpha();
         float beta = options.beta();
         float tagRelevanceBoost = options.tagRelevanceBoost();
@@ -124,8 +128,10 @@ public final class SemanticRecallStrategy {
         List<CognitiveResult> results = new ArrayList<>();
 
         for (ScoredResult sr : hnswResults) {
-            // HNSW returns an internal store index — compute header offset
-            long headerOffset = (long) sr.index() * layout.headerLayout().headerBytes();
+            // HNSW returns an internal store index — compute record offset in segment
+            // For persistent stores, records start after the 64-byte metadata header
+            long dataOffset = semanticStore.isPersistent() ? AbstractTierStore.METADATA_HEADER_BYTES : 0;
+            long headerOffset = dataOffset + (long) sr.index() * layout.stride();
 
             // Bounds check: ensure we're within the slab
             if (headerSlab == null || headerOffset + layout.headerLayout().headerBytes() > headerSlab.byteSize()) {
@@ -134,43 +140,58 @@ public final class SemanticRecallStrategy {
 
             CognitiveHeader header = layout.readHeader(headerSlab, headerOffset);
 
-            // Phase 1: Tombstone check
+            // Phase 1: Tombstone check (always applied)
             if (SynapticHeaderConstants.isTombstoned(header.flags())) continue;
 
-            // Phase 2: Synaptic tag gating (skip on zero overlap)
-            long recordTags = header.synapticTags();
-            if (queryTagMask != 0 && (recordTags & queryTagMask) == 0) continue;
-
-            // Phase 3: Valence filter
-            byte valence = header.valence();
-            if (valence < minValence || valence > maxValence) continue;
-
-            // Phase 4: Importance threshold
+            float finalScore;
             float importance = header.importance();
-            if (importance < minImportance) continue;
-
-            // Phase 5: Use HNSW similarity score directly
-            float similarity = sr.score();
-
-            // Phase 6: Temporal decay + reconsolidation
             long timestamp = header.timestampMs();
             int recallCount = header.recallCount();
-            int rawBucket = DecayStrategy.ageToBucket(timestamp, nowMs);
-            int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, recallCount);
-            float decay = DecayStrategy.decay(adjusted);
+            byte valence = header.valence();
+            float decay;
+            float rawDecay;
 
-            // Fused cognitive score with weighted tag relevance
-            float baseScore = alpha * similarity + beta * importance * decay;
-            float tagOverlap = SynapticTagEncoder.overlapRatio(recordTags, queryTagMask);
-            float finalScore = baseScore * (1.0f + tagOverlap * tagRelevanceBoost);
+            if (pureSimilarity) {
+                // ── SIMILARITY mode: HNSW cosine score IS the final score ──
+                // No importance weighting, no decay, no tag boost.
+                // Pure information retrieval ranking.
+                finalScore = sr.score();
+                decay = 1.0f;
+                rawDecay = 1.0f;
+            } else {
+                // ── COGNITIVE mode: full biologically-inspired scoring ──
 
-            // Build result
+                // Phase 2: Synaptic tag gating (skip on zero overlap)
+                long recordTags = header.synapticTags();
+                if (queryTagMask != 0 && (recordTags & queryTagMask) == 0) continue;
+
+                // Phase 3: Valence filter
+                if (valence < minValence || valence > maxValence) continue;
+
+                // Phase 4: Importance threshold
+                if (importance < minImportance) continue;
+
+                // Phase 5: Use HNSW similarity score directly
+                float similarity = sr.score();
+
+                // Phase 6: Temporal decay + reconsolidation
+                int rawBucket = DecayStrategy.ageToBucket(timestamp, nowMs);
+                int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, recallCount);
+                decay = DecayStrategy.decay(adjusted);
+                rawDecay = DecayStrategy.decay(rawBucket);
+
+                // Fused cognitive score with weighted tag relevance
+                float baseScore = alpha * similarity + beta * importance * decay;
+                float tagOverlap = SynapticTagEncoder.overlapRatio(recordTags, queryTagMask);
+                finalScore = baseScore * (1.0f + tagOverlap * tagRelevanceBoost);
+            }
+
+            // Build result — use the same headerOffset for reverse lookup
             String id = memoryIndex.findIdByOffset(MemoryType.SEMANTIC, headerOffset);
             String text = id != null ? memoryIndex.text(id) : "";
             MemorySource source = id != null ? memoryIndex.source(id) : MemorySource.OBSERVED;
             String[] tags = id != null ? memoryIndex.tags(id) : new String[0];
             float ageDays = (nowMs - timestamp) / (1000f * 60f * 60f * 24f);
-            float rawDecay = DecayStrategy.decay(rawBucket);
 
             results.add(new CognitiveResult(
                     id != null ? id : "semantic-" + sr.index(),

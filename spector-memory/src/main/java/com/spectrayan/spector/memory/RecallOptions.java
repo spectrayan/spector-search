@@ -84,7 +84,9 @@ public record RecallOptions(
         // ── Text Search (BM25 Hybrid) ──
         float gamma,
         boolean enableTextSearch,
-        TextSearchMode textSearchMode
+        TextSearchMode textSearchMode,
+        // ── Scoring Mode ──
+        ScoringMode scoringMode
 ) {
 
     /** Default options: top 10, no filters, balanced scoring. */
@@ -117,6 +119,9 @@ public record RecallOptions(
         private float gamma = 0.3f;                             // BM25 weight in fused score
         private boolean enableTextSearch = true;                 // enable BM25 parallel path
         private TextSearchMode textSearchMode = TextSearchMode.HYBRID; // search mode
+
+        // ── Scoring Mode ──
+        private ScoringMode scoringMode = ScoringMode.COGNITIVE; // default: full cognitive
 
         // ── Neurodivergent: Hyperfocus ──
         private long hyperfocusMask = 0L;       // 0 = disabled
@@ -387,6 +392,17 @@ public record RecallOptions(
             return this;
         }
 
+        /**
+         * Sets the scoring mode (default: {@link ScoringMode#COGNITIVE}).
+         *
+         * <p>Use {@link ScoringMode#SIMILARITY} for pure vector retrieval
+         * benchmarks where cognitive scoring (importance, decay) would add noise.</p>
+         */
+        public Builder scoringMode(ScoringMode mode) {
+            this.scoringMode = mode;
+            return this;
+        }
+
         public RecallOptions build() {
             int effectiveLateralMax = lateralMaxResults >= 0
                     ? lateralMaxResults
@@ -399,7 +415,8 @@ public record RecallOptions(
                     effectiveLateralMax, lateralMinTagOverlap,
                     strictnessCoefficient, queryValence, enableValenceAlignment,
                     twoFactorConfig, recallMode,
-                    gamma, enableTextSearch, textSearchMode);
+                    gamma, enableTextSearch, textSearchMode,
+                    scoringMode);
             return options;
         }
     }

@@ -22,6 +22,9 @@ import com.spectrayan.spector.config.SpectorConfigFactory;
 import com.spectrayan.spector.config.SpectorMode;
 import com.spectrayan.spector.config.SpectorProperties;
 import com.spectrayan.spector.config.PersistenceMode;
+import com.spectrayan.spector.config.HnswParams;
+import com.spectrayan.spector.index.HnswIndex;
+import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.embed.TextGenerationProvider;
 import com.spectrayan.spector.config.SpectorConfig;
@@ -122,28 +125,18 @@ public final class SpectorRuntime implements AutoCloseable {
 
         // ── Engine ──
         SpectorConfig engineConfig = SpectorConfig.from(props);
-        // In MEMORY mode the engine provides the shared HNSW index for semantic
-        // recall. Use DISK persistence so the HNSW graph + VectorStore survive
-        // restarts. Point engine data to .spector/index (sibling of memory path).
-        //
-        // LAZY ALLOCATION: Use a small bootstrap capacity so the first shard
-        // file is only ~80 MB instead of 800 MB. ShardedMappedVectorStore
-        // creates new shards lazily as vectors are ingested.
+        // Engine manages its own index/store for search workloads (document
+        // indexing, RAG). Memory is fully decoupled — uses dir-level partitions
+        // with its own .mem files. The two no longer share HNSW or VectorStore.
         if (mode.memoryEnabled() && memoryEnabled) {
             java.nio.file.Path indexDir = memoryConfig.persistencePath()
                     .resolveSibling("index");
-            // Bootstrap with full capacity but small shard size for lazy allocation.
-            // The total capacity remains the same — ShardedMappedVectorStore will
-            // roll new shard files (each ~80 MB) on demand instead of pre-allocating
-            // the entire capacity upfront.
-            int lazyNodesPerShard = Math.min(5_000, memoryConfig.capacity());
             engineConfig = engineConfig
                     .withPersistence(PersistenceMode.DISK, indexDir)
                     .withCapacity(memoryConfig.capacity())
-                    .withNodesPerShard(lazyNodesPerShard);
-            log.info("[Runtime] Memory mode: engine using lazy shard allocation " +
-                     "(nodesPerShard={}, total capacity={})",
-                     lazyNodesPerShard, memoryConfig.capacity());
+                    .withNodesPerShard(Math.min(5_000, memoryConfig.capacity()));
+            log.info("[Runtime] Engine: DISK persistence at {}, capacity={}",
+                     indexDir, memoryConfig.capacity());
         }
         SpectorEngine engine = new DefaultSpectorEngine(engineConfig, embedder);
         log.info("[Runtime] Engine: dims={}, index={}, persistence={}, dataDir={}, mode={}",
@@ -160,13 +153,24 @@ public final class SpectorRuntime implements AutoCloseable {
                     .embeddingProvider(embedder)
                     .persistenceMode(MemoryPersistenceMode.valueOf(memoryConfig.persistenceMode()))
                     .persistence(memoryConfig.persistencePath())
-                    .semanticCapacity(10_000)  // 10K per partition; auto-rolls to new partition dir when full
+                    .semanticCapacity(memoryConfig.capacity())  // from spector.memory.capacity config
                     .nodesPerPartition(memoryConfig.nodesPerPartition());
 
-            if (mode.memoryEnabled()) {
-                memoryBuilder.semanticIndex(engine.index());
-                memoryBuilder.vectorStore(engine.vectorStore());
-            }
+            // ── Create HNSW index for memory's semantic recall ──
+            // Without this, SemanticRecallStrategy falls back to header-only scoring
+            // which cannot compute vector similarity (VECTOR_ONLY search is broken).
+            var hnswConfig = SpectorConfigFactory.hnswDefaults(props);
+            var hnswParams = new HnswParams(hnswConfig.m(), hnswConfig.efConstruction(), hnswConfig.efSearch());
+            var memoryHnsw = new HnswIndex(
+                    engineConfig.dimensions(), memoryConfig.capacity(),
+                    SimilarityFunction.COSINE, hnswParams);
+            memoryBuilder.semanticIndex(memoryHnsw);
+            log.info("[Runtime] Memory HNSW: dims={}, capacity={}, M={}, efC={}, efS={}",
+                    engineConfig.dimensions(), memoryConfig.capacity(),
+                    hnswConfig.m(), hnswConfig.efConstruction(), hnswConfig.efSearch());
+
+            // Memory manages its own vector storage via dir-level partitions.
+            // Engine's vectorStore and HNSW index are NOT shared with memory.
 
             // ── Tag extractor (content, llm, or none) ──
             String tagMode = memoryConfig.tagExtractor().toLowerCase();

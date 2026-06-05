@@ -44,9 +44,8 @@ public final class TierRouter implements AutoCloseable {
     // ── Typed accessors for tier-specific operations ──
     private final WorkingMemoryStore workingStore;
     private final EpisodicMemoryStore episodicStore;
-    private final SemanticMemoryStore semanticStore;   // null when partitioned
+    private final SemanticMemoryStore semanticStore;
     private final ProceduralMemoryStore proceduralStore;
-    private final PartitionedSemanticStore partitionedSemantic;  // null when single-file
 
     /**
      * Creates a TierRouter with all four cognitive tier stores.
@@ -63,40 +62,11 @@ public final class TierRouter implements AutoCloseable {
         this.episodicStore = episodicStore;
         this.semanticStore = semanticStore;
         this.proceduralStore = proceduralStore;
-        this.partitionedSemantic = null;
 
         // Register in EnumMap for polymorphic dispatch
         stores.put(MemoryType.WORKING, workingStore);
         stores.put(MemoryType.EPISODIC, episodicStore);
         stores.put(MemoryType.SEMANTIC, semanticStore);
-        stores.put(MemoryType.PROCEDURAL, proceduralStore);
-    }
-
-    /**
-     * Creates a TierRouter with partitioned semantic storage.
-     *
-     * @deprecated Since V4 (directory-level partition rolling). Use the
-     * single-file constructor instead. Each colocated partition directory
-     * now contains a single {@code semantic.mem} file, and rolling is
-     * handled by {@code DefaultSpectorMemory.rollPartition()}. The
-     * sub-file rolling ({@code semantic-NNN.mem}) in
-     * {@link PartitionedSemanticStore} is no longer needed.
-     */
-    @Deprecated(since = "4.0", forRemoval = true)
-    public TierRouter(WorkingMemoryStore workingStore,
-                       EpisodicMemoryStore episodicStore,
-                       PartitionedSemanticStore partitionedSemanticStore,
-                       ProceduralMemoryStore proceduralStore) {
-        this.workingStore = workingStore;
-        this.episodicStore = episodicStore;
-        this.semanticStore = null;
-        this.proceduralStore = proceduralStore;
-        this.partitionedSemantic = partitionedSemanticStore;
-
-        // Register in EnumMap for polymorphic dispatch
-        stores.put(MemoryType.WORKING, workingStore);
-        stores.put(MemoryType.EPISODIC, episodicStore);
-        stores.put(MemoryType.SEMANTIC, partitionedSemanticStore);
         stores.put(MemoryType.PROCEDURAL, proceduralStore);
     }
 
@@ -190,22 +160,8 @@ public final class TierRouter implements AutoCloseable {
     /** Returns the Episodic Memory store (for partition iteration). */
     public EpisodicMemoryStore episodic() { return episodicStore; }
 
-    /** Returns the Semantic Memory store (for header slab access). Null in partitioned mode. */
+    /** Returns the Semantic Memory store (for header slab access). */
     public SemanticMemoryStore semantic() { return semanticStore; }
-
-    /**
-     * Returns the Partitioned Semantic store.
-     * @deprecated Since V4 — use {@link #semantic()} with directory-level partitioning.
-     */
-    @Deprecated(since = "4.0", forRemoval = true)
-    public PartitionedSemanticStore semanticPartitioned() { return partitionedSemantic; }
-
-    /**
-     * Returns true if semantic storage uses the old sub-file partitioning.
-     * @deprecated Since V4 — directory-level rolling replaces sub-file partitioning.
-     */
-    @Deprecated(since = "4.0", forRemoval = true)
-    public boolean isSemanticPartitioned() { return partitionedSemantic != null; }
 
     /** Returns the Procedural Memory store (for flat scan). */
     public ProceduralMemoryStore procedural() { return proceduralStore; }
