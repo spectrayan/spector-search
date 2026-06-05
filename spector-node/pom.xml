@@ -127,6 +127,15 @@
     </dependencies>
 
     <build>
+        <resources>
+            <!-- Only include src/main/resources. The protobuf-maven-plugin
+                 implicitly adds src/main/proto as a resource directory, which
+                 copies .proto files to target/classes and triggers spurious
+                 "changed dependency" recompiles in the reactor build. -->
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+        </resources>
         <extensions>
             <extension>
                 <groupId>kr.motd.maven</groupId>
@@ -135,6 +144,16 @@
             </extension>
         </extensions>
         <plugins>
+            <!-- Workaround: maven-compiler-plugin 3.15.0 incremental compilation
+                 deletes class files in reactor builds when dependencies change.
+                 This is a known issue with enable-preview on Java 25. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <useIncrementalCompilation>false</useIncrementalCompilation>
+                </configuration>
+            </plugin>
             <!-- Protobuf + gRPC code generation -->
             <plugin>
                 <groupId>org.xolstice.maven.plugins</groupId>
