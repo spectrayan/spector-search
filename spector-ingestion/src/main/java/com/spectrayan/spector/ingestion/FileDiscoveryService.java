@@ -102,7 +102,7 @@ public class FileDiscoveryService {
      */
     public List<Path> discover() throws IOException {
         List<Path> files = new ArrayList<>();
-        String extension = extractExtension(filePattern);
+        Set<String> extensions = extractExtensions(filePattern);
 
         Files.walkFileTree(rootDirectory, new SimpleFileVisitor<>() {
             @Override
@@ -116,7 +116,7 @@ public class FileDiscoveryService {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                if (matchesPattern(file, extension)) {
+                if (matchesPattern(file, extensions)) {
                     files.add(file);
                 }
                 return FileVisitResult.CONTINUE;
@@ -160,14 +160,31 @@ public class FileDiscoveryService {
                 .replace('\\', ' ');
     }
 
-    private static String extractExtension(String pattern) {
-        int lastDot = pattern.lastIndexOf('.');
-        return lastDot >= 0 ? pattern.substring(lastDot) : "";
+    /**
+     * Extracts all file extensions from a comma-separated glob pattern.
+     *
+     * <p>For example, {@code "**&#47;*.md,**&#47;*.txt"} returns {@code [".md", ".txt"]}.
+     * Returns an empty set if no extensions can be extracted.</p>
+     */
+    private static Set<String> extractExtensions(String pattern) {
+        var extensions = new java.util.HashSet<String>();
+        for (String part : pattern.split(",")) {
+            String trimmed = part.trim();
+            int lastDot = trimmed.lastIndexOf('.');
+            if (lastDot >= 0) {
+                extensions.add(trimmed.substring(lastDot));
+            }
+        }
+        return extensions;
     }
 
-    private static boolean matchesPattern(Path file, String extension) {
-        if (extension.isEmpty()) return true;
-        return file.getFileName().toString().endsWith(extension);
+    private static boolean matchesPattern(Path file, Set<String> extensions) {
+        if (extensions.isEmpty()) return true;
+        String fileName = file.getFileName().toString();
+        for (String ext : extensions) {
+            if (fileName.endsWith(ext)) return true;
+        }
+        return false;
     }
 
     // ─────────────── Builder ───────────────

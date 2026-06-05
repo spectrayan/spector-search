@@ -26,6 +26,7 @@ import com.spectrayan.spector.memory.RecallMode;
 import com.spectrayan.spector.memory.RecallOptions;
 import com.spectrayan.spector.memory.ScoreBreakdown;
 import com.spectrayan.spector.memory.SpectorMemory;
+import com.spectrayan.spector.memory.ScoringMode;
 import com.spectrayan.spector.memory.TextSearchMode;
 import com.spectrayan.spector.mcp.schema.ToolSchemaBuilder;
 
@@ -84,6 +85,10 @@ public final class MemoryRecallTool extends MemoryToolHandler {
                         + "HYBRID (default): parallel vector + BM25 keyword search with fused scoring. "
                         + "KEYWORD_ONLY: BM25 keyword search only (exact terms, error codes). "
                         + "VECTOR_ONLY: vector similarity only (no keyword boost).", "HYBRID")
+                .optionalString("scoring_mode",
+                        "Controls how retrieved candidates are ranked. "
+                        + "COGNITIVE (default): full biological scoring — importance, decay, tag boost. "
+                        + "SIMILARITY: pure vector cosine similarity — ideal for search/retrieval benchmarks.", "COGNITIVE")
                 .optionalString("namespace",
                         "Memory namespace to query. Isolates agent/user memory spaces. "
                         + "Leave empty for default namespace.", "")
@@ -133,6 +138,14 @@ public final class MemoryRecallTool extends MemoryToolHandler {
             builder.textSearchMode(TextSearchMode.valueOf(textModeStr.strip().toUpperCase()));
         } catch (IllegalArgumentException e) {
             // Invalid mode name — fall back to HYBRID
+        }
+
+        // Parse scoring mode (COGNITIVE or SIMILARITY)
+        String scoringStr = optionalString(args, "scoring_mode", "COGNITIVE");
+        try {
+            builder.scoringMode(ScoringMode.valueOf(scoringStr.strip().toUpperCase()));
+        } catch (IllegalArgumentException e) {
+            // Invalid mode name — fall back to COGNITIVE
         }
 
         RecallOptions options = builder.build();

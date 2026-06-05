@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Partition-level snapshot replicator for the {@code PartitionedSemanticStore}.
+ * Partition-level snapshot replicator for directory-based partition storage.
  *
  * <h3>Design</h3>
  * <p>Works alongside the existing {@link ReplicationManager} to replicate
