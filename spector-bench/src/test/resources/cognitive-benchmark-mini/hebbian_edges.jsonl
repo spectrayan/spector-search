@@ -1,0 +1,12 @@
+{"memory_id_a":"mem-001","memory_id_b":"mem-002","co_activation_count":5}
+{"memory_id_a":"mem-002","memory_id_b":"mem-003","co_activation_count":3}
+{"memory_id_a":"mem-003","memory_id_b":"mem-004","co_activation_count":7}
+{"memory_id_a":"mem-005","memory_id_b":"mem-010","co_activation_count":8}
+{"memory_id_a":"mem-006","memory_id_b":"mem-008","co_activation_count":6}
+{"memory_id_a":"mem-007","memory_id_b":"mem-009","co_activation_count":4}
+{"memory_id_a":"mem-023","memory_id_b":"mem-026","co_activation_count":9}
+{"memory_id_a":"mem-011","memory_id_b":"mem-036","co_activation_count":5}
+{"memory_id_a":"mem-035","memory_id_b":"mem-038","co_activation_count":10}
+{"memory_id_a":"mem-013","memory_id_b":"mem-018","co_activation_count":4}
+{"memory_id_a":"mem-027","memory_id_b":"mem-031","co_activation_count":6}
+{"memory_id_a":"mem-042","memory_id_b":"mem-046","co_activation_count":7}

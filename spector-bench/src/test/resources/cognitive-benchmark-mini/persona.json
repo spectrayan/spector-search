@@ -1,0 +1,9 @@
+{
+  "name": "Jordan Chen",
+  "age": 32,
+  "occupation": "Senior Software Engineer",
+  "interests": ["distributed systems", "rock climbing", "cooking", "reading sci-fi", "board games"],
+  "life_context": "Jordan lives in a two-bedroom apartment in Seattle with their partner. They recently transitioned from a startup to a larger company and are adjusting to the different pace. They enjoy cooking elaborate meals on weekends and go rock climbing twice a week.",
+  "personality_traits": ["analytical", "introverted", "curious", "empathetic", "detail-oriented"],
+  "companion_relationship": "Jordan has been using the AI companion for about six months, primarily for debugging sessions and brainstorming. They treat it as a trusted colleague and appreciate its patience."
+}
