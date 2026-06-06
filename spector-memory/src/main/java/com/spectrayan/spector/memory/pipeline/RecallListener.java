@@ -27,7 +27,7 @@ import java.util.List;
  *
  * <h3>Built-in Listeners</h3>
  * <ul>
- *   <li>{@link LtpReconsolidationListener} — increments recall_count for returned memories</li>
+ *   <li>{@link LtpReconsolidationListener} — increments agent_recall_count for returned memories</li>
  *   <li>{@link HebbianCoActivationListener} — records tag co-occurrence in the
  *       {@link com.spectrayan.spector.memory.hebbian.CoActivationTracker}</li>
  * </ul>

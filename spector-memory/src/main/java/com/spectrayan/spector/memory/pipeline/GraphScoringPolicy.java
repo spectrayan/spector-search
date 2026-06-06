@@ -34,14 +34,18 @@ package com.spectrayan.spector.memory.pipeline;
  *       .build();
  * }</pre>
  *
- * @param causalBoostWeight      multiplier for STDP predictive strength (Step 5b)
- * @param hebbianBoostFactor     attenuation for Hebbian spreading activation results (Step 5c)
- * @param temporalForwardFactor  score multiplier for forward temporal chain results (Step 5d)
- * @param temporalBackwardFactor score multiplier for backward temporal chain results (Step 5d)
- * @param entityHopAttenuation   score multiplier for entity graph traversal results (Step 5e)
- * @param hebbianMaxDepth        maximum depth for Hebbian spreading activation (Step 5c)
- * @param temporalMaxHops        maximum hops for temporal chain traversal (Step 5d)
- * @param entityMaxHops          maximum hops for entity graph BFS traversal (Step 5e)
+ * @param causalBoostWeight         multiplier for STDP predictive strength (Step 5b)
+ * @param hebbianBoostFactor        attenuation for Hebbian spreading activation results (Step 5c)
+ * @param temporalForwardFactor     score multiplier for forward temporal chain results (Step 5d)
+ * @param temporalBackwardFactor    score multiplier for backward temporal chain results (Step 5d)
+ * @param entityHopAttenuation      score multiplier for entity graph traversal results (Step 5e)
+ * @param hebbianMaxDepth           maximum depth for Hebbian spreading activation (Step 5c)
+ * @param temporalMaxHops           maximum hops for temporal chain traversal (Step 5d)
+ * @param entityMaxHops             maximum hops for entity graph BFS traversal (Step 5e)
+ * @param graphExpansionThreshold   maximum direct similarity score below which graph expansion
+ *                                  is triggered (default: 0.40). When the best direct result
+ *                                  has similarity ≥ this threshold, graph expansion is skipped
+ *                                  to avoid diluting already-strong results with associative noise.
  */
 public record GraphScoringPolicy(
         float causalBoostWeight,
@@ -51,8 +55,21 @@ public record GraphScoringPolicy(
         float entityHopAttenuation,
         int hebbianMaxDepth,
         int temporalMaxHops,
-        int entityMaxHops
+        int entityMaxHops,
+        float graphExpansionThreshold
 ) {
+
+    /**
+     * Backward-compatible constructor — uses default graph expansion threshold.
+     */
+    public GraphScoringPolicy(float causalBoostWeight, float hebbianBoostFactor,
+                               float temporalForwardFactor, float temporalBackwardFactor,
+                               float entityHopAttenuation, int hebbianMaxDepth,
+                               int temporalMaxHops, int entityMaxHops) {
+        this(causalBoostWeight, hebbianBoostFactor, temporalForwardFactor,
+                temporalBackwardFactor, entityHopAttenuation, hebbianMaxDepth,
+                temporalMaxHops, entityMaxHops, 0.40f);
+    }
 
     /**
      * Default policy with the original hardcoded values.
@@ -65,7 +82,8 @@ public record GraphScoringPolicy(
             0.25f,  // entityHopAttenuation
             2,      // hebbianMaxDepth
             3,      // temporalMaxHops
-            2       // entityMaxHops
+            2,      // entityMaxHops
+            0.40f   // graphExpansionThreshold
     );
 
     /**
@@ -88,5 +106,7 @@ public record GraphScoringPolicy(
             throw new IllegalArgumentException("temporalMaxHops must be in [1, 20]: " + temporalMaxHops);
         if (entityMaxHops < 1 || entityMaxHops > 10)
             throw new IllegalArgumentException("entityMaxHops must be in [1, 10]: " + entityMaxHops);
+        if (graphExpansionThreshold < 0f || graphExpansionThreshold > 1.0f)
+            throw new IllegalArgumentException("graphExpansionThreshold must be in [0.0, 1.0]: " + graphExpansionThreshold);
     }
 }

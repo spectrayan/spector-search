@@ -45,6 +45,12 @@ import java.util.List;
  */
 public final class LtpReconsolidationListener implements RecallListener {
 
+    /**
+     * Minimum interval between auto-LTP reinforcements for the same memory (5 minutes).
+     * Prevents runaway LTP from repeated queries hitting the same results.
+     */
+    private static final long AUTO_LTP_COOLDOWN_MS = 300_000L; // 5 minutes
+
     private final MemoryIndex index;
     private final TierRouter tierRouter;
     private final MemoryWal wal;
@@ -61,15 +67,35 @@ public final class LtpReconsolidationListener implements RecallListener {
         for (CognitiveResult r : results) {
             MemoryLocation loc = index.locate(r.id());
             if (loc != null) {
-                // Record recall timestamp for ACT-R base-level activation (V3 only).
-                // This captures the spacing effect: spaced recalls produce higher
-                // activation than massed recalls, without inflating recall_count.
                 MemorySegment segment = tierRouter.segmentFor(loc.type());
                 if (segment != null) {
                     CognitiveRecordLayout layout = tierRouter.layoutFor(loc.type());
+
                     if (layout.headerLayout().version() >= 3) {
                         long creationMs = layout.readTimestamp(segment, loc.offset());
+
+                        // Record recall timestamp for ACT-R base-level activation.
+                        // This captures the spacing effect: spaced recalls produce higher
+                        // activation than massed recalls, without inflating agent_recall_count.
                         ActRActivation.recordRecall(segment, loc.offset(), creationMs, nowMs);
+
+                        // Auto-LTP: passively reinforce memories that surface in results,
+                        // subject to a cooldown to prevent inflation from repeated queries.
+                        long lastAutoLtp = layout.readLastAutoLtp(segment, loc.offset());
+                        if (nowMs - lastAutoLtp >= AUTO_LTP_COOLDOWN_MS) {
+                            // Atomically increment spector-internal recall count
+                            layout.incrementSpectorRecallCount(segment, loc.offset());
+
+                            // Update storage strength using Two-Factor formula:
+                            // S(t+1) = S(t) + α·(1/R(t)) where R(t) = retrieval strength
+                            // Simplified: each auto-LTP adds a small fixed increment (0.05)
+                            float currentStrength = layout.readStorageStrength(segment, loc.offset());
+                            float newStrength = Math.min(5.0f, currentStrength + 0.05f);
+                            layout.writeStorageStrength(segment, loc.offset(), newStrength);
+
+                            // Record cooldown timestamp
+                            layout.writeLastAutoLtp(segment, loc.offset(), nowMs);
+                        }
                     }
                 }
 

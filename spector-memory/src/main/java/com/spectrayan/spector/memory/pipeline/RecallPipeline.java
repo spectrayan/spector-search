@@ -59,6 +59,7 @@ import com.spectrayan.spector.memory.graph.EntityExtractor;
 import com.spectrayan.spector.memory.graph.EntityGraph;
 import com.spectrayan.spector.memory.graph.ExtractedEntity;
 import com.spectrayan.spector.memory.temporal.TemporalChain;
+import com.spectrayan.spector.core.similarity.SimilarityFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -379,7 +381,7 @@ public final class RecallPipeline {
                         : null;
                 allResults.set(i, new CognitiveResult(
                         r.id(), r.text(), newScore, r.importance(), r.ageDays(),
-                        r.recallCount(), r.valence(), r.memoryType(), r.source(),
+                        r.agentRecallCount(), r.valence(), r.memoryType(), r.source(),
                         r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay(),
                         r.retrievalMode(), bd));
             }
@@ -413,7 +415,7 @@ public final class RecallPipeline {
                         float boostedScore = r.score() * (1.0f + predictive * graphScoringPolicy.causalBoostWeight());
                         allResults.set(i, new CognitiveResult(
                                 r.id(), r.text(), boostedScore, r.importance(), r.ageDays(),
-                                r.recallCount(), r.valence(), r.memoryType(), r.source(),
+                                r.agentRecallCount(), r.valence(), r.memoryType(), r.source(),
                                 r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay(),
                                 r.retrievalMode(), r.breakdown()));
                     }
@@ -424,17 +426,39 @@ public final class RecallPipeline {
 
         // Build existingIds ONCE for graph expansion steps 5c/5d/5e
         // (previously rebuilt 3 times — eliminated 2 redundant full-list scans)
-        boolean needsGraphExpansion = cognitiveScoring
-                && (hebbianGraph != null || temporalChain != null
+        boolean hasGraphSubsystems = hebbianGraph != null || temporalChain != null
                 || (entityGraph != null && (entityExtractor != null && entityExtractor.isAvailable()
-                        || !options.entityHints().isEmpty())))
-                && !allResults.isEmpty();
+                        || !options.entityHints().isEmpty()));
+        boolean needsGraphExpansion = cognitiveScoring && hasGraphSubsystems && !allResults.isEmpty();
+
+        // ── Similarity-gated expansion ──
+        // When the best direct result already has high similarity, graph expansion
+        // adds noise that dilutes precision. Skip expansion when direct matches are strong.
+        float maxDirectSimilarity = 0f;
+        if (needsGraphExpansion) {
+            for (CognitiveResult r : allResults) {
+                if (r.hasBreakdown()) {
+                    maxDirectSimilarity = Math.max(maxDirectSimilarity, r.breakdown().similarity());
+                }
+            }
+            float expansionThreshold = options.graphExpansionThreshold();
+            if (maxDirectSimilarity >= expansionThreshold) {
+                log.debug("Graph expansion skipped: maxDirectSimilarity={} >= threshold={}",
+                        maxDirectSimilarity, expansionThreshold);
+                needsGraphExpansion = false;
+            }
+        }
+
         Set<String> existingIds = needsGraphExpansion ? new HashSet<>(allResults.size()) : null;
         if (existingIds != null) {
             for (CognitiveResult r : allResults) {
                 if (r.id() != null) existingIds.add(r.id());
             }
         }
+
+        // Cross-layer dedup: track best score per graph-expanded candidate
+        // across Hebbian (5c), Temporal (5d), and Entity (5e) layers.
+        Map<String, CognitiveResult> graphCandidates = needsGraphExpansion ? new HashMap<>() : null;
 
         // ── Graph telemetry tracking ──
         // NOTE: Manual nanoTime is intentional here. This times a *sub-phase* of recall
@@ -447,6 +471,8 @@ public final class RecallPipeline {
         int graphMaxDepth = 0;
 
         // Step 5c: Hebbian spreading activation — follow memory-to-memory associations
+        // Co-fusion: compute actual L2 distance for each neighbor so scores are
+        // similarity-grounded instead of fabricated.
         if (hebbianGraph != null && existingIds != null) {
             try {
                 // Use top 3 results as seeds for spreading activation
@@ -466,15 +492,23 @@ public final class RecallPipeline {
                         // Find the memory at this graph index
                         String neighborId = findMemoryByApproximateIndex(edge.neighborIndex());
                         if (neighborId != null && !existingIds.contains(neighborId)) {
-                            existingIds.add(neighborId);
+                            // Co-fusion: compute actual similarity against query vector
+                            float neighborSim = computeNeighborSimilarity(neighborId, queryVector);
+                            // Saturate edge weight to prevent single co-occurrences from over-boosting
+                            float saturatedWeight = Math.min(edge.weight() / 5.0f, 1.0f);
+                            float graphScore = neighborSim
+                                    + seed.score() * saturatedWeight * graphScoringPolicy.hebbianBoostFactor();
+
                             String text = index.text(neighborId);
                             MemorySource source = index.source(neighborId);
                             String[] tags = index.tags(neighborId);
-                            float graphScore = seed.score() * edge.weight() * graphScoringPolicy.hebbianBoostFactor(); // attenuated
-                            allResults.add(new CognitiveResult(
+                            CognitiveResult candidate = new CognitiveResult(
                                     neighborId, text, graphScore, seed.importance(), 0f,
                                     (short) 0, (byte) 0, seed.memoryType(), source,
-                                    tags, 1.0f, 1.0f));
+                                    tags, 1.0f, 1.0f);
+                            // Cross-layer dedup: keep best score
+                            graphCandidates.merge(neighborId, candidate,
+                                    (a, b) -> a.score() >= b.score() ? a : b);
                         }
                     }
                 }
@@ -485,6 +519,7 @@ public final class RecallPipeline {
         }
 
         // Step 5d: Temporal chain extension — follow session-linked sequences
+        // Co-fusion: compute actual similarity for chain-linked neighbors.
         if (temporalChain != null && existingIds != null) {
             try {
                 int seeds = Math.min(3, allResults.size());
@@ -496,10 +531,12 @@ public final class RecallPipeline {
                     int memIdx = (int) (loc.offset() / 164);
                     // Follow forward and backward
                     for (int chainIdx : temporalChain.followForward(memIdx, graphScoringPolicy.temporalMaxHops())) {
-                        addChainResult(chainIdx, seed, existingIds, allResults, graphScoringPolicy.temporalForwardFactor());
+                        addChainResultCoFusion(chainIdx, seed, existingIds, graphCandidates,
+                                queryVector, graphScoringPolicy.temporalForwardFactor());
                     }
                     for (int chainIdx : temporalChain.followBackward(memIdx, graphScoringPolicy.temporalMaxHops())) {
-                        addChainResult(chainIdx, seed, existingIds, allResults, graphScoringPolicy.temporalBackwardFactor());
+                        addChainResultCoFusion(chainIdx, seed, existingIds, graphCandidates,
+                                queryVector, graphScoringPolicy.temporalBackwardFactor());
                     }
                 }
             } catch (RuntimeException e) {
@@ -509,6 +546,7 @@ public final class RecallPipeline {
         }
 
         // Step 5e: Entity graph traversal — multi-hop knowledge discovery
+        // Co-fusion: compute actual similarity for entity-linked memories.
         // Pre-extracted entityHints from RecallOptions take precedence over EntityExtractor
         if (entityGraph != null && existingIds != null) {
             List<ExtractedEntity> queryEntities = null;
@@ -539,15 +577,21 @@ public final class RecallPipeline {
                         for (int memIdx : reachableMemories) {
                             String memId = findMemoryByApproximateIndex(memIdx);
                             if (memId != null && !existingIds.contains(memId)) {
-                                existingIds.add(memId);
+                                // Co-fusion: compute actual similarity
+                                float neighborSim = computeNeighborSimilarity(memId, queryVector);
+                                float entityScore = neighborSim
+                                        + allResults.getFirst().score() * graphScoringPolicy.entityHopAttenuation();
+
                                 String text = index.text(memId);
                                 MemorySource source = index.source(memId);
                                 String[] tags = index.tags(memId);
-                                float entityScore = allResults.getFirst().score() * graphScoringPolicy.entityHopAttenuation();
-                                allResults.add(new CognitiveResult(
+                                CognitiveResult candidate = new CognitiveResult(
                                         memId, text, entityScore, 0.5f, 0f,
                                         (short) 0, (byte) 0, MemoryType.SEMANTIC, source,
-                                        tags, 1.0f, 1.0f));
+                                        tags, 1.0f, 1.0f);
+                                // Cross-layer dedup: keep best score
+                                graphCandidates.merge(memId, candidate,
+                                        (a, b) -> a.score() >= b.score() ? a : b);
                             }
                         }
                     }
@@ -556,6 +600,18 @@ public final class RecallPipeline {
                     log.debug(ex.getMessage());
                 }
             }
+        }
+
+        // Add deduplicated graph candidates to results
+        if (graphCandidates != null && !graphCandidates.isEmpty()) {
+            allResults.addAll(graphCandidates.values());
+            // Mark their IDs as existing (for any downstream processing)
+            for (String id : graphCandidates.keySet()) {
+                existingIds.add(id);
+            }
+            log.debug("Graph expansion added {} candidates (from {} layers)",
+                    graphCandidates.size(), 
+                    (hebbianGraph != null ? 1 : 0) + (temporalChain != null ? 1 : 0) + (entityGraph != null ? 1 : 0));
         }
 
         // ── Report graph telemetry (if enabled) ──
@@ -759,7 +815,7 @@ public final class RecallPipeline {
                 // Re-score existing result with RRF
                 vectorResults.add(new CognitiveResult(
                         existing.id(), existing.text(), rrfScore, existing.importance(),
-                        existing.ageDays(), existing.recallCount(), existing.valence(),
+                        existing.ageDays(), existing.agentRecallCount(), existing.valence(),
                         existing.memoryType(), existing.source(), existing.synapticTags(),
                         existing.decayFactor(), existing.ltpAdjustedDecay(),
                         existing.retrievalMode(), existing.breakdown()));
@@ -935,9 +991,9 @@ public final class RecallPipeline {
             if (importance < options.minImportance()) continue;
 
             long timestamp = header.timestampMs();
-            int recallCount = header.recallCount();
+            int agentRecallCount = header.agentRecallCount();
             int rawBucket = DecayStrategy.ageToBucket(timestamp, nowMs);
-            int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, recallCount);
+            int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, agentRecallCount);
             float decay = DecayStrategy.decay(adjusted);
 
             // Score with weighted tag relevance boost (consistent with CognitiveScorer)
@@ -960,7 +1016,7 @@ public final class RecallPipeline {
         float ageDays = (nowMs - header.timestampMs()) / (1000f * 60f * 60f * 24f);
 
         int rawBucket = DecayStrategy.ageToBucket(header.timestampMs(), nowMs);
-        int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, header.recallCount());
+        int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, header.agentRecallCount());
         float rawDecay = DecayStrategy.decay(rawBucket);
         float ltpDecay = DecayStrategy.decay(adjusted);
 
@@ -996,7 +1052,7 @@ public final class RecallPipeline {
         return new CognitiveResult(
                 id != null ? id : "unknown-" + sr.index(),
                 text, sr.score(), header.importance(), ageDays,
-                header.recallCount(), header.valence(), type, source,
+                header.agentRecallCount(), header.valence(), type, source,
                 tags, rawDecay, ltpDecay, mode, breakdown
         );
     }
@@ -1042,23 +1098,64 @@ public final class RecallPipeline {
     }
 
     /**
-     * Adds a temporal chain result to the result set if not already present.
+     * Adds a temporal chain result using co-fusion scoring (actual similarity + seed boost).
+     *
+     * <p>Replaces the old addChainResult that used fabricated scores.
+     * Computes actual L2 distance to the query vector so chain-expanded
+     * results have similarity-grounded scores.</p>
      */
-    private void addChainResult(int chainIdx, CognitiveResult seed,
-                                 Set<String> existingIds,
-                                 List<CognitiveResult> allResults,
-                                 float attenuation) {
+    private void addChainResultCoFusion(int chainIdx, CognitiveResult seed,
+                                         Set<String> existingIds,
+                                         Map<String, CognitiveResult> graphCandidates,
+                                         float[] queryVector, float attenuation) {
         String chainId = findMemoryByApproximateIndex(chainIdx);
         if (chainId != null && !existingIds.contains(chainId)) {
-            existingIds.add(chainId);
+            // Co-fusion: compute actual similarity against query vector
+            float neighborSim = computeNeighborSimilarity(chainId, queryVector);
+            float chainScore = neighborSim + seed.score() * attenuation * 0.2f;
+
             String text = index.text(chainId);
             MemorySource source = index.source(chainId);
             String[] tags = index.tags(chainId);
-            float chainScore = seed.score() * attenuation * 0.2f;
-            allResults.add(new CognitiveResult(
+            CognitiveResult candidate = new CognitiveResult(
                     chainId, text, chainScore, seed.importance(), 0f,
                     (short) 0, (byte) 0, seed.memoryType(), source,
-                    tags, 1.0f, 1.0f));
+                    tags, 1.0f, 1.0f);
+            // Cross-layer dedup: keep best score
+            graphCandidates.merge(chainId, candidate,
+                    (a, b) -> a.score() >= b.score() ? a : b);
+        }
+    }
+
+    /**
+     * Computes actual cosine-derived similarity for a graph-expanded neighbor
+     * against the query vector.
+     *
+     * <p>This grounds graph-expanded scores in real similarity instead of
+     * fabricating them from the seed's score alone. Cost: ~200 cycles per
+     * candidate (one L2 distance computation). With typical graph expansion
+     * producing 50-200 candidates, total overhead is ~10-40μs — negligible.</p>
+     *
+     * @param memoryId    the memory ID to compute similarity for
+     * @param queryVector the query embedding vector
+     * @return similarity score in [0.0, 1.0] (higher = more similar), or 0.0 on error
+     */
+    private float computeNeighborSimilarity(String memoryId, float[] queryVector) {
+        try {
+            MemoryIndex.MemoryLocation loc = index.locate(memoryId);
+            if (loc == null) return 0f;
+
+            MemorySegment seg = tierRouter.segmentFor(loc.type());
+            if (seg == null) return 0f;
+
+            CognitiveRecordLayout layout = tierRouter.layoutFor(loc.type());
+            float l2dist = SimilarityFunction.EUCLIDEAN.computeQuantizedFromSegment(
+                    queryVector, seg, layout.vectorOffset(loc.offset()),
+                    calibrationMins, calibrationScales, layout.quantizedVecBytes());
+            return 1.0f / (1.0f + l2dist);
+        } catch (RuntimeException e) {
+            log.trace("Failed to compute neighbor similarity for '{}': {}", memoryId, e.getMessage());
+            return 0f;
         }
     }
 }
