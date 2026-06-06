@@ -43,7 +43,7 @@ jobs:
       # ─── Reproducible Build ───────────────────────────────────────────
       - name: Build with reproducible output
         run: |
-          mvn -B clean verify \
+          mvn -B clean install \
             --no-transfer-progress \
             -Dproject.build.outputTimestamp=2024-01-01T00:00:00Z
 
