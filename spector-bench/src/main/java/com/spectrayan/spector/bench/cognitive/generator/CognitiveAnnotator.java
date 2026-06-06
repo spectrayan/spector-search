@@ -175,7 +175,7 @@ public final class CognitiveAnnotator {
                         tags, valence, importance, arousal,
                         original.sessionId(), original.timestampMs(),
                         original.entityMentions(), original.memoryType(),
-                        original.recallCount()
+                        original.agentRecallCount()
                 ));
             } else {
                 // Annotation count mismatch — keep original

@@ -334,16 +334,19 @@ public final class DatasetLoader {
         String memoryTypeStr = node.get("memoryType").asText();
         MemoryType memoryType = MemoryType.valueOf(memoryTypeStr);
 
-        int recallCount = node.get("recallCount").asInt();
-        if (recallCount < RECALL_COUNT_MIN) {
-            log.warn("Corpus line {} in {}: recallCount {} below minimum, clamping to {}",
-                    lineNumber, file, recallCount, RECALL_COUNT_MIN);
-            recallCount = RECALL_COUNT_MIN;
+        // Accept both 'agentRecallCount' (new) and 'recallCount' (legacy dataset format)
+        JsonNode recallNode = node.get("agentRecallCount");
+        if (recallNode == null) recallNode = node.get("recallCount");
+        int agentRecallCount = recallNode != null ? recallNode.asInt() : 0;
+        if (agentRecallCount < RECALL_COUNT_MIN) {
+            log.warn("Corpus line {} in {}: agentRecallCount {} below minimum, clamping to {}",
+                    lineNumber, file, agentRecallCount, RECALL_COUNT_MIN);
+            agentRecallCount = RECALL_COUNT_MIN;
         }
 
         return new BenchmarkCorpusRecord(
                 id, text, title, synapticTags, valence, importance, arousal,
-                sessionId, timestampMs, entityMentions, memoryType, recallCount
+                sessionId, timestampMs, entityMentions, memoryType, agentRecallCount
         );
     }
 

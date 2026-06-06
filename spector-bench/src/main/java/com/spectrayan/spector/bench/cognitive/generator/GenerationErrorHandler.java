@@ -174,7 +174,7 @@ public final class GenerationErrorHandler {
                     record.valence(), importance, arousal,
                     record.sessionId(), record.timestampMs(),
                     record.entityMentions(), record.memoryType(),
-                    record.recallCount()
+                    record.agentRecallCount()
             );
         }
         return record;

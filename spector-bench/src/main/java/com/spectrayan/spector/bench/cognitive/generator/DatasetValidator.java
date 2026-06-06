@@ -277,8 +277,8 @@ public final class DatasetValidator {
             if (r.arousal() < 0 || r.arousal() > 255) {
                 errors.add("Corpus " + r.id() + ": arousal out of range [0,255]: " + r.arousal());
             }
-            if (r.recallCount() < 0) {
-                errors.add("Corpus " + r.id() + ": recallCount must be >= 0: " + r.recallCount());
+            if (r.agentRecallCount() < 0) {
+                errors.add("Corpus " + r.id() + ": agentRecallCount must be >= 0: " + r.agentRecallCount());
             }
             if (r.synapticTags() == null || r.synapticTags().isEmpty()) {
                 warnings.add("Corpus " + r.id() + ": no synaptic tags");

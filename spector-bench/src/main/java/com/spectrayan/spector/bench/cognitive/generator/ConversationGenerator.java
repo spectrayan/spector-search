@@ -241,7 +241,7 @@ public final class ConversationGenerator {
                         userTimestampMs,
                         entities,
                         memoryType,
-                        0         // recallCount starts at 0
+                        0         // agentRecallCount starts at 0
                 );
                 records.add(userRecord);
 

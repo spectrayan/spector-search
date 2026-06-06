@@ -40,7 +40,7 @@ import com.spectrayan.spector.memory.MemoryType;
  *   <li>{@code timestampMs} — epoch milliseconds</li>
  *   <li>{@code entityMentions} — typed entity references</li>
  *   <li>{@code memoryType} — one of EPISODIC, SEMANTIC, PROCEDURAL, WORKING</li>
- *   <li>{@code recallCount} — integer ≥ 0, default 0</li>
+ *   <li>{@code agentRecallCount} — integer ≥ 0, default 0</li>
  * </ul>
  *
  * @param id              unique identifier for this corpus memory
@@ -54,7 +54,7 @@ import com.spectrayan.spector.memory.MemoryType;
  * @param timestampMs     creation time as epoch milliseconds
  * @param entityMentions  entities mentioned in this memory
  * @param memoryType      cognitive memory type (EPISODIC, SEMANTIC, PROCEDURAL, WORKING)
- * @param recallCount     number of times this memory has been recalled (≥ 0)
+ * @param agentRecallCount     number of times this memory has been recalled (≥ 0)
  * @param interest        ICNU Interest hint — how engaging this is to the user (0.0–1.0)
  * @param challenge       ICNU Challenge hint — how complex the topic is (0.0–1.0)
  * @param urgency         ICNU Urgency hint — how time-critical this information is (0.0–1.0)
@@ -71,7 +71,7 @@ public record BenchmarkCorpusRecord(
         long timestampMs,
         List<EntityMention> entityMentions,
         MemoryType memoryType,
-        int recallCount,
+        int agentRecallCount,
         float interest,
         float challenge,
         float urgency
@@ -84,9 +84,9 @@ public record BenchmarkCorpusRecord(
                                   List<String> synapticTags, byte valence, float importance,
                                   int arousal, String sessionId, long timestampMs,
                                   List<EntityMention> entityMentions, MemoryType memoryType,
-                                  int recallCount) {
+                                  int agentRecallCount) {
         this(id, text, title, synapticTags, valence, importance, arousal,
-                sessionId, timestampMs, entityMentions, memoryType, recallCount,
+                sessionId, timestampMs, entityMentions, memoryType, agentRecallCount,
                 0.5f, 0.5f, 0.5f);
     }
 }

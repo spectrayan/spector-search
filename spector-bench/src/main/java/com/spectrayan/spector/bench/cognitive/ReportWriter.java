@@ -310,7 +310,7 @@ public final class ReportWriter {
                     resultMap.put("valence", cr.valence());
                     resultMap.put("memoryType", cr.memoryType() != null ? cr.memoryType().name() : null);
                     resultMap.put("decayFactor", round(cr.decayFactor(), 4));
-                    resultMap.put("recallCount", cr.recallCount());
+                    resultMap.put("agentRecallCount", cr.agentRecallCount());
                     resultMap.put("tags", cr.synapticTags());
 
                     ScoreBreakdown bd = cr.breakdown();
