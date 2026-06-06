@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.*;
 /**
  * E2E tests for temporal decay and LTP (Long-Term Potentiation) reconsolidation.
  *
- * <p>Validates that {@code reinforce()} increments recallCount, that
+ * <p>Validates that {@code reinforce()} increments agentRecallCount, that
  * LTP-adjusted decay is >= raw decay, and that decay values are within valid ranges.</p>
  */
 @DisplayName("🧠 E2E: Decay & LTP Reconsolidation")
@@ -34,7 +34,7 @@ class DecayAndLtpE2ETest extends AbstractE2ETest {
 
     @Test
     @Order(1)
-    @DisplayName("Reinforce increments recallCount exactly N times")
+    @DisplayName("Reinforce increments agentRecallCount exactly N times")
     void reinforceIncrementsRecallCount() {
         String query = "PostgreSQL connection pool configuration";
 
@@ -43,7 +43,7 @@ class DecayAndLtpE2ETest extends AbstractE2ETest {
         assertThat(firstRecall).isNotEmpty();
 
         String topId = firstRecall.getFirst().id();
-        int initialCount = firstRecall.getFirst().recallCount();
+        int initialCount = firstRecall.getFirst().agentRecallCount();
 
         int reinforcements = 3;
         for (int i = 0; i < reinforcements; i++) {
@@ -60,9 +60,9 @@ class DecayAndLtpE2ETest extends AbstractE2ETest {
                 .orElse(null);
 
         if (refreshed != null) {
-            log.info("LTP: '{}' recallCount {} → {}", topId, initialCount, refreshed.recallCount());
-            assertThat(refreshed.recallCount())
-                    .as("recallCount should increase by %d", reinforcements)
+            log.info("LTP: '{}' agentRecallCount {} → {}", topId, initialCount, refreshed.agentRecallCount());
+            assertThat(refreshed.agentRecallCount())
+                    .as("agentRecallCount should increase by %d", reinforcements)
                     .isEqualTo(initialCount + reinforcements);
         } else {
             // Memory may have shifted out of top-K — verify via WAL that reinforce events were written
@@ -85,8 +85,8 @@ class DecayAndLtpE2ETest extends AbstractE2ETest {
                 RecallOptions.builder().topK(5).build());
 
         for (CognitiveResult r : results) {
-            log.info("  {} → recallCount={}, rawDecay={}, ltpDecay={}",
-                    r.id(), r.recallCount(), r.decayFactor(), r.ltpAdjustedDecay());
+            log.info("  {} → agentRecallCount={}, rawDecay={}, ltpDecay={}",
+                    r.id(), r.agentRecallCount(), r.decayFactor(), r.ltpAdjustedDecay());
             assertThat(r.ltpAdjustedDecay())
                     .as("LTP decay for '%s' should be >= raw decay", r.id())
                     .isGreaterThanOrEqualTo(r.decayFactor());

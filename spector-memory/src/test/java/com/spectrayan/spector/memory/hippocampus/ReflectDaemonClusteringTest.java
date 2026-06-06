@@ -83,7 +83,7 @@ class ReflectDaemonClusteringTest {
                         (long) (i + 1) * 7, // synaptic tags
                         1.0f,                // exactNorm
                         2.0f,                // importance (> 1.0 so V1 fallback would also promote)
-                        0,                   // recallCount
+                        0,                   // agentRecallCount
                         (short) centroidAssignments[i],  // centroid ID
                         (byte) 0,
                         SynapticHeaderConstants.withMemoryType((byte) 0, MemoryType.EPISODIC.ordinal())
@@ -118,7 +118,7 @@ class ReflectDaemonClusteringTest {
                 CognitiveHeader header = new CognitiveHeader(
                         System.currentTimeMillis(),
                         0xFFL, 1.0f, 1.5f,
-                        0, // recallCount
+                        0, // agentRecallCount
                         (short) 5, // centroid 5
                         (byte) 0,
                         SynapticHeaderConstants.withMemoryType((byte) 0, MemoryType.EPISODIC.ordinal())

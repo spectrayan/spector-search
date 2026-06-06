@@ -86,10 +86,10 @@ class MemoryIntrospectorTest {
     }
 
     private CognitiveResult makeResult(float importance, float ageDays,
-                                        short recallCount, byte valence) {
+                                        short agentRecallCount, byte valence) {
         return new CognitiveResult(
                 "test-id", "test text", 0.8f, importance, ageDays,
-                recallCount, valence, MemoryType.SEMANTIC, MemorySource.OBSERVED,
+                agentRecallCount, valence, MemoryType.SEMANTIC, MemorySource.OBSERVED,
                 new String[]{"test"}, 0.7f, 0.8f
         );
     }

@@ -111,7 +111,7 @@ class PerformanceBenchmarkTest {
 
         assertThat(sr.header()).isNotNull();
         assertThat(sr.header().importance()).isEqualTo(0.8f);
-        assertThat(sr.header().recallCount()).isEqualTo(5);
+        assertThat(sr.header().agentRecallCount()).isEqualTo(5);
         assertThat(sr.header().valence()).isEqualTo((byte) 10);
         assertThat(sr.header().centroidId()).isEqualTo((short) 42);
     }

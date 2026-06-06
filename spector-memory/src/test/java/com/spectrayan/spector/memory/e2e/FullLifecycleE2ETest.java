@@ -108,7 +108,7 @@ class FullLifecycleE2ETest extends AbstractE2ETest {
 
     @Test
     @Order(4)
-    @DisplayName("Step 4: Agent reinforces helpful memories — recallCount increases")
+    @DisplayName("Step 4: Agent reinforces helpful memories — agentRecallCount increases")
     void step4_reinforceHelpful() {
         // Recall some relevant context
         List<CognitiveResult> context = memory.recall(
@@ -117,7 +117,7 @@ class FullLifecycleE2ETest extends AbstractE2ETest {
 
         assertThat(context).isNotEmpty();
         String helpfulId = context.getFirst().id();
-        int beforeCount = context.getFirst().recallCount();
+        int beforeCount = context.getFirst().agentRecallCount();
 
         memory.reinforce(helpfulId, (byte) 20);
 
@@ -130,10 +130,10 @@ class FullLifecycleE2ETest extends AbstractE2ETest {
                 .findFirst().orElse(null);
 
         if (refreshed != null) {
-            log.info("Reinforced '{}': recallCount {} → {}",
-                    helpfulId, beforeCount, refreshed.recallCount());
-            assertThat(refreshed.recallCount())
-                    .as("recallCount should increase after reinforce")
+            log.info("Reinforced '{}': agentRecallCount {} → {}",
+                    helpfulId, beforeCount, refreshed.agentRecallCount());
+            assertThat(refreshed.agentRecallCount())
+                    .as("agentRecallCount should increase after reinforce")
                     .isGreaterThan(beforeCount);
         }
     }

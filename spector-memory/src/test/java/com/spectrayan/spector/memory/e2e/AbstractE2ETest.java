@@ -75,7 +75,7 @@ public abstract class AbstractE2ETest {
             CognitiveResult r = results.get(i);
             log.info("  [{}] {} | {} | {} | val={} | rc={} | tags={} | {}",
                     i + 1, r.score(), r.id(), r.memoryType(), r.valence(),
-                    r.recallCount(),
+                    r.agentRecallCount(),
                     r.synapticTags() != null ? Arrays.toString(r.synapticTags()) : "[]",
                     truncate(r.text(), 60));
         }
