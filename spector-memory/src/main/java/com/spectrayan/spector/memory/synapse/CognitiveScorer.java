@@ -14,6 +14,7 @@ package com.spectrayan.spector.memory.synapse;
 
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.memory.RecallOptions;
+import com.spectrayan.spector.memory.ScoringMode;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 
 import java.lang.foreign.MemorySegment;
@@ -229,6 +230,9 @@ public final class CognitiveScorer {
         float beta = options.beta();
         float tagRelevanceBoost = options.tagRelevanceBoost();
         float strictness = options.strictnessCoefficient();
+        Long minTimestamp = options.minTimestamp();
+        Long maxTimestamp = options.maxTimestamp();
+        boolean pureSimilarity = options.scoringMode() == ScoringMode.SIMILARITY;
 
         // ── Valence Alignment (State-Dependent Recall) ──
         boolean valenceAlign = options.enableValenceAlignment();
@@ -271,6 +275,13 @@ public final class CognitiveScorer {
             if (isTombstoned(flags))
                 continue;
 
+            // ── Phase 1b: Temporal gating (absolute timestamp bounds) ──
+            long timestamp = segment.get(LAYOUT_TIMESTAMP, offset + OFFSET_TIMESTAMP);
+            if (minTimestamp != null && timestamp < minTimestamp)
+                continue;
+            if (maxTimestamp != null && timestamp > maxTimestamp)
+                continue;
+
             // ── Phase 2: Synaptic tag gating (~1 cycle) ──
             // Neurodivergent: Hyperfocus uses STRICT equality (all mask bits must match).
             // Standard mode uses containment (any overlap passes).
@@ -298,10 +309,15 @@ public final class CognitiveScorer {
             if (importance < minImportance)
                 continue;
 
-            long timestamp = segment.get(LAYOUT_TIMESTAMP, offset + OFFSET_TIMESTAMP);
-            int recallCount = segment.get(LAYOUT_RECALL_COUNT, offset + OFFSET_RECALL_COUNT);
+            int agentRecallCount = segment.get(LAYOUT_AGENT_RECALL_COUNT, offset + OFFSET_AGENT_RECALL_COUNT);
             int rawBucket = DecayStrategy.ageToBucket(timestamp, nowMs);
-            int adjustedBucket = DecayStrategy.adjustForReconsolidation(rawBucket, recallCount);
+            int adjustedBucket = DecayStrategy.adjustForReconsolidation(rawBucket, agentRecallCount);
+
+            // Phase 2B: Apply gentler auto-recall adjustment from spector-internal passive LTP (V3 only)
+            if (hasStorageStrength) { // V2+ (V3 in practice — V2 returns 0 for spectorRecallCount)
+                int spectorRecallCount = segment.get(LAYOUT_SPECTOR_RECALL_COUNT, offset + OFFSET_SPECTOR_RECALL_COUNT);
+                adjustedBucket = DecayStrategy.adjustForAutoRecall(adjustedBucket, spectorRecallCount);
+            }
 
             // Neurodivergent: Hyperfocus — clamp decay to 1.0 (zero time effect)
             // for memories that match the focus mask.
@@ -345,7 +361,7 @@ public final class CognitiveScorer {
                     && tagOverlap >= lateralMinTagOverlap) {
                 scoreLateral(lateralHeap, lateralMaxResults, segment, offset,
                         l2dist, tagOverlap, importance, adjustedBucket, arousal,
-                        timestamp, recordTags, valence, flags, recallCount, i);
+                        timestamp, recordTags, valence, flags, agentRecallCount, i);
                 continue;
             }
 
@@ -354,34 +370,45 @@ public final class CognitiveScorer {
             // strictness=10.0 → Heaviside cliff: near-matches stay high, vague matches
             // plummet
             float similarity = 1.0f / (1.0f + l2dist * strictness);
-            float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);
-            decay = Math.min(1.0f, decay);
+            float finalScore;
 
-            // Two-Factor Memory: S(t)^sExponent modulates importance
-            float storageBoost = 1.0f;
-            if (hasStorageStrength) {
-                float storageStrength = layout.headerLayout()
-                        .readStorageStrength(segment, offset);
-                TwoFactorConfig tfc = options.twoFactorConfig();
-                if (tfc.enabled() && storageStrength > 1.0f) {
-                    storageBoost = fastStorageBoost(storageStrength, tfc.sExponent());
+            if (pureSimilarity) {
+                finalScore = similarity;
+            } else {
+                float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);
+                decay = Math.min(1.0f, decay);
+
+                // Two-Factor Memory: S(t)^sExponent modulates importance
+                float storageBoost = 1.0f;
+                if (hasStorageStrength) {
+                    float storageStrength = layout.headerLayout()
+                            .readStorageStrength(segment, offset);
+                    TwoFactorConfig tfc = options.twoFactorConfig();
+                    if (tfc.enabled() && storageStrength > 1.0f) {
+                        storageBoost = fastStorageBoost(storageStrength, tfc.sExponent());
+                    }
                 }
-            }
 
-            float baseScore = alpha * similarity + beta * importance * decay * storageBoost;
+                // Multiplicative fusion: similarity is primary signal, importance×decay acts
+                // as a re-ranking multiplier. Importance is normalized to [0,1] so the
+                // boost ranges from 1.0× (imp=0) to 1.0+β (imp=10).
+                float importanceNorm = importance / 10.0f; // normalize to [0, 1]
+                float impDecayFactor = 1.0f + beta * importanceNorm * decay * storageBoost;
+                float baseScore = similarity * impDecayFactor;
 
-            // Valence alignment: state-dependent recall (mood-congruent memory)
-            if (valenceAlign) {
-                float valenceMultiplier = 1.0f - (Math.abs(queryValence - valence) / 255.0f);
-                baseScore *= valenceMultiplier;
-            }
+                // Valence alignment: state-dependent recall (mood-congruent memory)
+                if (valenceAlign) {
+                    float valenceMultiplier = 1.0f - (Math.abs(queryValence - valence) / 255.0f);
+                    baseScore *= valenceMultiplier;
+                }
 
-            // Weighted tag relevance: partial matches get proportional boost
-            float finalScore = baseScore * (1.0f + tagOverlap * tagRelevanceBoost);
+                // Weighted tag relevance: partial matches get proportional boost
+                finalScore = baseScore * (1.0f + tagOverlap * tagRelevanceBoost);
 
-            // Neurodivergent: Hyperfocus — post-score boost for focus-matched memories
-            if (focusMatch && hyperfocusBoost != 1.0f) {
-                finalScore *= hyperfocusBoost;
+                // Neurodivergent: Hyperfocus — post-score boost for focus-matched memories
+                if (focusMatch && hyperfocusBoost != 1.0f) {
+                    finalScore *= hyperfocusBoost;
+                }
             }
 
             // ── Insert into flat min-heap (ZERO object allocation) ──
@@ -394,7 +421,7 @@ public final class CognitiveScorer {
                 float exactNorm = segment.get(LAYOUT_EXACT_NORM, offset + OFFSET_EXACT_NORM);
                 short centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
                 heap.insert(finalScore, offset, i, timestamp, synapticTags,
-                        exactNorm, importance, recallCount, centroidId, valence, flags);
+                        exactNorm, importance, agentRecallCount, centroidId, valence, flags);
             }
         }
 
@@ -419,7 +446,7 @@ public final class CognitiveScorer {
             float l2dist, float tagOverlap, float importance,
             int adjustedBucket, byte arousal,
             long timestamp, long recordTags, byte valence, byte flags,
-            int recallCount, int recordIndex) {
+            int agentRecallCount, int recordIndex) {
         // Parabolic RBF: peaks at orthogonality (L2²=2.0 for normalized vectors).
         // Formula: 1.0 - 0.25 * (L2² - 2.0)²
         float l2sq = l2dist * l2dist;
@@ -427,13 +454,15 @@ public final class CognitiveScorer {
         float lateralSimilarity = Math.max(0f, 1.0f - 0.25f * diff * diff);
         float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);
         decay = Math.min(1.0f, decay);
-        float lateralScore = lateralSimilarity * tagOverlap * importance * decay;
+        // Multiplicative fusion for lateral path — normalized importance
+        float importanceNorm = importance / 10.0f;
+        float lateralScore = lateralSimilarity * tagOverlap * (1.0f + importanceNorm * decay);
 
         float exactNorm = segment.get(LAYOUT_EXACT_NORM, offset + OFFSET_EXACT_NORM);
         short centroidId = segment.get(LAYOUT_CENTROID_ID, offset + OFFSET_CENTROID_ID);
         CognitiveHeader header = new CognitiveHeader(
                 timestamp, recordTags, exactNorm, importance,
-                recallCount, centroidId, valence, flags);
+                agentRecallCount, centroidId, valence, flags);
 
         if (lateralHeap.size() < lateralMaxResults) {
             lateralHeap.offer(new ScoredRecord(offset, lateralScore, recordIndex, header, true));
@@ -480,7 +509,7 @@ public final class CognitiveScorer {
         private final long[] synapticTags;
         private final float[] exactNorms;
         private final float[] importances;
-        private final int[] recallCounts;
+        private final int[] agentRecallCounts;
         private final short[] centroidIds;
         private final byte[] valences;
         private final byte[] flags;
@@ -496,7 +525,7 @@ public final class CognitiveScorer {
             this.synapticTags = new long[len];
             this.exactNorms = new float[len];
             this.importances = new float[len];
-            this.recallCounts = new int[len];
+            this.agentRecallCounts = new int[len];
             this.centroidIds = new short[len];
             this.valences = new byte[len];
             this.flags = new byte[len];
@@ -513,17 +542,17 @@ public final class CognitiveScorer {
          */
         void insert(float score, long offset, int index,
                 long timestamp, long tags, float exactNorm, float importance,
-                int recallCount, short centroidId, byte valence, byte flag) {
+                int agentRecallCount, short centroidId, byte valence, byte flag) {
             if (size < capacity) {
                 int idx = size;
                 set(idx, score, offset, index, timestamp, tags, exactNorm,
-                        importance, recallCount, centroidId, valence, flag);
+                        importance, agentRecallCount, centroidId, valence, flag);
                 size++;
                 siftUp(idx);
             } else {
                 // Replace root (minimum)
                 set(0, score, offset, index, timestamp, tags, exactNorm,
-                        importance, recallCount, centroidId, valence, flag);
+                        importance, agentRecallCount, centroidId, valence, flag);
                 siftDown(0);
             }
         }
@@ -534,7 +563,7 @@ public final class CognitiveScorer {
             for (int h = 0; h < size; h++) {
                 CognitiveHeader header = new CognitiveHeader(
                         timestamps[h], synapticTags[h], exactNorms[h], importances[h],
-                        recallCounts[h], centroidIds[h], valences[h], flags[h]);
+                        agentRecallCounts[h], centroidIds[h], valences[h], flags[h]);
                 results.add(new ScoredRecord(offsets[h], scores[h], indices[h], header));
             }
             return results;
@@ -542,7 +571,7 @@ public final class CognitiveScorer {
 
         private void set(int idx, float score, long offset, int index,
                 long timestamp, long tags, float exactNorm, float importance,
-                int recallCount, short centroidId, byte valence, byte flag) {
+                int agentRecallCount, short centroidId, byte valence, byte flag) {
             scores[idx] = score;
             offsets[idx] = offset;
             indices[idx] = index;
@@ -550,7 +579,7 @@ public final class CognitiveScorer {
             synapticTags[idx] = tags;
             exactNorms[idx] = exactNorm;
             importances[idx] = importance;
-            recallCounts[idx] = recallCount;
+            agentRecallCounts[idx] = agentRecallCount;
             centroidIds[idx] = centroidId;
             valences[idx] = valence;
             flags[idx] = flag;
@@ -590,7 +619,7 @@ public final class CognitiveScorer {
             long tg = synapticTags[a]; synapticTags[a] = synapticTags[b]; synapticTags[b] = tg;
             float tn = exactNorms[a]; exactNorms[a] = exactNorms[b]; exactNorms[b] = tn;
             float tp = importances[a]; importances[a] = importances[b]; importances[b] = tp;
-            int tr = recallCounts[a]; recallCounts[a] = recallCounts[b]; recallCounts[b] = tr;
+            int tr = agentRecallCounts[a]; agentRecallCounts[a] = agentRecallCounts[b]; agentRecallCounts[b] = tr;
             short tc = centroidIds[a]; centroidIds[a] = centroidIds[b]; centroidIds[b] = tc;
             byte tv = valences[a]; valences[a] = valences[b]; valences[b] = tv;
             byte tf = flags[a]; flags[a] = flags[b]; flags[b] = tf;
