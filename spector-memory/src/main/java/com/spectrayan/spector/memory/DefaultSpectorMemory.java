@@ -899,7 +899,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
         if (segment != null) {
             CognitiveRecordLayout layout = tierRouter.layoutFor(loc.type());
             valenceTracker.reinforce(segment, loc.offset(), layout, valence);
-            layout.incrementRecallCount(segment, loc.offset()); // LTP on explicit use
+            layout.incrementAgentRecallCount(segment, loc.offset()); // LTP on explicit use
 
             // ACT-R: record recall timestamp in ring buffer (V3 only)
             if (layout.headerLayout().version() >= 3) {
@@ -936,6 +936,69 @@ public final class DefaultSpectorMemory implements SpectorMemory {
 
         wal.appendReinforce(memoryId, valence);
         log.debug("Reinforce: '{}' with valence={}", memoryId, valence);
+    }
+
+    /**
+     * Reinforces a memory with optional ICNU importance re-fusion.
+     *
+     * <p>When {@code updatedHints} are provided, importance is re-fused using
+     * the ICNU formula and blended 50/50 with the current importance. This allows
+     * the agent to provide updated context (e.g., "this turned out to be very important")
+     * without discarding the original surprise-based importance entirely.</p>
+     *
+     * <p>When {@code updatedHints} is null, a simpler Hebbian degree-centrality boost
+     * is applied: memories with more co-activation edges are assumed to be more central
+     * to the user's knowledge graph and receive an importance bump.</p>
+     *
+     * @param memoryId     the memory ID to reinforce
+     * @param valence      positive/negative outcome (-128 to +127)
+     * @param updatedHints optional ICNU hints for re-fusion (null = auto-compute)
+     */
+    @Override
+    public void reinforce(String memoryId, byte valence,
+                           com.spectrayan.spector.memory.neurodivergent.IngestionHints updatedHints) {
+        // Delegate core reinforcement (valence, LTP, storage strength, WAL)
+        reinforce(memoryId, valence);
+
+        // Phase 3 & 4: Importance re-fusion
+        MemoryLocation loc = index.locate(memoryId);
+        if (loc == null) return;
+
+        MemorySegment segment = tierRouter.segmentFor(loc.type());
+        if (segment == null) return;
+
+        CognitiveRecordLayout layout = tierRouter.layoutFor(loc.type());
+        float currentImportance = layout.readImportance(segment, loc.offset());
+
+        float newImportance;
+        if (updatedHints != null && !updatedHints.isEmpty()) {
+            // Phase 3: Re-fuse importance with updated ICNU hints.
+            // Novelty component approximated from current importance (normalized to 0-1 range)
+            float noveltyApprox = Math.min(1.0f, currentImportance / 5.0f);
+            float refusedImportance = com.spectrayan.spector.memory.neurodivergent.IcnuWeights.DEFAULT.fuse(updatedHints, noveltyApprox);
+            // Blend 50/50 with current importance to avoid wild swings
+            newImportance = 0.5f * currentImportance + 0.5f * refusedImportance;
+        } else {
+            // Phase 4: Degree centrality boost from Hebbian graph.
+            // More co-activation edges → more central to user's knowledge → higher importance.
+            // The partitionIndex in MemoryLocation is the sequential slot used with HebbianGraph.
+            int graphIdx = loc.partitionIndex();
+            if (graphIdx >= 0 && hebbianGraph != null) {
+                var edges = hebbianGraph.neighbors(graphIdx);
+                int degree = edges.size();
+                // Logarithmic boost: +5% per edge, capped at +30%
+                float boost = Math.min(0.30f, degree * 0.05f);
+                newImportance = Math.min(10.0f, currentImportance * (1.0f + boost));
+            } else {
+                newImportance = currentImportance; // no graph data, no change
+            }
+        }
+
+        if (Math.abs(newImportance - currentImportance) > 0.001f) {
+            layout.writeImportance(segment, loc.offset(), newImportance);
+            log.debug("Reinforce re-fusion: '{}' importance {} → {}",
+                    memoryId, currentImportance, newImportance);
+        }
     }
 
     @Override

@@ -26,7 +26,7 @@ import com.spectrayan.spector.memory.cortex.MemorySource;
  * @param score           final fused cognitive score (similarity × decay × importance)
  * @param importance      base importance weight (auto-set by Prediction Error engine)
  * @param ageDays         age of the memory in days
- * @param recallCount     number of times this memory has been recalled (LTP/reconsolidation)
+ * @param agentRecallCount     number of times this memory has been recalled (LTP/reconsolidation)
  * @param valence         emotional valence (-128 to +127)
  * @param memoryType      cognitive memory tier (Working, Episodic, Semantic, Procedural)
  * @param source          provenance source (Observed, UserStated, Reflected, etc.)
@@ -43,7 +43,7 @@ public record CognitiveResult(
         float score,
         float importance,
         float ageDays,
-        int recallCount,
+        int agentRecallCount,
         byte valence,
         MemoryType memoryType,
         MemorySource source,
@@ -80,11 +80,11 @@ public record CognitiveResult(
      * Compact constructor — defaults retrievalMode to STANDARD when not specified.
      */
     public CognitiveResult(String id, String text, float score, float importance,
-                            float ageDays, int recallCount, byte valence,
+                            float ageDays, int agentRecallCount, byte valence,
                             MemoryType memoryType, MemorySource source,
                             String[] synapticTags, float decayFactor,
                             float ltpAdjustedDecay) {
-        this(id, text, score, importance, ageDays, recallCount, valence,
+        this(id, text, score, importance, ageDays, agentRecallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
                 RetrievalMode.STANDARD, null, null);
     }
@@ -93,11 +93,11 @@ public record CognitiveResult(
      * Constructor with retrieval mode but no breakdown (backward compat).
      */
     public CognitiveResult(String id, String text, float score, float importance,
-                            float ageDays, int recallCount, byte valence,
+                            float ageDays, int agentRecallCount, byte valence,
                             MemoryType memoryType, MemorySource source,
                             String[] synapticTags, float decayFactor,
                             float ltpAdjustedDecay, RetrievalMode retrievalMode) {
-        this(id, text, score, importance, ageDays, recallCount, valence,
+        this(id, text, score, importance, ageDays, agentRecallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
                 retrievalMode, null, null);
     }
@@ -106,12 +106,12 @@ public record CognitiveResult(
      * Constructor with breakdown but no trace (backward compat).
      */
     public CognitiveResult(String id, String text, float score, float importance,
-                            float ageDays, int recallCount, byte valence,
+                            float ageDays, int agentRecallCount, byte valence,
                             MemoryType memoryType, MemorySource source,
                             String[] synapticTags, float decayFactor,
                             float ltpAdjustedDecay, RetrievalMode retrievalMode,
                             ScoreBreakdown breakdown) {
-        this(id, text, score, importance, ageDays, recallCount, valence,
+        this(id, text, score, importance, ageDays, agentRecallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
                 retrievalMode, breakdown, null);
     }
@@ -141,7 +141,7 @@ public record CognitiveResult(
      * Returns a copy of this result with the given trace attached.
      */
     public CognitiveResult withTrace(RecallTrace trace) {
-        return new CognitiveResult(id, text, score, importance, ageDays, recallCount,
+        return new CognitiveResult(id, text, score, importance, ageDays, agentRecallCount,
                 valence, memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
                 retrievalMode, breakdown, trace);
     }

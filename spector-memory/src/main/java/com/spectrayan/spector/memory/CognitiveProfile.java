@@ -48,35 +48,35 @@ public enum CognitiveProfile {
      * Balanced scoring — equal weight to similarity and importance.
      * Default profile for general-purpose recall.
      */
-    BALANCED(0.6f, 0.4f, 0.3f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+    BALANCED(0.6f, 0.4f, 0.3f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.40f),
 
     /**
      * Exploration mode — similarity-dominated scoring for creative, associative recall.
      * Finds memories that are semantically close to the query, regardless of age or importance.
      * Use when brainstorming, exploring new ideas, or looking for tangential connections.
      */
-    EXPLORING(0.8f, 0.2f, 0.1f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+    EXPLORING(0.8f, 0.2f, 0.1f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.40f),
 
     /**
      * Debugging mode — importance-dominated scoring, biased toward negative valence.
      * Surfaces recent errors, bugs, and failures. Deprioritizes old successes.
      * Use when investigating bugs, crashes, or production issues.
      */
-    DEBUGGING(0.3f, 0.7f, 0.5f, Byte.MIN_VALUE, (byte) -10),
+    DEBUGGING(0.3f, 0.7f, 0.5f, Byte.MIN_VALUE, (byte) -10, 0.20f),
 
     /**
      * Recalling mode — importance-dominated, biased toward positive valence.
      * Surfaces proven solutions and past successes. Filters out negative outcomes.
      * Use when looking for known-good patterns, templates, or prior art.
      */
-    RECALLING(0.4f, 0.6f, 0.3f, (byte) 10, Byte.MAX_VALUE),
+    RECALLING(0.4f, 0.6f, 0.3f, (byte) 10, Byte.MAX_VALUE, 0.40f),
 
     /**
      * Critical mode — heavily importance-dominated, full valence range.
      * Surfaces the most important memories regardless of similarity.
      * Use for high-stakes decisions where correctness matters more than relevance.
      */
-    CRITICAL(0.2f, 0.8f, 0.4f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+    CRITICAL(0.2f, 0.8f, 0.4f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.20f),
 
     // ══ Neurodivergent Profiles ══
 
@@ -94,7 +94,7 @@ public enum CognitiveProfile {
      * Decay is clamped to 1.0 for focus-matched memories.
      * Post-score hyperfocusBoost=1.5 applied after normalized base score.</p>
      */
-    HYPERFOCUS(1.0f, 0.0f, 0.2f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+    HYPERFOCUS(1.0f, 0.0f, 0.2f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.0f),
 
     /**
      * Systematizer mode — importance-dominated, lossless consolidation.
@@ -107,7 +107,7 @@ public enum CognitiveProfile {
      * <p>Great for Senior AI Software Engineers, medical diagnosis, log analysis,
      * and deep-research agents that need encyclopedic detail retention.</p>
      */
-    SYSTEMATIZER(0.3f, 0.7f, 0.3f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+    SYSTEMATIZER(0.3f, 0.7f, 0.3f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.30f),
 
     /**
      * Divergent thinking mode — enables lateral/orthogonal retrieval.
@@ -120,7 +120,7 @@ public enum CognitiveProfile {
      * <p>Enables {@code lateralMode} with default thresholds. Lateral candidates
      * are tag-matched but semantically distant — blended with standard results.</p>
      */
-    DIVERGENT(0.8f, 0.2f, 0.2f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+    DIVERGENT(0.8f, 0.2f, 0.2f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.80f),
 
     // ══ Enhanced Profiles (feature-flagged for licensing) ══
 
@@ -142,7 +142,7 @@ public enum CognitiveProfile {
      * are all implemented via the valence range and alignment parameters.
      * Users seeking "Anxious" or "Hyper-vigilant" behavior should use this profile.</p>
      */
-    PARANOID_SENTINEL(0.2f, 0.8f, 0.5f, Byte.MIN_VALUE, (byte) -1),
+    PARANOID_SENTINEL(0.2f, 0.8f, 0.5f, Byte.MIN_VALUE, (byte) -1, 0.20f),
 
     /**
      * The Executor mode — Devin-style agentic task runner.
@@ -155,7 +155,7 @@ public enum CognitiveProfile {
      * <p>Scoring: α=0.3 (moderate similarity), β=0.7 (importance-dominated),
      * strictnessCoefficient=10.0 (cliff function).</p>
      */
-    THE_EXECUTOR(0.3f, 0.7f, 0.4f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+    THE_EXECUTOR(0.3f, 0.7f, 0.4f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.20f),
 
     /**
      * Highly Sensitive mode — Sensory Processing Sensitivity.
@@ -173,7 +173,7 @@ public enum CognitiveProfile {
      * <p>Users who previously tuned flashbulbThreshold and inhibition parameters
      * manually can use this profile instead for a curated experience.</p>
      */
-    HIGHLY_SENSITIVE(0.7f, 0.3f, 0.3f, Byte.MIN_VALUE, Byte.MAX_VALUE),
+    HIGHLY_SENSITIVE(0.7f, 0.3f, 0.3f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.40f),
 
     /**
      * Default Mode Network — "Shower Thoughts" / mind-wandering.
@@ -186,20 +186,23 @@ public enum CognitiveProfile {
      * <p>Scoring: α=0.2 (low similarity), β=0.8 (importance-dominated).
      * memoryTypes restricted to SEMANTIC + PROCEDURAL.</p>
      */
-    DEFAULT_MODE_NETWORK(0.2f, 0.8f, 0.1f, Byte.MIN_VALUE, Byte.MAX_VALUE);
+    DEFAULT_MODE_NETWORK(0.2f, 0.8f, 0.1f, Byte.MIN_VALUE, Byte.MAX_VALUE, 0.40f);
 
     private final float alpha;
     private final float beta;
     private final float gamma;
     private final byte minValence;
     private final byte maxValence;
+    private final float graphExpansionThreshold;
 
-    CognitiveProfile(float alpha, float beta, float gamma, byte minValence, byte maxValence) {
+    CognitiveProfile(float alpha, float beta, float gamma, byte minValence, byte maxValence,
+                     float graphExpansionThreshold) {
         this.alpha = alpha;
         this.beta = beta;
         this.gamma = gamma;
         this.minValence = minValence;
         this.maxValence = maxValence;
+        this.graphExpansionThreshold = graphExpansionThreshold;
     }
 
     /** Similarity weight (higher = more similarity-driven). */
@@ -216,6 +219,9 @@ public enum CognitiveProfile {
 
     /** Maximum valence filter. */
     public byte maxValence() { return maxValence; }
+
+    /** Graph expansion similarity threshold (0.0 = never expand, 1.0 = always expand). */
+    public float graphExpansionThreshold() { return graphExpansionThreshold; }
 
     /**
      * Applies this profile's settings to a {@link RecallOptions.Builder}.
@@ -237,7 +243,8 @@ public enum CognitiveProfile {
                .beta(beta)
                .gamma(gamma)
                .minValence(minValence)
-               .maxValence(maxValence);
+               .maxValence(maxValence)
+               .graphExpansionThreshold(graphExpansionThreshold);
 
         // Neurodivergent profile-specific overrides
         return switch (this) {

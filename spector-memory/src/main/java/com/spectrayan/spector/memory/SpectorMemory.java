@@ -145,6 +145,23 @@ public interface SpectorMemory extends AutoCloseable {
     /** Reports an outcome (positive/negative) for a previously recalled memory. */
     void reinforce(String memoryId, byte valence);
 
+    /**
+     * Reinforces a memory with optional ICNU hints for importance re-fusion.
+     *
+     * <p>When {@code updatedHints} is provided, the memory's importance is re-fused
+     * using the updated ICNU weights (Interest, Challenge, Novelty, Urgency).
+     * When {@code updatedHints} is null, importance is auto-adjusted based on the
+     * memory's graph position (degree centrality in the Hebbian graph).</p>
+     *
+     * @param memoryId     the memory ID to reinforce
+     * @param valence      positive/negative outcome (-128 to +127)
+     * @param updatedHints optional ICNU hints for re-fusion (null = auto-compute from graph)
+     */
+    default void reinforce(String memoryId, byte valence,
+                           com.spectrayan.spector.memory.neurodivergent.IngestionHints updatedHints) {
+        reinforce(memoryId, valence); // default: delegate to simple reinforce
+    }
+
     /** Suppresses a memory from future recall with a reason. */
     void suppress(String memoryId, String reason);
 

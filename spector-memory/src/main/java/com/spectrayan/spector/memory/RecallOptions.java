@@ -91,7 +91,12 @@ public record RecallOptions(
         // ── Entity Hints (Pre-Extracted Entities) ──
         List<ExtractedEntity> entityHints,
         // ── Pipeline Tracing ──
-        boolean enableTrace
+        boolean enableTrace,
+        // ── Temporal Gating ──
+        Long minTimestamp,
+        Long maxTimestamp,
+        // ── Graph Expansion Gating ──
+        float graphExpansionThreshold
 ) {
 
     /** Default options: top 10, no filters, balanced scoring. */
@@ -133,6 +138,13 @@ public record RecallOptions(
 
         // ── Pipeline Tracing ──
         private boolean enableTrace = false; // default: off (no allocation overhead)
+
+        // ── Temporal Gating ──
+        private Long minTimestamp = null;
+        private Long maxTimestamp = null;
+
+        // ── Graph Expansion Gating ──
+        private float graphExpansionThreshold = 0.40f; // default: expand when max similarity < 0.40
 
         // ── Neurodivergent: Hyperfocus ──
         private long hyperfocusMask = 0L;       // 0 = disabled
@@ -457,6 +469,37 @@ public record RecallOptions(
             return this;
         }
 
+        // ── Temporal Gating ──
+
+        /**
+         * Minimum timestamp (inclusive) — memories older than this are skipped.
+         */
+        public Builder minTimestamp(Long minTimestamp) {
+            this.minTimestamp = minTimestamp;
+            return this;
+        }
+
+        /**
+         * Maximum timestamp (inclusive) — memories newer than this are skipped.
+         */
+        public Builder maxTimestamp(Long maxTimestamp) {
+            this.maxTimestamp = maxTimestamp;
+            return this;
+        }
+
+        // ── Graph Expansion Gating ──
+
+        /**
+         * Maximum direct similarity score below which graph expansion is triggered (default: 0.40).
+         * When the best direct result has similarity ≥ this threshold, graph expansion
+         * (Hebbian, temporal, entity) is skipped to avoid diluting strong results.
+         * Set to 0.0 to disable graph expansion entirely, or 1.0 to always expand.
+         */
+        public Builder graphExpansionThreshold(float threshold) {
+            this.graphExpansionThreshold = threshold;
+            return this;
+        }
+
         public RecallOptions build() {
             int effectiveLateralMax = lateralMaxResults >= 0
                     ? lateralMaxResults
@@ -470,7 +513,9 @@ public record RecallOptions(
                     strictnessCoefficient, queryValence, enableValenceAlignment,
                     twoFactorConfig, recallMode,
                     gamma, enableTextSearch, textSearchMode,
-                    scoringMode, entityHints, enableTrace);
+                    scoringMode, entityHints, enableTrace,
+                    minTimestamp, maxTimestamp,
+                    graphExpansionThreshold);
             return options;
         }
     }
