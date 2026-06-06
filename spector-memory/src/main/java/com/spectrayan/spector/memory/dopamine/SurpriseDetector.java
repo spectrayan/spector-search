@@ -93,22 +93,26 @@ public final class SurpriseDetector {
     }
 
     /**
-     * Maps a z-score to an importance value.
+     * Maps a z-score to an importance value using a continuous sigmoid.
+     *
+     * <p>Produces a smooth, unique importance value for each memory instead of
+     * the previous 5-level step function that collapsed 95% of memories to
+     * the same value. The sigmoid is centered at z=1.0 (moderate novelty
+     * threshold) with steepness 1.2, mapping to the [0.05, 10.0] range.</p>
      *
      * <pre>
-     *   z < -1.0 → very similar to existing memories → 0.1 (suppress)
-     *   z ∈ [-1, 1] → normal → 0.5 (default)
-     *   z > 1.0 → moderately novel → 2.0
-     *   z > 2.0 → highly novel → 5.0
-     *   z > 3.0 → extreme outlier → 10.0 (dopamine spike!)
+     *   z ≪ 0  → near 0.05 (very similar to known memories)
+     *   z ≈ 1  → ~5.0 (midpoint — moderate novelty)
+     *   z ≫ 3  → near 10.0 (extreme outlier — dopamine spike!)
      * </pre>
      */
     static float zScoreToImportance(double zScore) {
-        if (zScore < -1.0) return 0.1f;  // Very similar to known memories
-        if (zScore <= 1.0) return 0.5f;  // Normal, expected
-        if (zScore <= 2.0) return 2.0f;  // Moderately novel
-        if (zScore <= 3.0) return 5.0f;  // Highly novel
-        return 10.0f;                     // Extreme outlier — dopamine spike!
+        // Shifted sigmoid: σ(k · (z - center))
+        // center=1.0: moderate novelty is the midpoint
+        // steepness=1.2: gradual transition, not a cliff
+        float sigmoid = (float) (1.0 / (1.0 + Math.exp(-1.2 * (zScore - 1.0))));
+        // Scale to [0.05, 10.0]
+        return 0.05f + sigmoid * 9.95f;
     }
 
     /**

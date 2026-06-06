@@ -41,9 +41,10 @@ class SurpriseDetectorTest {
             detector.computeImportance(1.0f + i * 0.01f);
         }
 
-        // A value at the mean should get normal importance
+        // A value near the mean should produce importance around the sigmoid midpoint
+        // For z≈0, sigmoid(1.2*(0-1)) ≈ 0.23 → importance ≈ 0.05 + 0.23*9.95 ≈ 2.34
         float normalImportance = detector.computeImportance(1.02f);
-        assertThat(normalImportance).isEqualTo(0.5f);
+        assertThat(normalImportance).isBetween(0.5f, 5.0f); // moderate range, not extreme
     }
 
     @Test
@@ -75,14 +76,34 @@ class SurpriseDetectorTest {
     }
 
     @Test
-    void zScoreToImportanceMappingBoundaries() {
-        assertThat(SurpriseDetector.zScoreToImportance(-2.0)).isEqualTo(0.1f);
-        assertThat(SurpriseDetector.zScoreToImportance(-0.5)).isEqualTo(0.5f);
-        assertThat(SurpriseDetector.zScoreToImportance(0.0)).isEqualTo(0.5f);
-        assertThat(SurpriseDetector.zScoreToImportance(1.0)).isEqualTo(0.5f);
-        assertThat(SurpriseDetector.zScoreToImportance(1.5)).isEqualTo(2.0f);
-        assertThat(SurpriseDetector.zScoreToImportance(2.5)).isEqualTo(5.0f);
-        assertThat(SurpriseDetector.zScoreToImportance(4.0)).isEqualTo(10.0f);
+    void zScoreToImportanceMappingContinuous() {
+        // Continuous sigmoid: verify monotonicity and range
+        float atNeg2 = SurpriseDetector.zScoreToImportance(-2.0);
+        float atNeg05 = SurpriseDetector.zScoreToImportance(-0.5);
+        float at0 = SurpriseDetector.zScoreToImportance(0.0);
+        float at1 = SurpriseDetector.zScoreToImportance(1.0);
+        float at2 = SurpriseDetector.zScoreToImportance(2.0);
+        float at4 = SurpriseDetector.zScoreToImportance(4.0);
+
+        // Monotonically increasing
+        assertThat(atNeg2).isLessThan(atNeg05);
+        assertThat(atNeg05).isLessThan(at0);
+        assertThat(at0).isLessThan(at1);
+        assertThat(at1).isLessThan(at2);
+        assertThat(at2).isLessThan(at4);
+
+        // Range: all values in [0.05, 10.0]
+        assertThat(atNeg2).isGreaterThanOrEqualTo(0.05f);
+        assertThat(at4).isLessThanOrEqualTo(10.0f);
+
+        // At z=1.0 (sigmoid center), importance should be ~5.0 (midpoint)
+        assertThat(at1).isBetween(4.5f, 5.5f);
+
+        // Extreme low z should be close to floor
+        assertThat(atNeg2).isLessThan(1.0f);
+
+        // Extreme high z should be close to ceiling
+        assertThat(at4).isGreaterThan(9.0f);
     }
 
     @Test
