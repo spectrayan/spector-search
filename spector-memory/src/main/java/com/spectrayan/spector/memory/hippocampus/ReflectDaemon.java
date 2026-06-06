@@ -461,7 +461,7 @@ public final class ReflectDaemon {
      * {@code interferenceThreshold} L2 distance. For each pair, the older
      * record's importance is multiplied by {@code interferenceDecayFactor}
      * (default: 0.7 = 30% reduction per cycle). This is less violent than
-     * halving recall_count — the old memory fades naturally via importance
+     * halving agent_recall_count — the old memory fades naturally via importance
      * decay rather than losing its entire recall history.</p>
      *
      * <h3>Performance</h3>
@@ -613,7 +613,7 @@ public final class ReflectDaemon {
                 commonTags != 0 ? commonTags : episodicHeader.synapticTags(),
                 episodicHeader.exactNorm(),
                 episodicHeader.importance(),
-                episodicHeader.recallCount(),
+                episodicHeader.agentRecallCount(),
                 episodicHeader.centroidId(),
                 episodicHeader.valence(),
                 semanticFlags);

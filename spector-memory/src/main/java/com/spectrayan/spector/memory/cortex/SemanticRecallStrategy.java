@@ -116,6 +116,8 @@ public final class SemanticRecallStrategy {
         byte minValence = options.minValence();
         byte maxValence = options.maxValence();
         float minImportance = options.minImportance();
+        Long minTimestamp = options.minTimestamp();
+        Long maxTimestamp = options.maxTimestamp();
         boolean pureSimilarity = options.scoringMode() == ScoringMode.SIMILARITY;
 
         // Cognitive scoring weights (ignored in SIMILARITY mode)
@@ -144,11 +146,25 @@ public final class SemanticRecallStrategy {
             // Phase 1: Tombstone check (always applied)
             if (SynapticHeaderConstants.isTombstoned(header.flags())) continue;
 
-            float finalScore;
-            float importance = header.importance();
+            // Phase 1b: Temporal gating (absolute timestamp bounds)
             long timestamp = header.timestampMs();
-            int recallCount = header.recallCount();
+            if (minTimestamp != null && timestamp < minTimestamp) continue;
+            if (maxTimestamp != null && timestamp > maxTimestamp) continue;
+
+            // Phase 2: Synaptic tag gating (skip on zero overlap)
+            long recordTags = header.synapticTags();
+            if (queryTagMask != 0 && (recordTags & queryTagMask) == 0) continue;
+
+            // Phase 3: Valence filter
             byte valence = header.valence();
+            if (valence < minValence || valence > maxValence) continue;
+
+            // Phase 4: Importance threshold
+            float importance = header.importance();
+            if (importance < minImportance) continue;
+
+            float finalScore;
+            int agentRecallCount = header.agentRecallCount();
             float decay;
             float rawDecay;
 
@@ -161,23 +177,12 @@ public final class SemanticRecallStrategy {
                 rawDecay = 1.0f;
             } else {
                 // ── COGNITIVE mode: full biologically-inspired scoring ──
-
-                // Phase 2: Synaptic tag gating (skip on zero overlap)
-                long recordTags = header.synapticTags();
-                if (queryTagMask != 0 && (recordTags & queryTagMask) == 0) continue;
-
-                // Phase 3: Valence filter
-                if (valence < minValence || valence > maxValence) continue;
-
-                // Phase 4: Importance threshold
-                if (importance < minImportance) continue;
-
                 // Phase 5: Use HNSW similarity score directly
                 float similarity = sr.score();
 
                 // Phase 6: Temporal decay + reconsolidation
                 int rawBucket = DecayStrategy.ageToBucket(timestamp, nowMs);
-                int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, recallCount);
+                int adjusted = DecayStrategy.adjustForReconsolidation(rawBucket, agentRecallCount);
                 decay = DecayStrategy.decay(adjusted);
                 rawDecay = DecayStrategy.decay(rawBucket);
 
@@ -210,7 +215,7 @@ public final class SemanticRecallStrategy {
             results.add(new CognitiveResult(
                     id != null ? id : "semantic-" + sr.index(),
                     text, finalScore, importance, ageDays,
-                    recallCount, valence, MemoryType.SEMANTIC, source,
+                    agentRecallCount, valence, MemoryType.SEMANTIC, source,
                     tags, rawDecay, decay,
                     CognitiveResult.RetrievalMode.STANDARD, breakdown));
         }

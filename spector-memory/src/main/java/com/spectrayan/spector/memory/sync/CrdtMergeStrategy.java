@@ -50,7 +50,7 @@ public final class CrdtMergeStrategy {
      * @param timestampMs   LWW: most recent timestamp
      * @param synapticTags  OR-merge: union of Bloom filters
      * @param importance    Max-merge: highest importance
-     * @param recallCount   Max-merge: highest recall count
+     * @param agentRecallCount   Max-merge: highest recall count
      * @param valence       LWW: valence from most recent timestamp
      * @param flags         Merged flags (tombstone wins, consolidated/pinned OR)
      */
@@ -58,7 +58,7 @@ public final class CrdtMergeStrategy {
             long timestampMs,
             long synapticTags,
             float importance,
-            int recallCount,
+            int agentRecallCount,
             byte valence,
             byte flags
     ) {}
@@ -70,7 +70,7 @@ public final class CrdtMergeStrategy {
             long timestampMs,
             long synapticTags,
             float importance,
-            int recallCount,
+            int agentRecallCount,
             byte valence,
             byte flags
     ) {}
@@ -89,7 +89,7 @@ public final class CrdtMergeStrategy {
         long mergedTimestamp = Math.max(local.timestampMs(), remote.timestampMs());
         long mergedTags = local.synapticTags() | remote.synapticTags(); // OR-merge
         float mergedImportance = Math.max(local.importance(), remote.importance()); // Max-merge
-        int mergedRecallCount = Math.max(local.recallCount(), remote.recallCount()); // Max-merge
+        int mergedagentRecallCount = Math.max(local.agentRecallCount(), remote.agentRecallCount()); // Max-merge
         byte mergedValence = remoteIsNewer ? remote.valence() : local.valence(); // LWW
 
         // Flag merge: tombstone and consolidated/pinned are OR-merged
@@ -100,7 +100,7 @@ public final class CrdtMergeStrategy {
                 remoteIsNewer ? "remote" : "local");
 
         return new MergedHeader(mergedTimestamp, mergedTags, mergedImportance,
-                mergedRecallCount, mergedValence, mergedFlags);
+                mergedagentRecallCount, mergedValence, mergedFlags);
     }
 
     /**
@@ -132,7 +132,7 @@ public final class CrdtMergeStrategy {
     public static boolean wouldChange(SourceHeader local, SourceHeader remote) {
         if (remote.timestampMs() > local.timestampMs()) return true;
         if (remote.importance() > local.importance()) return true;
-        if (remote.recallCount() > local.recallCount()) return true;
+        if (remote.agentRecallCount() > local.agentRecallCount()) return true;
         if ((remote.synapticTags() & ~local.synapticTags()) != 0) return true; // remote has bits local doesn't
         if ((remote.flags() & ~local.flags()) != 0) return true; // remote has flag bits local doesn't
         return false;

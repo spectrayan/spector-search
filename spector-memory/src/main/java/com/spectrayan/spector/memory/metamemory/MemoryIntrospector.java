@@ -96,21 +96,21 @@ public final class MemoryIntrospector {
         float sumImportance = 0f;
         float sumValence = 0f;
         float sumAgeDays = 0f;
-        float sumRecallCount = 0f;
+        float sumagentRecallCount = 0f;
         int reinforcedCount = 0;
 
         for (CognitiveResult r : results) {
             sumImportance += r.importance();
             sumValence += r.valence();
             sumAgeDays += r.ageDays();
-            sumRecallCount += r.recallCount();
-            if (r.recallCount() > 0) reinforcedCount++;
+            sumagentRecallCount += r.agentRecallCount();
+            if (r.agentRecallCount() > 0) reinforcedCount++;
         }
 
         float avgImportance = sumImportance / count;
         float avgValence = sumValence / count;
         float avgAgeDays = sumAgeDays / count;
-        float avgRecalls = sumRecallCount / count;
+        float avgRecalls = sumagentRecallCount / count;
 
         // Confidence: based on memory count, reinforcement ratio, and importance
         float countFactor = Math.min(1.0f, count / 20.0f); // saturates at 20 memories

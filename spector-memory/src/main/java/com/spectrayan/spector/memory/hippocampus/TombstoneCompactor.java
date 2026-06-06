@@ -93,10 +93,10 @@ public final class TombstoneCompactor {
             if (SynapticHeaderConstants.isPinned(flags)) continue;
 
             long timestamp = layout.readTimestamp(segment, offset);
-            int recallCount = layout.readRecallCount(segment, offset);
+            int agentRecallCount = layout.readAgentRecallCount(segment, offset);
             float importance = layout.readImportance(segment, offset);
 
-            float decay = DecayStrategy.computeDecay(timestamp, nowMs, recallCount);
+            float decay = DecayStrategy.computeDecay(timestamp, nowMs, agentRecallCount);
             float score = importance * decay;
 
             if (score < pruneThreshold) {
