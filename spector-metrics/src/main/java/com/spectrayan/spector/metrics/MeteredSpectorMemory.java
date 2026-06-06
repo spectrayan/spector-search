@@ -200,6 +200,15 @@ public class MeteredSpectorMemory implements SpectorMemory {
     }
 
     @Override
+    public CompletableFuture<Void> remember(String id, String text, MemoryType type,
+                                              MemorySource source,
+                                              com.spectrayan.spector.memory.IngestionContext context,
+                                              String... tags) {
+        rememberCounter.increment();
+        return delegate.remember(id, text, type, source, context, tags);
+    }
+
+    @Override
     public List<CognitiveResult> recall(String queryText, RecallOptions options) {
         recallCounter.increment();
         return recallTimer.record(() -> delegate.recall(queryText, options));

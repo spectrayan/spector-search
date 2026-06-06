@@ -35,6 +35,7 @@ import com.spectrayan.spector.memory.cortex.MemorySource;
  * @param ltpAdjustedDecay decay multiplier after reconsolidation adjustment
  * @param retrievalMode   how this result was retrieved (Standard, Lateral, Hyperfocus)
  * @param breakdown       decomposed scoring trace (nullable for backward compat)
+ * @param trace           per-step pipeline scoring trace (nullable — only populated when enableTrace=true)
  */
 public record CognitiveResult(
         String id,
@@ -50,7 +51,8 @@ public record CognitiveResult(
         float decayFactor,
         float ltpAdjustedDecay,
         RetrievalMode retrievalMode,
-        ScoreBreakdown breakdown
+        ScoreBreakdown breakdown,
+        RecallTrace trace
 ) {
 
     /**
@@ -84,7 +86,7 @@ public record CognitiveResult(
                             float ltpAdjustedDecay) {
         this(id, text, score, importance, ageDays, recallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
-                RetrievalMode.STANDARD, null);
+                RetrievalMode.STANDARD, null, null);
     }
 
     /**
@@ -97,7 +99,21 @@ public record CognitiveResult(
                             float ltpAdjustedDecay, RetrievalMode retrievalMode) {
         this(id, text, score, importance, ageDays, recallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
-                retrievalMode, null);
+                retrievalMode, null, null);
+    }
+
+    /**
+     * Constructor with breakdown but no trace (backward compat).
+     */
+    public CognitiveResult(String id, String text, float score, float importance,
+                            float ageDays, int recallCount, byte valence,
+                            MemoryType memoryType, MemorySource source,
+                            String[] synapticTags, float decayFactor,
+                            float ltpAdjustedDecay, RetrievalMode retrievalMode,
+                            ScoreBreakdown breakdown) {
+        this(id, text, score, importance, ageDays, recallCount, valence,
+                memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
+                retrievalMode, breakdown, null);
     }
 
     /**
@@ -112,6 +128,22 @@ public record CognitiveResult(
      */
     public boolean hasBreakdown() {
         return breakdown != null;
+    }
+
+    /**
+     * Returns true if this result has a pipeline scoring trace.
+     */
+    public boolean hasTrace() {
+        return trace != null;
+    }
+
+    /**
+     * Returns a copy of this result with the given trace attached.
+     */
+    public CognitiveResult withTrace(RecallTrace trace) {
+        return new CognitiveResult(id, text, score, importance, ageDays, recallCount,
+                valence, memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
+                retrievalMode, breakdown, trace);
     }
 
     /**

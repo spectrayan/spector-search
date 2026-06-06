@@ -646,7 +646,7 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     @Override
     public CompletableFuture<Void> remember(String id, String text, MemoryType type,
                                               MemorySource source, String... tags) {
-        return remember(id, text, type, source, null, tags);
+        return remember(id, text, type, source, (com.spectrayan.spector.memory.neurodivergent.IngestionHints) null, tags);
     }
 
     @Override
@@ -682,6 +682,34 @@ public final class DefaultSpectorMemory implements SpectorMemory {
     public CompletableFuture<Void> remember(String id, String text, MemoryType type,
                                               String... tags) {
         return remember(id, text, type, MemorySource.OBSERVED, tags);
+    }
+
+    @Override
+    public CompletableFuture<Void> remember(String id, String text, MemoryType type,
+                                              MemorySource source,
+                                              IngestionContext context,
+                                              String... tags) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                float[] vector = embeddingProvider.embed(text).vector();
+                cognitiveTarget.ingestCognitive(id, text, vector, type, tags, source, context);
+
+                // Circadian trigger: auto-reflect after volume threshold
+                if (type == MemoryType.EPISODIC) {
+                    int count = episodicIngestCount.incrementAndGet();
+                    if (count >= circadianPolicy.volumeTrigger()) {
+                        episodicIngestCount.set(0);
+                        CompletableFuture.runAsync(() -> {
+                            log.info("Circadian volume trigger: {} episodic memories → auto-reflect", count);
+                            reflect();
+                        }, virtualExecutor);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to remember '{}': {}", id, e.getMessage(), e);
+                throw new SpectorServerException(ErrorCode.INTERNAL_ERROR, e, "Memory ingestion failed for id=" + id);
+            }
+        }, virtualExecutor);
     }
 
     @Override

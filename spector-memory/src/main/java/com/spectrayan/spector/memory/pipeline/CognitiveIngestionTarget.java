@@ -214,7 +214,7 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                 String.join(", ", tags));
 
         ingestCognitive(id, text, vector, MemoryType.SEMANTIC,
-                tags, MemorySource.OBSERVED, null);
+                tags, MemorySource.OBSERVED, (IngestionHints) null);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -422,6 +422,255 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
 
         log.debug("Ingested '{}' as {} (importance={}, {} tags, hnswIdx={}, source={})",
                 id, type, importance, tags.length, storeIndex, source);
+    }
+
+    /**
+     * Full cognitive ingestion with consolidated {@link com.spectrayan.spector.memory.IngestionContext}.
+     *
+     * <p>Delegates core ingestion (steps 2-9c) to the existing pipeline, then
+     * processes pre-extracted entities, Hebbian edge hints, and temporal link
+     * hints from the context. When context provides entities, the
+     * {@code EntityExtractor} SPI is bypassed.</p>
+     *
+     * @param id      unique memory identifier
+     * @param text    the memory content
+     * @param vector  pre-computed embedding vector
+     * @param type    cognitive memory tier
+     * @param tags    synaptic tag strings
+     * @param source  provenance source
+     * @param context consolidated cognitive metadata
+     */
+    public void ingestCognitive(String id, String text, float[] vector,
+                                 MemoryType type, String[] tags,
+                                 MemorySource source,
+                                 com.spectrayan.spector.memory.IngestionContext context) {
+        if (context == null) {
+            ingestCognitive(id, text, vector, type, tags, source, (IngestionHints) null);
+            return;
+        }
+
+        // Delegate core ingestion with hints — BUT we need to control entity extraction.
+        // If context has pre-extracted entities, we skip entity extraction in the base method
+        // by temporarily using a flag approach. Instead, we inline the logic here.
+
+        // Step 9d override: Use context entities instead of EntityExtractor
+        // First, run the base ingestion (which handles Steps 2-9c + 9d with extractor)
+        // We'll re-implement 9d below if context has entities.
+
+        // Use context hints for ICNU fusion
+        IngestionHints hints = context.hints();
+
+        // Dedup guard
+        if (index.locate(id) != null) {
+            log.debug("Skipping duplicate memory '{}' — already indexed", id);
+            return;
+        }
+
+        // Step 2: Encode synaptic tags
+        long synapticTags = SynapticTagEncoder.encode(tags);
+
+        // Step 1c: L2-normalize vector
+        if (normalizeAtIngest) {
+            vector = l2Normalize(vector);
+        }
+
+        // Step 5 (early): Quantize vector to INT8
+        byte[] quantized = quantizer.encode(vector);
+
+        // Step 3: Compute surprise → importance
+        float nearestDist;
+        if (workingStore != null && workingStore.count() > 0) {
+            nearestDist = workingStore.nearestDistance(
+                    vector, quantizer.mins(), quantizer.scales());
+        } else {
+            nearestDist = computeL2Norm(vector);
+        }
+
+        float importance;
+        if (hints != null && !hints.isEmpty()) {
+            float rawNoveltyImportance = surpriseDetector.computeImportance(nearestDist);
+            float noveltyNorm = Math.clamp(rawNoveltyImportance / 10.0f, 0f, 1f);
+            importance = icnuWeights.fuse(hints, noveltyNorm);
+        } else {
+            importance = surpriseDetector.computeImportance(nearestDist);
+        }
+
+        // Step 4: Flashbulb check
+        double zScore = surpriseDetector.stats().zScore(nearestDist);
+        var flashbulb = flashbulbPolicy.evaluate(zScore);
+        byte flags = SynapticHeaderConstants.withMemoryType((byte) 0, type.ordinal());
+        if (flashbulb.isFlashbulb()) {
+            importance = flashbulb.importance();
+            flags = (byte) (flags | SynapticHeaderConstants.FLAG_PINNED);
+        }
+
+        // Step 6: Build cognitive header (use override timestamp if provided)
+        float l2Norm = computeL2Norm(vector);
+        byte valence = (hints != null) ? hints.valence() : (byte) 0;
+        byte arousal = (hints != null) ? hints.effectiveArousal() : (byte) 0;
+        long timestampMs = context.effectiveTimestampMs();
+        CognitiveHeader header = new CognitiveHeader(
+                timestampMs, synapticTags, l2Norm, importance,
+                0, (short) 0, valence, flags, arousal, 1.0f);
+
+        // Step 7: Route to tier store and write
+        long offset;
+        try {
+            offset = tierRouter.write(type, header, quantized);
+        } catch (SpectorMemoryTierFullException e) {
+            if (partitionRollCallback != null) {
+                partitionRollCallback.run();
+                offset = tierRouter.write(type, header, quantized);
+            } else {
+                throw e;
+            }
+        }
+
+        // Step 7b: HNSW index
+        int storeIndex = -1;
+        if (type == MemoryType.SEMANTIC && semanticIndex != null
+                && !semanticIndex.isReadOnly()) {
+            storeIndex = tierRouter.countFor(MemoryType.SEMANTIC) - 1;
+            semanticIndex.add(id, storeIndex, vector);
+        }
+
+        // Step 8: Register in ID index
+        index.register(id, new MemoryLocation(type, offset, storeIndex), text, source, tags);
+
+        // Step 9: WAL append
+        wal.appendRemember(id, quantized);
+
+        // Step 9a: BM25 text index
+        if (textDataStore != null) {
+            try { textDataStore.write(id, type, text); }
+            catch (RuntimeException e) { log.warn("Failed to write text.dat for '{}': {}", id, e.getMessage()); }
+        }
+        if (bm25Index != null && activePartitionIndex >= 0) {
+            try { bm25Index.index(activePartitionIndex, id, text); }
+            catch (RuntimeException e) { log.warn("Failed BM25 index for '{}': {}", id, e.getMessage()); }
+        }
+
+        // Step 9b: Hebbian edge strengthening (automatic co-ingestion)
+        int memoryIdx = index.size() - 1;
+        if (hebbianGraph != null) {
+            try {
+                if (hebbianGraph.isNewSession()) {
+                    currentSessionId++;
+                    lastIngestedMemoryIdx.set(-1);
+                }
+                int lastIdx = lastIngestedMemoryIdx.getAndSet(memoryIdx);
+                if (lastIdx >= 0 && lastIdx != memoryIdx) {
+                    hebbianGraph.strengthen(memoryIdx, lastIdx, 1.0f);
+                }
+            } catch (RuntimeException e) {
+                log.warn(new SpectorHebbianException("edge strengthening", e).getMessage());
+            }
+        }
+
+        // Step 9b-ext: Pre-computed Hebbian edges from IngestionContext
+        if (context.hasHebbianEdges() && hebbianGraph != null) {
+            for (var edgeHint : context.hebbianEdges()) {
+                try {
+                    MemoryLocation targetLoc = index.locate(edgeHint.targetMemoryId());
+                    if (targetLoc != null) {
+                        int targetIdx = targetLoc.partitionIndex() >= 0
+                                ? targetLoc.partitionIndex()
+                                : (int) (targetLoc.offset() / 164);
+                        hebbianGraph.strengthen(memoryIdx, targetIdx, edgeHint.weight());
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("Failed to apply Hebbian edge hint {} → {}: {}",
+                            id, edgeHint.targetMemoryId(), e.getMessage());
+                }
+            }
+        }
+
+        // Step 9c: Temporal chain linking (automatic session-based)
+        if (temporalChain != null) {
+            try {
+                int lastIdx = lastIngestedMemoryIdx.get() == memoryIdx
+                        ? -1 : lastIngestedMemoryIdx.get();
+                if (lastIdx >= 0) {
+                    temporalChain.link(memoryIdx, lastIdx, currentSessionId);
+                }
+            } catch (RuntimeException e) {
+                log.warn(new SpectorTemporalChainException("linking", e).getMessage());
+            }
+        }
+
+        // Step 9c-ext: Pre-computed temporal links from IngestionContext
+        if (context.hasTemporalLinks() && temporalChain != null) {
+            for (var linkHint : context.temporalLinks()) {
+                try {
+                    MemoryLocation predLoc = index.locate(linkHint.predecessorMemoryId());
+                    if (predLoc != null) {
+                        int predIdx = predLoc.partitionIndex() >= 0
+                                ? predLoc.partitionIndex()
+                                : (int) (predLoc.offset() / 164);
+                        temporalChain.link(memoryIdx, predIdx, linkHint.sessionId());
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("Failed to apply temporal link hint {} → {}: {}",
+                            id, linkHint.predecessorMemoryId(), e.getMessage());
+                }
+            }
+        }
+
+        // Step 9d: Entity extraction and graph population
+        // Pre-extracted entities from IngestionContext take precedence over EntityExtractor
+        if (context.hasEntities() && entityGraph != null) {
+            try {
+                for (ExtractedEntity entity : context.entities()) {
+                    int eid = entityGraph.addEntity(entity.name(), entity.type());
+                    if (eid >= 0) {
+                        entityGraph.linkEntityToMemory(eid, memoryIdx);
+                        for (EntityRelation rel : entity.relations()) {
+                            int targetEid = entityGraph.findEntity(rel.targetEntityName());
+                            if (targetEid < 0) {
+                                targetEid = entityGraph.addEntity(
+                                        rel.targetEntityName(),
+                                        com.spectrayan.spector.memory.graph.EntityType.OTHER);
+                            }
+                            if (targetEid >= 0) {
+                                entityGraph.addRelation(eid, targetEid, rel.relationType());
+                            }
+                        }
+                    }
+                }
+            } catch (RuntimeException e) {
+                log.warn(new SpectorEntityGraphException("pre-extracted entity population", e).getMessage());
+            }
+        } else if (entityExtractor != null && entityGraph != null && entityExtractor.isAvailable()) {
+            // Fall back to EntityExtractor SPI
+            try {
+                List<ExtractedEntity> entities = entityExtractor.extract(id, text);
+                for (ExtractedEntity entity : entities) {
+                    int eid = entityGraph.addEntity(entity.name(), entity.type());
+                    if (eid >= 0) {
+                        entityGraph.linkEntityToMemory(eid, memoryIdx);
+                        for (EntityRelation rel : entity.relations()) {
+                            int targetEid = entityGraph.findEntity(rel.targetEntityName());
+                            if (targetEid < 0) {
+                                targetEid = entityGraph.addEntity(
+                                        rel.targetEntityName(),
+                                        com.spectrayan.spector.memory.graph.EntityType.OTHER);
+                            }
+                            if (targetEid >= 0) {
+                                entityGraph.addRelation(eid, targetEid, rel.relationType());
+                            }
+                        }
+                    }
+                }
+            } catch (RuntimeException e) {
+                log.warn(new SpectorEntityGraphException("extraction", e).getMessage());
+            }
+        }
+
+        log.debug("Ingested '{}' as {} with IngestionContext (importance={}, {} tags, entities={}, hebbianEdges={}, temporalLinks={})",
+                id, type, importance, tags.length,
+                context.hasEntities() ? context.entities().size() : 0,
+                context.hasHebbianEdges() ? context.hebbianEdges().size() : 0,
+                context.hasTemporalLinks() ? context.temporalLinks().size() : 0);
     }
 
     // ═══════════════════════════════════════════════════════════════

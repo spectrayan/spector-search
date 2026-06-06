@@ -17,6 +17,7 @@ import com.spectrayan.spector.index.VectorIndex;
 import com.spectrayan.spector.memory.CognitiveResult;
 import com.spectrayan.spector.memory.MemoryType;
 import com.spectrayan.spector.memory.RecallOptions;
+import com.spectrayan.spector.memory.ScoreBreakdown;
 import com.spectrayan.spector.memory.ScoringMode;
 import com.spectrayan.spector.memory.index.MemoryIndex;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
@@ -193,11 +194,25 @@ public final class SemanticRecallStrategy {
             String[] tags = id != null ? memoryIndex.tags(id) : new String[0];
             float ageDays = (nowMs - timestamp) / (1000f * 60f * 60f * 24f);
 
+            // Build breakdown for diagnostic output
+            ScoreBreakdown breakdown;
+            if (pureSimilarity) {
+                breakdown = new ScoreBreakdown(sr.score(), 0f, 1.0f, 1.0f, 1.0f, 1.0f, finalScore);
+            } else {
+                float importanceDecay = importance * decay;
+                float tagOverlapForBd = SynapticTagEncoder.overlapRatio(header.synapticTags(), queryTagMask);
+                float tagBoostFactor = 1.0f + tagOverlapForBd * tagRelevanceBoost;
+                breakdown = new ScoreBreakdown(
+                        sr.score(), importanceDecay, tagBoostFactor,
+                        1.0f, 1.0f, 1.0f, finalScore);
+            }
+
             results.add(new CognitiveResult(
                     id != null ? id : "semantic-" + sr.index(),
                     text, finalScore, importance, ageDays,
                     recallCount, valence, MemoryType.SEMANTIC, source,
-                    tags, rawDecay, decay));
+                    tags, rawDecay, decay,
+                    CognitiveResult.RetrievalMode.STANDARD, breakdown));
         }
 
         // Sort by fused score descending

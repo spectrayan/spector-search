@@ -98,6 +98,27 @@ public interface SpectorMemory extends AutoCloseable {
                                       com.spectrayan.spector.memory.neurodivergent.IngestionHints hints,
                                       String... tags);
 
+    /**
+     * Ingests a new memory with full cognitive context.
+     *
+     * <p>The {@link IngestionContext} consolidates all LLM-provided metadata:
+     * ICNU hints, pre-extracted entities, Hebbian edge hints, and temporal
+     * chain links. This enables a single-call ingestion with complete
+     * cognitive context — ideal for MCP tool integration.</p>
+     *
+     * @param id      unique memory identifier
+     * @param text    memory content
+     * @param type    cognitive tier (WORKING, EPISODIC, SEMANTIC, PROCEDURAL)
+     * @param source  provenance (USER_STATED, OBSERVED, INFERRED, PROCEDURAL)
+     * @param context consolidated cognitive metadata (entities, edges, links, hints)
+     * @param tags    synaptic tag strings for Bloom filter encoding
+     * @see IngestionContext
+     */
+    CompletableFuture<Void> remember(String id, String text, MemoryType type,
+                                      MemorySource source,
+                                      IngestionContext context,
+                                      String... tags);
+
     /** Convenience overload with default source. */
     CompletableFuture<Void> remember(String id, String text, MemoryType type,
                                       String... tags);

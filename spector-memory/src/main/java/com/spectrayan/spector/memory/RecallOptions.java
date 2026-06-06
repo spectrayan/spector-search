@@ -12,6 +12,7 @@
  */
 package com.spectrayan.spector.memory;
 
+import com.spectrayan.spector.memory.graph.ExtractedEntity;
 import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
 
 import java.util.ArrayList;
@@ -86,7 +87,11 @@ public record RecallOptions(
         boolean enableTextSearch,
         TextSearchMode textSearchMode,
         // ── Scoring Mode ──
-        ScoringMode scoringMode
+        ScoringMode scoringMode,
+        // ── Entity Hints (Pre-Extracted Entities) ──
+        List<ExtractedEntity> entityHints,
+        // ── Pipeline Tracing ──
+        boolean enableTrace
 ) {
 
     /** Default options: top 10, no filters, balanced scoring. */
@@ -122,6 +127,12 @@ public record RecallOptions(
 
         // ── Scoring Mode ──
         private ScoringMode scoringMode = ScoringMode.COGNITIVE; // default: full cognitive
+
+        // ── Entity Hints ──
+        private List<ExtractedEntity> entityHints = List.of(); // default: empty (use EntityExtractor)
+
+        // ── Pipeline Tracing ──
+        private boolean enableTrace = false; // default: off (no allocation overhead)
 
         // ── Neurodivergent: Hyperfocus ──
         private long hyperfocusMask = 0L;       // 0 = disabled
@@ -403,6 +414,49 @@ public record RecallOptions(
             return this;
         }
 
+        // ── Entity Hints ──
+
+        /**
+         * Pre-extracted entities for entity graph traversal at recall time.
+         *
+         * <p>When provided, these entities are used directly for graph traversal
+         * in Step 5e of the recall pipeline, bypassing the live {@code EntityExtractor}.
+         * This is essential for benchmarking (where no LLM is available for extraction)
+         * and for MCP clients that already have entity data.</p>
+         *
+         * @param entities pre-extracted entities from the query
+         */
+        public Builder entityHints(List<ExtractedEntity> entities) {
+            this.entityHints = entities != null ? entities : List.of();
+            return this;
+        }
+
+        /**
+         * Convenience overload for varargs entity hints.
+         */
+        public Builder entityHints(ExtractedEntity... entities) {
+            this.entityHints = List.of(entities);
+            return this;
+        }
+
+        // ── Pipeline Tracing ──
+
+        /**
+         * Enables per-result pipeline scoring trace (default: false).
+         *
+         * <p>When enabled, each {@link CognitiveResult} will carry a
+         * {@link RecallTrace} showing how its score evolved through every
+         * phase of the recall pipeline. Useful for debugging and LLM-driven
+         * dynamic query adjustment via MCP.</p>
+         *
+         * <p><b>Performance note:</b> Tracing adds allocation overhead per result.
+         * Do not enable in production hot paths.</p>
+         */
+        public Builder enableTrace(boolean enable) {
+            this.enableTrace = enable;
+            return this;
+        }
+
         public RecallOptions build() {
             int effectiveLateralMax = lateralMaxResults >= 0
                     ? lateralMaxResults
@@ -416,7 +470,7 @@ public record RecallOptions(
                     strictnessCoefficient, queryValence, enableValenceAlignment,
                     twoFactorConfig, recallMode,
                     gamma, enableTextSearch, textSearchMode,
-                    scoringMode);
+                    scoringMode, entityHints, enableTrace);
             return options;
         }
     }

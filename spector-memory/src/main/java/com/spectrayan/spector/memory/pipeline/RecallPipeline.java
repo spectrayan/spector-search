@@ -20,6 +20,7 @@ import com.spectrayan.spector.events.TelemetryScope;
 import com.spectrayan.spector.memory.error.SpectorEntityGraphException;
 import com.spectrayan.spector.memory.error.SpectorHebbianException;
 import com.spectrayan.spector.memory.error.SpectorTemporalChainException;
+import com.spectrayan.spector.memory.RecallTrace;
 
 import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
@@ -413,7 +414,8 @@ public final class RecallPipeline {
                         allResults.set(i, new CognitiveResult(
                                 r.id(), r.text(), boostedScore, r.importance(), r.ageDays(),
                                 r.recallCount(), r.valence(), r.memoryType(), r.source(),
-                                r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay()));
+                                r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay(),
+                                r.retrievalMode(), r.breakdown()));
                     }
                 }
             }
@@ -424,7 +426,8 @@ public final class RecallPipeline {
         // (previously rebuilt 3 times — eliminated 2 redundant full-list scans)
         boolean needsGraphExpansion = cognitiveScoring
                 && (hebbianGraph != null || temporalChain != null
-                || (entityGraph != null && entityExtractor != null && entityExtractor.isAvailable()))
+                || (entityGraph != null && (entityExtractor != null && entityExtractor.isAvailable()
+                        || !options.entityHints().isEmpty())))
                 && !allResults.isEmpty();
         Set<String> existingIds = needsGraphExpansion ? new HashSet<>(allResults.size()) : null;
         if (existingIds != null) {
@@ -506,36 +509,52 @@ public final class RecallPipeline {
         }
 
         // Step 5e: Entity graph traversal — multi-hop knowledge discovery
-        if (entityGraph != null && entityExtractor != null
-                && entityExtractor.isAvailable() && existingIds != null) {
-            // Extract entities from the query
-            try {
-                var queryEntities = entityExtractor.extract("query", queryText);
-                for (var entity : queryEntities) {
-                    int entityId = entityGraph.findEntity(entity.name());
-                    if (entityId < 0) continue;
+        // Pre-extracted entityHints from RecallOptions take precedence over EntityExtractor
+        if (entityGraph != null && existingIds != null) {
+            List<ExtractedEntity> queryEntities = null;
 
-                    // Collect memories reachable within 2 hops
-                    Set<Integer> reachableMemories = entityGraph.collectMemories(
-                            entityId, null, graphScoringPolicy.entityMaxHops());
-                    for (int memIdx : reachableMemories) {
-                        String memId = findMemoryByApproximateIndex(memIdx);
-                        if (memId != null && !existingIds.contains(memId)) {
-                            existingIds.add(memId);
-                            String text = index.text(memId);
-                            MemorySource source = index.source(memId);
-                            String[] tags = index.tags(memId);
-                            float entityScore = allResults.getFirst().score() * graphScoringPolicy.entityHopAttenuation();
-                            allResults.add(new CognitiveResult(
-                                    memId, text, entityScore, 0.5f, 0f,
-                                    (short) 0, (byte) 0, MemoryType.SEMANTIC, source,
-                                    tags, 1.0f, 1.0f));
+            // Priority 1: Pre-extracted entity hints from RecallOptions
+            if (!options.entityHints().isEmpty()) {
+                queryEntities = options.entityHints();
+            }
+            // Priority 2: Live EntityExtractor SPI
+            else if (entityExtractor != null && entityExtractor.isAvailable()) {
+                try {
+                    queryEntities = entityExtractor.extract("query", queryText);
+                } catch (RuntimeException e) {
+                    SpectorEntityGraphException ex = new SpectorEntityGraphException("entity extraction", e);
+                    log.debug(ex.getMessage());
+                }
+            }
+
+            if (queryEntities != null && !queryEntities.isEmpty()) {
+                try {
+                    for (var entity : queryEntities) {
+                        int entityId = entityGraph.findEntity(entity.name());
+                        if (entityId < 0) continue;
+
+                        // Collect memories reachable within N hops
+                        Set<Integer> reachableMemories = entityGraph.collectMemories(
+                                entityId, null, graphScoringPolicy.entityMaxHops());
+                        for (int memIdx : reachableMemories) {
+                            String memId = findMemoryByApproximateIndex(memIdx);
+                            if (memId != null && !existingIds.contains(memId)) {
+                                existingIds.add(memId);
+                                String text = index.text(memId);
+                                MemorySource source = index.source(memId);
+                                String[] tags = index.tags(memId);
+                                float entityScore = allResults.getFirst().score() * graphScoringPolicy.entityHopAttenuation();
+                                allResults.add(new CognitiveResult(
+                                        memId, text, entityScore, 0.5f, 0f,
+                                        (short) 0, (byte) 0, MemoryType.SEMANTIC, source,
+                                        tags, 1.0f, 1.0f));
+                            }
                         }
                     }
+                } catch (RuntimeException e) {
+                    SpectorEntityGraphException ex = new SpectorEntityGraphException("graph traversal", e);
+                    log.debug(ex.getMessage());
                 }
-            } catch (RuntimeException e) {
-                SpectorEntityGraphException ex = new SpectorEntityGraphException("graph traversal", e);
-                log.debug(ex.getMessage());
             }
         }
 
@@ -596,6 +615,65 @@ public final class RecallPipeline {
             }
         } else {
             log.debug("Recall [OBSERVE] returned {} results for '{}'", allResults.size(), queryText);
+        }
+
+        // ── Pipeline Tracing (opt-in) ──
+        // When enableTrace is true, attach a RecallTrace to each result showing
+        // how its score evolved through the cognitive pipeline phases.
+        if (options.enableTrace() && !allResults.isEmpty()) {
+            int totalCandidates = allResults.size();
+            for (int i = 0; i < allResults.size(); i++) {
+                CognitiveResult r = allResults.get(i);
+                RecallTrace.Builder traceBuilder = new RecallTrace.Builder(r.id());
+
+                // Phase 1: Cognitive Score (fused α×similarity + β×importance×decay)
+                if (r.hasBreakdown()) {
+                    ScoreBreakdown bd = r.breakdown();
+                    traceBuilder.addStep("COGNITIVE_SCORE", 0f, bd.finalScore(),
+                            0, totalCandidates,
+                            String.format("α=%.2f, sim=%.3f, β=%.2f, impDecay=%.3f, tagBoost=%.2f",
+                                    options.alpha(), bd.similarity(),
+                                    options.beta(), bd.importanceDecay(), bd.tagBoostFactor()));
+
+                    // Phase 2: Habituation
+                    if (bd.habituationPenalty() < 1.0f) {
+                        float preHab = bd.finalScore() / bd.habituationPenalty();
+                        traceBuilder.addStep("HABITUATION", preHab, bd.finalScore(),
+                                totalCandidates, totalCandidates,
+                                String.format("penalty=%.3f", bd.habituationPenalty()));
+                    } else {
+                        traceBuilder.addStep("HABITUATION", bd.finalScore(), bd.finalScore(),
+                                totalCandidates, totalCandidates, "no penalty");
+                    }
+
+                    // Phase 3: Graph boost
+                    if (bd.graphBoost() != 0f) {
+                        float preGraph = r.score() - bd.graphBoost();
+                        traceBuilder.addStep("GRAPH_BOOST", preGraph, r.score(),
+                                totalCandidates, totalCandidates,
+                                String.format("boost=%.4f", bd.graphBoost()));
+                    }
+
+                    // Phase 4: Valence alignment
+                    if (bd.valenceAlignment() != 0f) {
+                        traceBuilder.addStep("VALENCE_ALIGN", r.score(), r.score() + bd.valenceAlignment(),
+                                totalCandidates, totalCandidates,
+                                String.format("alignment=%.4f", bd.valenceAlignment()));
+                    }
+                } else {
+                    // No breakdown — just record final score
+                    traceBuilder.addStep("COGNITIVE_SCORE", 0f, r.score(),
+                            0, totalCandidates, "no breakdown available");
+                }
+
+                // Phase 5: Top-K cutoff
+                traceBuilder.addStep("TOPK_CUTOFF", r.score(), r.score(),
+                        totalCandidates, options.topK(),
+                        String.format("rank=%d/%d, included=true", i + 1, options.topK()));
+
+                allResults.set(i, r.withTrace(traceBuilder.build()));
+            }
+            log.debug("Pipeline tracing: attached traces to {} results", allResults.size());
         }
 
         return allResults;
@@ -683,7 +761,8 @@ public final class RecallPipeline {
                         existing.id(), existing.text(), rrfScore, existing.importance(),
                         existing.ageDays(), existing.recallCount(), existing.valence(),
                         existing.memoryType(), existing.source(), existing.synapticTags(),
-                        existing.decayFactor(), existing.ltpAdjustedDecay()));
+                        existing.decayFactor(), existing.ltpAdjustedDecay(),
+                        existing.retrievalMode(), existing.breakdown()));
             } else {
                 // BM25-only result — create from index metadata
                 String text = index.text(id);
