@@ -46,7 +46,7 @@ jobs:
 
       - name: Install MkDocs and dependencies
         run: |
-          pip install mkdocs-material pymdown-extensions mkdocs-callouts
+          pip install mkdocs-material pymdown-extensions mkdocs-callouts mkdocs-minify-plugin
 
       - name: Collect Labs branches
         run: ./scripts/collect-labs.sh
