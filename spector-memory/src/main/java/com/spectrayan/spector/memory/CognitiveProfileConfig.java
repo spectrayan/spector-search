@@ -12,6 +12,9 @@
  */
 package com.spectrayan.spector.memory;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
+
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
@@ -108,16 +111,15 @@ public final class CognitiveProfileConfig {
     /**
      * Strict validation — throws if the profile is not enabled.
      *
-     * @throws IllegalArgumentException if the profile is disabled
+     * @throws SpectorValidationException if the profile is disabled
      */
     public CognitiveProfile requireEnabled(CognitiveProfile requested) {
         if (requested == null) {
-            throw new IllegalArgumentException("CognitiveProfile must not be null");
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "CognitiveProfile");
         }
         if (!enabledProfiles.contains(requested)) {
-            throw new IllegalArgumentException(
-                    "CognitiveProfile." + requested.name() + " is not enabled in this configuration. "
-                    + "Enabled profiles: " + enabledProfiles);
+            throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "CognitiveProfile." + requested.name() + " is not enabled. Enabled: " + enabledProfiles, true);
         }
         return requested;
     }
@@ -217,9 +219,9 @@ public final class CognitiveProfileConfig {
             try {
                 set.add(CognitiveProfile.valueOf(name));
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException(
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_OUT_OF_RANGE,
                         "Unknown cognitive profile in config: '" + token.strip()
-                        + "'. Valid profiles: " + java.util.Arrays.toString(CognitiveProfile.values()));
+                        + "'. Valid profiles: " + java.util.Arrays.toString(CognitiveProfile.values()), true);
             }
         }
         return new CognitiveProfileConfig(set);

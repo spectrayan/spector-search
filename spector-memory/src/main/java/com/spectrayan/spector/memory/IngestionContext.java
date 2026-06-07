@@ -12,6 +12,8 @@
  */
 package com.spectrayan.spector.memory;
 
+import com.spectrayan.spector.commons.error.ErrorCode;
+import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.memory.graph.ExtractedEntity;
 import com.spectrayan.spector.memory.neurodivergent.IngestionHints;
 
@@ -112,7 +114,7 @@ public record IngestionContext(
     public record HebbianEdgeHint(String targetMemoryId, float weight) {
         public HebbianEdgeHint {
             if (targetMemoryId == null || targetMemoryId.isBlank()) {
-                throw new IllegalArgumentException("targetMemoryId must not be null or blank");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "targetMemoryId");
             }
             weight = Math.clamp(weight, 0f, 1f);
         }
@@ -130,7 +132,7 @@ public record IngestionContext(
     public record TemporalLinkHint(String predecessorMemoryId, int sessionId) {
         public TemporalLinkHint {
             if (predecessorMemoryId == null || predecessorMemoryId.isBlank()) {
-                throw new IllegalArgumentException("predecessorMemoryId must not be null or blank");
+                throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL, "predecessorMemoryId");
             }
         }
     }

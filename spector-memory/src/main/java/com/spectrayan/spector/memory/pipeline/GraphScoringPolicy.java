@@ -91,22 +91,40 @@ public record GraphScoringPolicy(
      */
     public GraphScoringPolicy {
         if (causalBoostWeight < 0 || causalBoostWeight > 2.0f)
-            throw new IllegalArgumentException("causalBoostWeight must be in [0, 2.0]: " + causalBoostWeight);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "causalBoostWeight", 0, 2.0, causalBoostWeight);
         if (hebbianBoostFactor < 0 || hebbianBoostFactor > 2.0f)
-            throw new IllegalArgumentException("hebbianBoostFactor must be in [0, 2.0]: " + hebbianBoostFactor);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "hebbianBoostFactor", 0, 2.0, hebbianBoostFactor);
         if (temporalForwardFactor < 0 || temporalForwardFactor > 2.0f)
-            throw new IllegalArgumentException("temporalForwardFactor must be in [0, 2.0]: " + temporalForwardFactor);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "temporalForwardFactor", 0, 2.0, temporalForwardFactor);
         if (temporalBackwardFactor < 0 || temporalBackwardFactor > 2.0f)
-            throw new IllegalArgumentException("temporalBackwardFactor must be in [0, 2.0]: " + temporalBackwardFactor);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "temporalBackwardFactor", 0, 2.0, temporalBackwardFactor);
         if (entityHopAttenuation < 0 || entityHopAttenuation > 2.0f)
-            throw new IllegalArgumentException("entityHopAttenuation must be in [0, 2.0]: " + entityHopAttenuation);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "entityHopAttenuation", 0, 2.0, entityHopAttenuation);
         if (hebbianMaxDepth < 1 || hebbianMaxDepth > 10)
-            throw new IllegalArgumentException("hebbianMaxDepth must be in [1, 10]: " + hebbianMaxDepth);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "hebbianMaxDepth", 1, 10, hebbianMaxDepth);
         if (temporalMaxHops < 1 || temporalMaxHops > 20)
-            throw new IllegalArgumentException("temporalMaxHops must be in [1, 20]: " + temporalMaxHops);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "temporalMaxHops", 1, 20, temporalMaxHops);
         if (entityMaxHops < 1 || entityMaxHops > 10)
-            throw new IllegalArgumentException("entityMaxHops must be in [1, 10]: " + entityMaxHops);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "entityMaxHops", 1, 10, entityMaxHops);
         if (graphExpansionThreshold < 0f || graphExpansionThreshold > 1.0f)
-            throw new IllegalArgumentException("graphExpansionThreshold must be in [0.0, 1.0]: " + graphExpansionThreshold);
+            throw new com.spectrayan.spector.commons.error.SpectorValidationException(
+                    com.spectrayan.spector.commons.error.ErrorCode.ARGUMENT_OUT_OF_RANGE,
+                    "graphExpansionThreshold", 0, 1.0, graphExpansionThreshold);
     }
 }

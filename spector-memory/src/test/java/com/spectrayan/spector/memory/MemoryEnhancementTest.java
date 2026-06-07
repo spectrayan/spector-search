@@ -387,7 +387,7 @@ class MemoryEnhancementTest {
             var config = CognitiveProfileConfig.coreOnly();
             org.assertj.core.api.Assertions.assertThatThrownBy(
                     () -> config.requireEnabled(CognitiveProfile.HYPERFOCUS))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class)
                     .hasMessageContaining("HYPERFOCUS");
         }
 
@@ -458,7 +458,7 @@ class MemoryEnhancementTest {
         void invalidProfileThrows() {
             org.assertj.core.api.Assertions.assertThatThrownBy(
                     () -> CognitiveProfileConfig.fromConfigValue("DEBUGGING, INVALID_PROFILE"))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(com.spectrayan.spector.commons.error.SpectorValidationException.class)
                     .hasMessageContaining("INVALID_PROFILE");
         }
 
