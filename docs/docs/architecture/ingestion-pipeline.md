@@ -1,3 +1,8 @@
+---
+title: "Ingestion Pipeline — Document Processing & Indexing"
+description: "How Spector processes documents: chunking strategies, embedding generation, scalar quantization, HNSW graph insertion, and BM25 index updates."
+---
+
 # 📥 Ingestion Pipeline
 
 > **Unified ingestion: document → chunk → embed → target.** A single `IngestionPipeline` with builder configuration handles all ingestion — for both search engine and cognitive memory. The pipeline decides how to process content; the `IngestionTarget` decides where to store it.

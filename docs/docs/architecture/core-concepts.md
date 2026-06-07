@@ -1,3 +1,8 @@
+---
+title: "Core Concepts — HNSW, BM25, RRF, SIMD Acceleration"
+description: "The algorithms behind Spector: HNSW graph search, BM25 keyword ranking, Reciprocal Rank Fusion, SVASQ quantization, and Java Vector API SIMD acceleration."
+---
+
 # 🧠 Core Concepts
 
 > **The algorithms and data structures that make Spector blazingly fast.** This page explains HNSW, IVF-PQ, BM25, RRF, and SIMD acceleration — the building blocks behind sub-millisecond hybrid search.

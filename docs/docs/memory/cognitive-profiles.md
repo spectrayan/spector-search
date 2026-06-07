@@ -1,3 +1,8 @@
+---
+title: "Cognitive Profiles — Adaptive Retrieval Modes"
+description: "Cognitive profile system: BALANCED, DEBUGGING, HYPERFOCUS, DIVERGENT, CRITICAL, and other retrieval modes that adapt scoring to different cognitive tasks."
+---
+
 # Cognitive Profiles
 
 Cognitive profiles are **pre-configured scoring presets** that modulate how the memory system prioritizes, retrieves, and consolidates information. They act as a thalamic filter — adjusting the balance between similarity-driven and importance-driven recall to match different task contexts.

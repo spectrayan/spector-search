@@ -1,3 +1,8 @@
+---
+title: "Test Framework & LLM Judge — Automated Quality Evaluation"
+description: "Spector's test framework: 685+ automated tests, LLM-as-judge evaluation, cognitive benchmark datasets, and nDCG/MRR/Recall metrics."
+---
+
 # Test Framework & LLM Judge
 
 Spector's testing strategy goes beyond traditional unit tests. The project implements a comprehensive **E2E test framework** with a novel **LLM-as-Judge** system that uses a language model to semantically validate recall results — catching semantic drift and relevance degradation that deterministic assertions cannot detect.

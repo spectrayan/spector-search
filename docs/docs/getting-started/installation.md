@@ -1,3 +1,8 @@
+---
+title: "Installation — System Requirements & Setup"
+description: "Install Spector: Java 25+, Maven 3.9+, system requirements, build from source, Docker, and platform-specific SIMD configuration."
+---
+
 # Installation
 
 ## System Requirements

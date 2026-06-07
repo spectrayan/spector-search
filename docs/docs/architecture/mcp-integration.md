@@ -1,3 +1,8 @@
+---
+title: "MCP Integration — Model Context Protocol Server"
+description: "Connect AI agents to Spector via the built-in MCP server. 13 tools for search, memory, and cognitive operations. Works with Claude Desktop, Cursor, and custom agents."
+---
+
 # 🤖 MCP Integration Architecture
 
 > **Spector's built-in Model Context Protocol (MCP) server gives any AI agent instant, in-process access to SIMD-accelerated vector search — with zero network overhead.**

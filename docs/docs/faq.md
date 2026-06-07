@@ -1,3 +1,8 @@
+---
+title: "Spector FAQ — Frequently Asked Questions"
+description: "Common questions about Spector: deployment, MCP integration, performance tuning, cognitive memory, Java compatibility, and comparison with other vector databases."
+---
+
 # ❓ FAQ
 
 > **Quick answers to the most common questions about Spector.** Can't find what you're looking for? Check [GitHub Discussions](https://github.com/spectrayan/spector/discussions) or the specific wiki pages linked throughout.

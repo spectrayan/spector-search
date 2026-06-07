@@ -1,3 +1,8 @@
+---
+title: "Architecture Overview — Module Structure & Data Flow"
+description: "Spector architecture: 25 Maven modules, SIMD-accelerated search pipeline, off-heap Panama memory, virtual thread concurrency, and MCP agent integration."
+---
+
 # 🏗️ Architecture Overview
 
 > **Spector is a modular, JVM-native AI memory backbone organized as a Maven multi-module project.** This page covers the module structure, dependency graph, data flow, threading model, and memory architecture that make sub-millisecond, agent-native search possible.

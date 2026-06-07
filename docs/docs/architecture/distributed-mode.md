@@ -1,3 +1,8 @@
+---
+title: "Distributed Mode — gRPC Fan-Out & Consistent Hashing"
+description: "Run Spector in distributed mode: consistent hash sharding, gRPC fan-out queries, replication, heartbeat membership, and distributed query coordination."
+---
+
 # 🌐 Distributed Mode
 
 > **Scale Spector horizontally across multiple nodes.** The distributed architecture uses consistent hash sharding, configurable replication, heartbeat-based membership, and parallel query fan-out with result merging via gRPC.

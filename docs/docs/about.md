@@ -1,3 +1,8 @@
+---
+title: "What is Spector? — AI Search Engine & Cognitive Memory"
+description: "Spector is a Java-native AI search engine combining SIMD-accelerated vector search, BM25 keyword search, and biologically-inspired cognitive memory in a single embeddable library."
+---
+
 # 🌟 What is Spector?
 
 > **The Zero-Overhead, Agent-Ready AI Memory Backbone.**

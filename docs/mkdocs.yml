@@ -1,11 +1,13 @@
 site_name: Spector Documentation
-site_description: The Zero-Overhead, Agent-Ready AI Memory Backbone
+site_description: "Spector — The Zero-Overhead, Agent-Ready AI Memory Backbone. SIMD-accelerated vector search, cognitive memory for AI agents, built-in MCP server, zero dependencies."
 site_url: https://spectrayan.github.io/spector/
 repo_url: https://github.com/spectrayan/spector
 repo_name: spectrayan/spector
+copyright: "Copyright &copy; 2026 Spectrayan — Apache 2.0 / BSL 1.1"
 
 theme:
   name: material
+  custom_dir: overrides
   icon:
     logo: material/lightning-bolt
   logo: assets/spector-logo-icon.png
@@ -49,8 +51,13 @@ theme:
     - toc.follow                   # TOC follows scroll position
 
 plugins:
-  - search
+  - search:
+      separator: '[\s\-\.]+'        # Better tokenization for compound terms
+      lang: en
   - callouts
+  - tags                            # Tag-based content discovery
+  - minify:                         # Minify HTML for faster page loads
+      minify_html: true
 
 markdown_extensions:
   - pymdownx.arithmatex:
@@ -90,47 +97,78 @@ markdown_extensions:
   - footnotes                  # Footnote references
   - abbr                       # Abbreviation tooltips
   - tables
+  - meta                       # Read front matter for meta tags
   - toc:
       permalink: true
       toc_depth: 3
 
-
+# ═══════════════════════════════════════════════════════════════
+#  Navigation — organized by user intent, max 3 levels deep
+# ═══════════════════════════════════════════════════════════════
 
 nav:
+  # Tab 1: First impression — "what is this?"
   - Home:
       - Welcome: index.md
       - "Why Spector?": why-spector.md
       - About: about.md
 
+  # Tab 2: "I want to start using it NOW" (action-oriented)
   - Getting Started:
       - Quick Start: getting-started/quickstart.md
       - Installation: getting-started/installation.md
-      - JDK API Status: getting-started/jdk-api-status.md
-
-  - Guides:
       - MCP Server: sdk-usage/mcp-server.md
       - Java SDK: sdk-usage/java-client.md
       - Spring AI Integration: sdk-usage/spring-ai.md
-      - CLI (spectorctl): cli-reference/spectorctl.md
+      - CLI Reference: cli-reference/spectorctl.md
       - REST API: api-reference/rest-endpoints.md
       - Configuration: configuration/parameters.md
-      - Performance Tuning: operations/performance-tuning.md
-      - Cognitive Memory:
-          - Overview: memory/index.md
-          - Getting Started: memory/getting-started.md
-          - "Use Cases & Configuration": memory/use-cases.md
-          - API Reference: memory/api-reference.md
 
-  - Technical Reference:
-      - Architecture:
-          - System Overview: architecture/overview.md
-          - Core Concepts: architecture/core-concepts.md
-          - MCP Integration: architecture/mcp-integration.md
-          - Ingestion Pipeline: architecture/ingestion-pipeline.md
-          - RAG Pipeline: architecture/rag-pipeline.md
-          - Distributed Mode: architecture/distributed-mode.md
-          - GPU Acceleration: architecture/gpu-acceleration.md
-          - Test Framework & LLM Judge: architecture/test-framework.md
+  # Tab 3: Cognitive Memory — the differentiator (own tab)
+  - Cognitive Memory:
+      - Overview: memory/index.md
+      - Getting Started: memory/getting-started.md
+      - "Use Cases & Configuration": memory/use-cases.md
+      - API Reference: memory/api-reference.md
+      - Architecture: memory/architecture.md
+      - The 6-Phase Scoring Pipeline: memory/scoring-pipeline.md
+      - Cognitive Profiles:
+          - Overview: memory/cognitive-profiles.md
+          - "Focus Mode": memory/focus-mode.md
+          - "Explorer — Lateral Retrieval": memory/lateral-retrieval.md
+          - "Importance Fusion (ICNU)": memory/importance-fusion.md
+      - Biological Systems:
+          - Overview: memory/biological-systems.md
+          - "Cortex — Tier Stores": memory/cortex.md
+          - "Hippocampus — Sleep Consolidation": memory/hippocampus.md
+          - "Synapse — Tags & Scoring": memory/synapse.md
+          - "Dopamine — Surprise Detection": memory/dopamine.md
+          - "Amygdala — Emotional Valence": memory/amygdala.md
+          - "3-Layer Cognitive Graph": memory/hebbian.md
+          - "Habituation — Anti-Filter Bubble": memory/habituation.md
+          - "Inhibition — Suppression": memory/inhibition.md
+          - "Interference — Deduplication": memory/interference.md
+          - "Prospective — Future Intents": memory/prospective.md
+          - "Metamemory — Self-Reflection": memory/metamemory.md
+          - "Sync — Persistence & Replication": memory/sync.md
+      - Performance & Internals:
+          - "Performance & SIMD": memory/performance.md
+          - "Off-Heap Panama Design": memory/panama-design.md
+          - "WAL Design": memory/wal-design.md
+      - Cognitive Evaluation: memory/evaluation.md
+
+  # Tab 4: Search Engine & Architecture
+  - Architecture:
+      - System Overview: architecture/overview.md
+      - Core Concepts: architecture/core-concepts.md
+      - Ingestion Pipeline: architecture/ingestion-pipeline.md
+      - RAG Pipeline: architecture/rag-pipeline.md
+      - MCP Integration: architecture/mcp-integration.md
+      - Distributed Mode: architecture/distributed-mode.md
+      - GPU Acceleration: architecture/gpu-acceleration.md
+      - Performance Tuning: operations/performance-tuning.md
+      - Test Framework & LLM Judge: architecture/test-framework.md
+      - JDK API Status: getting-started/jdk-api-status.md
       - Deep Dives:
           - ANN Search Primer: deep-dives/ann-search-primer.md
           - HNSW Explained: deep-dives/hnsw-explained.md
@@ -141,36 +179,10 @@ nav:
           - TurboQuant: deep-dives/turbo-quant.md
           - Real-Embedding Benchmarks: deep-dives/real-embedding-benchmarks.md
           - "Whitepaper: SVASQ + SpectorIndex": deep-dives/svasq-spectorindex-whitepaper.md
-      - Cognitive Memory:
-          - Architecture: memory/architecture.md
-          - The 6-Phase Scoring Pipeline: memory/scoring-pipeline.md
-          - Biological Systems:
-              - Overview: memory/biological-systems.md
-              - "Cortex — Tier Stores": memory/cortex.md
-              - "Hippocampus — Sleep Consolidation": memory/hippocampus.md
-              - "Synapse — Tags & Scoring": memory/synapse.md
-              - "Dopamine — Surprise Detection": memory/dopamine.md
-              - "Amygdala — Emotional Valence": memory/amygdala.md
-              - "3-Layer Cognitive Graph": memory/hebbian.md
-              - "Habituation — Anti-Filter Bubble": memory/habituation.md
-              - "Inhibition — Suppression": memory/inhibition.md
-              - "Interference — Deduplication": memory/interference.md
-              - "Prospective — Future Intents": memory/prospective.md
-              - "Metamemory — Self-Reflection": memory/metamemory.md
-              - "Sync — Persistence & Replication": memory/sync.md
-          - Advanced Profiles:
-              - Cognitive Profiles Overview: memory/cognitive-profiles.md
-              - "Focus Mode": memory/focus-mode.md
-              - "Explorer — Lateral Retrieval": memory/lateral-retrieval.md
-              - "Importance Fusion (ICNU)": memory/importance-fusion.md
-          - "Cognitive Evaluation": memory/evaluation.md
-          - Deep Dives:
-              - "Performance & SIMD": memory/performance.md
-              - "Off-Heap Panama Design": memory/panama-design.md
-              - "WAL Design": memory/wal-design.md
       - Cortex Dashboard:
           - Overview: cortex/index.md
 
+  # Tab 5: Community & future
   - Community:
       - Contributing: operations/contributing.md
       - FAQ: faq.md
@@ -179,10 +191,19 @@ nav:
           - labs/index.md
           - Research Roadmap: labs/roadmap.md
 
+# ═══════════════════════════════════════════════════════════════
+#  SEO & Social
+# ═══════════════════════════════════════════════════════════════
+
 extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/spectrayan/spector
+  # Analytics (uncomment when ready)
+  # analytics:
+  #   provider: google
+  #   property: G-XXXXXXXXXX
+  generator: false              # Remove "Made with Material for MkDocs" footer
 
 extra_css:
   - stylesheets/extra.css

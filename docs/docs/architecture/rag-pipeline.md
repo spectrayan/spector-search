@@ -1,3 +1,8 @@
+---
+title: "RAG Pipeline — Retrieval-Augmented Generation"
+description: "Spector's RAG pipeline: hybrid search, RRF fusion, LLM re-ranking, context window management, and integration with Spring AI."
+---
+
 # 🤖 RAG Pipeline
 
 > **End-to-end Retrieval-Augmented Generation built right into Spector.** From document ingestion to LLM-ready context assembly — with token-aware chunking, parallel embedding, and source attribution out of the box.

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {% if page and page.meta %}
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="{{ page.canonical_url }}" />
+  <meta property="og:title" content="{{ page.meta.get('title', page.title) }} — Spector" />
+  <meta property="og:description" content="{{ page.meta.get('description', config.site_description) }}" />
+  <meta property="og:site_name" content="Spector Documentation" />
+  <meta property="og:image" content="{{ config.site_url }}assets/spector-og-card.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{ page.meta.get('title', page.title) }} — Spector" />
+  <meta name="twitter:description" content="{{ page.meta.get('description', config.site_description) }}" />
+  <meta name="twitter:image" content="{{ config.site_url }}assets/spector-og-card.png" />
+
+  <!-- Canonical URL -->
+  <link rel="canonical" href="{{ page.canonical_url }}" />
+
+  <!-- JSON-LD Structured Data (SoftwareApplication) — homepage only -->
+  {% if page.is_homepage %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Spector",
+    "description": "The Zero-Overhead, Agent-Ready AI Memory Backbone. SIMD-accelerated vector search, cognitive memory for AI agents, built-in MCP server.",
+    "url": "{{ config.site_url }}",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Cross-platform (JVM)",
+    "programmingLanguage": "Java",
+    "softwareVersion": "1.0",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "codeRepository": "https://github.com/spectrayan/spector",
+    "author": {
+      "@type": "Organization",
+      "name": "Spectrayan",
+      "url": "https://www.spectrayan.com/"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+  {% endif %}
+
+  <!-- JSON-LD: TechArticle for content pages with descriptions -->
+  {% if page.meta.get('description') and not page.is_homepage %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "{{ page.meta.get('title', page.title) }}",
+    "description": "{{ page.meta.get('description', '') }}",
+    "url": "{{ page.canonical_url }}",
+    "author": {
+      "@type": "Organization",
+      "name": "Spectrayan"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Spectrayan",
+      "url": "https://www.spectrayan.com/"
+    }
+  }
+  </script>
+  {% endif %}
+
+  {% endif %}
+{% endblock %}

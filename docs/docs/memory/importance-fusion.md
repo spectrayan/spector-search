@@ -1,3 +1,8 @@
+---
+title: "Importance Fusion (ICNU) — Interest, Challenge, Novelty, Urgency"
+description: "The ICNU importance model: how Interest, Challenge, Novelty, and Urgency scores are fused into a single importance value during memory ingestion."
+---
+
 # Importance Fusion (ICNU)
 
 The **ICNU Importance Fusion** system computes a memory's importance score at ingestion time by blending four signals: **Interest**, **Challenge**, **Novelty**, and **Urgency**.

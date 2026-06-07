@@ -1,3 +1,8 @@
+---
+title: "Lateral Retrieval — Cross-Domain Memory Discovery"
+description: "Explorer profile and lateral retrieval: how Spector discovers cross-domain associations using widened distance thresholds and Hebbian graph traversal."
+---
+
 # Explorer — Lateral Retrieval
 
 The **Explorer** profile enables **lateral retrieval** — surfacing memories that are semantically distant from the query but share contextual tags. This is the computational equivalent of divergent thinking: connecting ideas across domains.

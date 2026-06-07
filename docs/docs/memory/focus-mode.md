@@ -1,3 +1,8 @@
+---
+title: "Focus Mode — Hyperfocus & Attention Filtering"
+description: "Focus mode implementation: tag-based attention filtering, time decay clamping for focus-matched memories, and synaptic tag boost mechanics."
+---
+
 # Focus Mode
 
 Focus Mode is a specialized cognitive scoring strategy that simulates **sustained attention** — the ability to deeply concentrate on a single topic while filtering out irrelevant information.

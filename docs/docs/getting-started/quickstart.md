@@ -1,3 +1,8 @@
+---
+title: "Quick Start — Build and Search in 5 Minutes"
+description: "Get Spector running in 5 minutes. Build from source, start the server, ingest documents, and run your first hybrid vector + keyword search."
+---
+
 # 🚀 Getting Started
 
 > **Go from zero to your first search result in under 5 minutes.** This guide walks you through building Spector from source, starting the server, ingesting documents, and running your first hybrid search.

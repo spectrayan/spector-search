@@ -1,3 +1,8 @@
+---
+title: "GPU Acceleration — CUDA via Panama FFM"
+description: "Spector GPU acceleration: CUDA kernel integration via Project Panama Foreign Function & Memory API, batch vector operations, and GPU memory management."
+---
+
 # 🎮 GPU Acceleration
 
 > **Unlock massive parallel throughput with optional CUDA GPU acceleration.** Spector loads GPU kernels via Panama FFM (Foreign Function & Memory), maintaining the zero-JNI philosophy. GPU shines for batch workloads — single queries are already sub-millisecond on CPU SIMD.
