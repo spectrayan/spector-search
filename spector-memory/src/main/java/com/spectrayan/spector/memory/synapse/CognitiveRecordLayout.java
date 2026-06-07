@@ -18,8 +18,6 @@ import com.spectrayan.spector.memory.model.MemoryType;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-import static com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.*;
-
 /**
  * Read/write operations for cognitive memory records.
  *
@@ -44,7 +42,7 @@ import static com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.*;
  * @param headerLayout      the versioned header layout to use for read/write
  *
  * @see HeaderLayout
- * @see HeaderLayoutV3
+ * @see HeaderLayout64
  */
 public record CognitiveRecordLayout(int quantizedVecBytes, HeaderLayout headerLayout) {
 

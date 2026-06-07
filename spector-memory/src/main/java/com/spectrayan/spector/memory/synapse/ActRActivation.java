@@ -57,7 +57,7 @@ import java.lang.foreign.ValueLayout;
  *
  * @see DecayStrategy
  * @see DecayConfig
- * @see HeaderLayoutV3
+ * @see HeaderLayout64
  */
 public final class ActRActivation {
 

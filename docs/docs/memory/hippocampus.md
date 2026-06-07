@@ -156,5 +156,5 @@ This can be logged, monitored, or exposed via the `MemoryIntrospector` for obser
 ## Next Steps
 
 - :material-brain: [**Cortex — Tier Stores**](cortex.md) — the 4-tier architecture
-- :material-flash: [**Synapse — Tags & Scoring**](synapse.md) — the 32-byte header
+- :material-flash: [**Synapse — Tags & Scoring**](synapse.md) — the 64-byte header
 - :material-head-cog: [**Dopamine — Surprise Detection**](dopamine.md) — auto-importance scoring

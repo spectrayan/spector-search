@@ -128,7 +128,7 @@ Most AI agents and databases (e.g., pgvector, Milvus, Chroma) treat memory as a 
 ### I. Synaptic Tag Gating (Bloom Filters)
 Standard vector databases suffer from the "Semantic Noise Trap." For example, if an agent asks: *"What was Greg Holloway's feedback on the PM launch?"*, a flat semantic search might match woodworking logs because the word "launch" or "feedback" is used in other contexts (e.g., *"Sarah gave feedback on the birdhouse launch"*).
 
-Spector avoids this by encoding tags into high-performance, zero-overhead **Bloom filters** mapped directly inside the 32-byte off-heap record headers. If a candidate record's Bloom filter does not overlap with the query's synaptic filter tags, it is pruned in Phase 2 of the pipeline—long before expensive distance calculations. This acts as a thalamic filter, keeping the agent focused on the active domain (e.g., `#vertex-health`).
+Spector avoids this by encoding tags into high-performance, zero-overhead **Bloom filters** mapped directly inside the 64-byte off-heap record headers. If a candidate record's Bloom filter does not overlap with the query's synaptic filter tags, it is pruned in Phase 2 of the pipeline—long before expensive distance calculations. This acts as a thalamic filter, keeping the agent focused on the active domain (e.g., `#vertex-health`).
 
 ### II. Importance Fusion (ICNU Model)
 Not all memories are created equal. Traditional systems treat *"I drank coffee"* and *"My wife Sarah and I decided to refinance our mortgage"* with equal structural weight.

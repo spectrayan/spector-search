@@ -1,6 +1,6 @@
 ---
 title: "Synapse — Tags & Scoring"
-description: "The versioned synaptic header (V1/V2/V3), 64-bit inline Bloom filter, arousal-modulated decay, and CognitiveRecordLayout binary format."
+description: "The 64-byte cache-line-aligned synaptic header (HeaderLayout64), 64-bit inline Bloom filter, arousal-modulated decay, and CognitiveRecordLayout binary format."
 ---
 
 # 🔗 Synapse — Tags & Scoring
@@ -11,9 +11,9 @@ description: "The versioned synaptic header (V1/V2/V3), 64-bit inline Bloom filt
 
 ---
 
-## Versioned Header Layouts
+## Header Layout — 64-Byte Cache-Line Format
 
-Every cognitive memory record begins with a synaptic header — the digital equivalent of a synaptic tag. The header format is **versioned** via the `HeaderLayout` sealed interface, supporting three layout sizes:
+Every cognitive memory record begins with a synaptic header — the digital equivalent of a synaptic tag. The header format is defined by the `HeaderLayout` sealed interface with a single implementation: `HeaderLayout64`.
 
 ```mermaid
 classDiagram
@@ -23,182 +23,58 @@ classDiagram
         +version() int
         +readHeader(segment, offset) CognitiveHeader
         +writeHeader(segment, offset, header)
-        +forVersion(int) HeaderLayout$
         +defaultLayout() HeaderLayout$
     }
     
-    class HeaderLayoutV1 {
-        +headerBytes() = 32
+    class HeaderLayout64 {
+        +headerBytes() = 64
         +version() = 1
     }
-    class HeaderLayoutV2 {
-        +headerBytes() = 48
-        +version() = 2
-    }
-    class HeaderLayoutV3 {
-        +headerBytes() = 64
-        +version() = 3
-    }
     
-    HeaderLayout <|.. HeaderLayoutV1 : permits
-    HeaderLayout <|.. HeaderLayoutV2 : permits
-    HeaderLayout <|.. HeaderLayoutV3 : permits
+    HeaderLayout <|.. HeaderLayout64 : permits
 ```
 
-### V1 — Core Layout (32 bytes)
+### Layout (64 bytes) — Cache-Line Aligned
 
-The original layout, still supported for backward compatibility. Contains all fields required for the [6-Phase Scoring Pipeline](scoring-pipeline.md).
-
-```
- Offset   Size   Field             Description
- ──────   ────   ─────             ───────────
-    0      8B    timestamp_ms      Unix epoch ms when memory was formed
-    8      8B    synaptic_tags     64-bit Bloom filter of contextual markers
-   16      4B    exact_norm        L2 norm of original float vector
-   20      4B    importance        Cognitive importance (0.05 – 10.0)
-   24      4B    recall_count      Times recalled (LTP reconsolidation counter)
-   28      2B    centroid_id       IVF centroid assignment (max 65,535)
-   30      1B    valence           Emotional coloring (signed: -128 to +127)
-   31      1B    flags             Bit flags (see below)
-                                   ═══════════════════════════════════
-                                   Total: 32 bytes (1× AVX2 register)
-```
-
-!!! info "Why 32 bytes?"
-    The V1 header is exactly one **AVX2 register width** (256 bits). The entire header can be loaded in a single SIMD instruction for bulk scanning operations.
-
-### V2 — Extended Layout (48 bytes)
-
-Adds **arousal** and **storage strength** for emotional modulation and the future [Two-Factor Memory Strength](../labs/roadmap.md#two-factor-memory-strength-bjork-bjork-1992) model.
+The sole header layout, aligned to a full **CPU cache line** (64 bytes) for optimal sequential scan performance.
 
 ```
- Offset   Size   Field             Description
- ──────   ────   ─────             ───────────
-    0     32B    [V1 core]         All V1 fields (timestamp through flags)
-   ─────────────────────────────── V2 extension ───────────────────────
-   32      1B    arousal           Emotional intensity (unsigned: 0-255)
-   33      3B    [padding]         Alignment padding
-   36      4B    storage_strength  Durability factor S(t) for Two-Factor model
-   40      8B    [reserved]        Future use (zeroed)
-                                   ═══════════════════════════════════
-                                   Total: 48 bytes (1.5× AVX2 registers)
+ Offset   Size   Field              Description
+ ──────   ────   ─────              ───────────
+    0      1B    header_version     Always 1
+    1      1B    flags              Tombstone, type, consolidated, pinned, resolved
+    2      1B    valence            Emotional coloring (signed: -128 to +127)
+    3      1B    arousal            Emotional intensity (unsigned: 0-255)
+    4      4B    importance         Base importance score (0.05 – 10.0)
+    8      8B    timestamp_ms       Unix epoch ms when memory was formed
+   16      4B    agent_recall_count LTP reinforcement counter
+   20      4B    exact_norm         L2 norm of original float vector
+   24      8B    synaptic_tags      64-bit Bloom filter of contextual markers
+   32      2B    centroid_id        IVF partition routing ID
+   34      2B    _pad0              Alignment padding
+   36      4B    storage_strength   Two-Factor Memory S(t) (Bjork & Bjork)
+   40      4B    spector_recall_cnt Auto-LTP passive counter
+   44      4B    _reserved_f1       Future float
+   48      8B    last_auto_ltp      Auto-LTP timestamp
+   56      8B    _reserved_l1       Future (128-bit tag upper half)
+                                    ═══════════════════════════════════
+                                    Total: 64 bytes (1× cache line, 2× AVX2)
 ```
 
-**New fields:**
+!!! tip "Why 64 bytes?"
+    **Cache-line alignment** eliminates split-line reads during sequential scans. When the scorer iterates over 1M records, each header read hits exactly one cache line — no partial line loads, no false sharing. The CPU prefetcher can pre-fetch the next record's header while the current one is being scored. The 8 bytes of reserved space prevent future migration costs when new fields are added.
 
-| Field | Type | Range | Purpose |
-|:---|:---|:---|:---|
-| `arousal` | unsigned byte | 0 (calm) – 255 (extreme) | Modulates decay curve — high-arousal memories resist forgetting |
-| `storage_strength` | float | 0.0 – 5.0 | Two-Factor model durability (default: 1.0). Reserved for [Labs](../labs/roadmap.md) |
+### Memory Cost
 
-### V3 — Full Cache-Line Layout (64 bytes) ⭐ Default
-
-The default for all new stores. Extends V2 with a 16-byte future buffer, aligned to a full **CPU cache line** (64 bytes) for optimal sequential scan performance.
-
-```
- Offset   Size   Field             Description
- ──────   ────   ─────             ───────────
-    0     32B    [V1 core]         All V1 fields (timestamp through flags)
-   ─────────────────────────────── V2 extension ───────────────────────
-   32      1B    arousal           Emotional intensity (unsigned: 0-255)
-   33      3B    [padding]         Alignment padding
-   36      4B    storage_strength  Durability factor S(t)
-   40      8B    [reserved_1]     Future use (zeroed)
-   ─────────────────────────────── V3 extension ───────────────────────
-   48     16B    [reserved_2]     Future expansion buffer (zeroed)
-                                   ═══════════════════════════════════
-                                   Total: 64 bytes (1× cache line, 2× AVX2)
-```
-
-!!! tip "Why V3 is the default"
-    **Cache-line alignment** eliminates split-line reads during sequential scans. When the scorer iterates over 1M records, each header read hits exactly one cache line — no partial line loads, no false sharing. The 16 bytes of reserved space cost ~1.5% total memory overhead but prevent future migration costs when new fields are added.
-
-### Version Comparison
-
-| Property | V1 (32B) | V2 (48B) | V3 (64B) |
-|:---|:---:|:---:|:---:|
-| Core fields | ✅ | ✅ | ✅ |
-| Arousal | ❌ (default: 0) | ✅ | ✅ |
-| Storage strength | ❌ (default: 1.0) | ✅ | ✅ |
-| Future buffer | ❌ | ❌ | ✅ (16B) |
-| Cache-line aligned | ❌ | ❌ | ✅ |
-| Memory per 1M records | 32 MB | 48 MB | 64 MB |
-| SIMD reads per header | 1 | 2 | 2 |
-
-### Backward Compatibility
-
-When a V3 reader encounters a V1 file, the missing fields return safe defaults:
-
-```java
-// V1 → V3 transparent upgrade
-CognitiveHeader header = layout.readHeader(segment, offset);
-header.arousal();          // → 0   (neutral — no arousal effect)
-header.storageStrength();  // → 1.0 (default durability)
-```
-
-No data migration is required for reads. The `CognitiveScorer` checks `headerBytes > 32` to determine whether arousal is available and skips the arousal read on V1 segments.
-
----
-
-## HeaderMigrator — One-Time Version Upgrades
-
-The `HeaderMigrator` performs atomic, one-time migration of store files between header versions.
-
-### Supported Paths
-
-```
- Upgrade (lossless):
-   V1 (32B) ──→ V2 (48B)  ✅   New fields filled with defaults
-   V1 (32B) ──→ V3 (64B)  ✅   New fields filled with defaults
-   V2 (48B) ──→ V3 (64B)  ✅   Existing V2 fields preserved
-
- Downgrade (lossy):
-   V3 (64B) ──→ V2 (48B)  ⚠️   Reserved buffer lost
-   V3 (64B) ──→ V1 (32B)  ⚠️   Arousal + storage_strength lost
-   V2 (48B) ──→ V1 (32B)  ⚠️   Arousal + storage_strength lost
-```
-
-### Atomic Migration Process
-
-```mermaid
-flowchart LR
-    A["Original Store<br/>store.dat"] --> B["Write to temp<br/>store.dat.migrating"]
-    B --> C["Verify temp<br/>record count match"]
-    C --> D["Backup original<br/>store.dat.bak"]
-    D --> E["Atomic rename<br/>temp → store.dat"]
-    
-    C -->|"Verify failed"| F["Delete temp<br/>Abort migration"]
-
-    style A fill:#3498db,color:white
-    style E fill:#27ae60,color:white
-    style F fill:#e74c3c,color:white
-```
-
-1. **Write** — Records are read from source, headers expanded/shrunk, written to `store.dat.migrating`
-2. **Verify** — Record count in temp file must match source exactly
-3. **Backup** — Original file renamed to `store.dat.bak`
-4. **Rename** — Temp file atomically renamed to `store.dat`
-5. **Cleanup** — On startup, orphaned `.migrating` files are detected and deleted
-
-### Usage
-
-```java
-HeaderMigrator migrator = new HeaderMigrator();
-
-// Upgrade V1 store to V3
-migrator.migrate(
-    Path.of("/data/episodic.dat"),
-    HeaderLayout.forVersion(1),  // source layout
-    HeaderLayout.forVersion(3),  // target layout
-    quantizedVecBytes            // vector payload size
-);
-```
+| Header | Stride (768-dim) | 1M Records | Alignment |
+|:---|:---:|:---:|:---|
+| 64B | 832B | ~793 MB | 1× cache line (64B) |
 
 ---
 
 ## Flags Bitfield
 
-The `flags` byte at offset 31 encodes per-record state:
+The `flags` byte at offset 1 encodes per-record state:
 
 ```
  Bit   Name          Description
@@ -306,7 +182,7 @@ public final class CognitiveRecordLayout {
     
     /**
      * Record stride = header bytes + vector payload.
-     * V1: 32 + vecBytes, V2: 48 + vecBytes, V3: 64 + vecBytes.
+     * Always 64 + vecBytes (one cache line + vector).
      */
     public int stride() {
         return headerLayout.headerBytes() + quantizedVecBytes;
@@ -331,7 +207,7 @@ public final class CognitiveRecordLayout {
 
 ### CognitiveHeader Record
 
-The header data is represented as a Java `record` with all fields from all versions:
+The header data is represented as a Java `record` with all fields:
 
 ```java
 public record CognitiveHeader(
@@ -343,21 +219,9 @@ public record CognitiveHeader(
     short centroidId,       // IVF partition routing ID
     byte valence,           // emotional coloring (-128 to +127)
     byte flags,             // bit field (tombstone, type, consolidated, pinned, resolved)
-    byte arousal,           // V2+: emotional intensity (unsigned 0-255)
-    float storageStrength   // V2+: Two-Factor durability S(t)
-) {
-    /**
-     * V1-compatible constructor — fills V2+ fields with safe defaults.
-     */
-    public CognitiveHeader(long timestampMs, long synapticTags, float exactNorm,
-                            float importance, int recallCount, short centroidId,
-                            byte valence, byte flags) {
-        this(timestampMs, synapticTags, exactNorm, importance,
-             recallCount, centroidId, valence, flags,
-             (byte) 0,   // arousal: neutral
-             1.0f);      // storageStrength: default durability
-    }
-}
+    byte arousal,           // emotional intensity (unsigned 0-255)
+    float storageStrength   // Two-Factor durability S(t)
+) {}
 ```
 
 ---
@@ -404,7 +268,7 @@ A memory recalled 12 times is 4 buckets "younger" than its actual age — it res
 
 ### Arousal-Modulated Decay
 
-Emotionally intense memories resist forgetting. The `arousal` byte (V2+ headers) modulates the decay curve through a 4-bucket lookup table:
+Emotionally intense memories resist forgetting. The `arousal` byte modulates the decay curve through a 4-bucket lookup table:
 
 ```java
 private static final int[] AROUSAL_THRESHOLDS = {64, 128, 192};
@@ -458,10 +322,8 @@ The scorer reads arousal from the header and applies the modifier to both standa
 ```java
 // In CognitiveScorer, after Phase 4 (temporal/importance pre-screen):
 
-// Read arousal — only available on V2+ layouts
-byte arousal = hasArousal
-    ? segment.get(LAYOUT_AROUSAL, offset + OFFSET_AROUSAL)
-    : (byte) 0;  // V1 fallback: no arousal effect
+// Read arousal from 64-byte header
+byte arousal = segment.get(LAYOUT_AROUSAL, offset + OFFSET_AROUSAL);
 
 // Phase 6: Standard scoring
 float decay = DecayStrategy.decay(adjustedBucket) * DecayStrategy.arousalModifier(arousal);

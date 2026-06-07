@@ -20,7 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -280,7 +279,7 @@ public final class HeaderMigrator {
                                               boolean isHeaderOnly) {
         try (FileChannel ch = FileChannel.open(storePath, StandardOpenOption.READ)) {
             if (ch.size() < METADATA_HEADER_BYTES) {
-                return HeaderLayoutV3.INSTANCE; // assume current layout
+                return HeaderLayout64.INSTANCE; // assume current layout
             }
 
             ByteBuffer buf = ByteBuffer.allocate(METADATA_HEADER_BYTES);
@@ -290,7 +289,7 @@ public final class HeaderMigrator {
             int magic = buf.getInt(META_MAGIC);
             if (magic != TIER_MAGIC) {
                 log.warn("Invalid magic in {}, assuming current layout", storePath);
-                return HeaderLayoutV3.INSTANCE;
+                return HeaderLayout64.INSTANCE;
             }
 
             int stride = buf.getInt(META_STRIDE);
@@ -301,10 +300,10 @@ public final class HeaderMigrator {
                         headerBytes, storePath, SynapticHeaderConstants.HEADER_BYTES);
             }
 
-            return HeaderLayoutV3.INSTANCE;
+            return HeaderLayout64.INSTANCE;
         } catch (IOException e) {
             log.warn("Cannot detect header version from {}: {}", storePath, e.getMessage());
-            return HeaderLayoutV3.INSTANCE;
+            return HeaderLayout64.INSTANCE;
         }
     }
 

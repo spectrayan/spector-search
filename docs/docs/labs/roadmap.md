@@ -316,15 +316,19 @@ graph LR
 
 ### Integration with Existing Header Layout
 
-The `storage_strength` field is already present in the V2 (48B) and V3 (64B) header layouts:
+The `storage_strength` field is present in the 64-byte header layout at offset 36:
 
 ```
-V2 Header Layout (48 bytes):
-  [32B core]                     — shared with V1
-  [1B  arousal]        Offset 32 — emotional intensity
-  [3B  padding]        Offset 33 — alignment
-  [4B  storage_str]    Offset 36 — S(t) ← THIS FIELD
-  [8B  reserved]       Offset 40 — future use
+64-Byte Header Layout:
+  [0B   header_version]     Offset 0  — version byte
+  [1B   flags]              Offset 1  — state flags
+  [1B   valence]            Offset 2  — emotional coloring
+  [1B   arousal]            Offset 3  — emotional intensity
+  [4B   importance]         Offset 4  — cognitive importance
+  [8B   timestamp_ms]       Offset 8  — when memory was formed
+  ...                                 — (other core fields)
+  [4B   storage_str]        Offset 36 — S(t) ← THIS FIELD
+  ...                                 — (reserved fields)
 ```
 
 **Current default:** `storage_strength = 1.0f` for all new memories. The field is written and read but not yet used in scoring.
@@ -362,7 +366,7 @@ public void reinforce(String memoryId, byte valence) {
     int recallCount = incrementRecallCount(segment, offset);
     
     // NEW: Two-Factor update
-    if (layout.headerLayout().headerBytes() >= 48) {  // V2+
+    if (layout.headerLayout().headerBytes() >= 64) {
         long timestamp = segment.get(LAYOUT_TIMESTAMP, offset + OFFSET_TIMESTAMP);
         float currentS = segment.get(LAYOUT_STORAGE_STRENGTH, offset + OFFSET_STORAGE_STRENGTH);
         
@@ -392,11 +396,11 @@ These need empirical calibration with real agent workloads. The key question: ho
 
 ### Dependencies & Complexity
 
-- **Dependencies:** V2+ header layout (`storage_strength` field) ✅ **Ready**
+- **Dependencies:** 64-byte header layout (`storage_strength` field) ✅ **Ready**
 - **Complexity:** Medium — ✅ **Implemented**
 - **Implementation details:**
     - `TwoFactorConfig` record: `sGain=0.1`, `sMax=5.0`, `sExponent=0.3`, `enabled=true`
-    - `CognitiveScorer`: Reads `storageStrength` from V2+ header, applies `fastStorageBoost()` using precomputed 64-entry LUT (linear interpolation, <0.2% error)
+    - `CognitiveScorer`: Reads `storageStrength` from header, applies `fastStorageBoost()` using precomputed 64-entry LUT (linear interpolation, <0.2% error)
     - `LtpReconsolidationListener`: Updates `storage_strength` on `reinforce()` calls with `ΔS = S_gain × (1 - R(t))`
     - `RecallOptions`: Includes `TwoFactorConfig` for per-query configuration
     - `DefaultSpectorMemory.Builder`: Exposes `twoFactorConfig(TwoFactorConfig)` builder method

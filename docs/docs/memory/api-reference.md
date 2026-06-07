@@ -153,13 +153,13 @@ boolean hasJava = SynapticTagEncoder.matches(recordTags, "java");
 
 ## CognitiveRecordLayout
 
-Binary layout for the 32-byte header + quantized vector:
+Binary layout for the 64-byte header + quantized vector:
 
 ```java
 CognitiveRecordLayout layout = new CognitiveRecordLayout(quantizedVecBytes);
 
 // Record stride (header + vector)
-int stride = layout.stride();            // e.g., 800 for 768-dim INT8
+int stride = layout.stride();            // e.g., 832 for 768-dim INT8
 
 // Read/write header
 CognitiveHeader header = layout.readHeader(segment, offset);

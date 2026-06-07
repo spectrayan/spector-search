@@ -18,11 +18,11 @@ import java.lang.foreign.ValueLayout;
 import static com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.*;
 
 /**
- * Header layout V1 — the 64-byte cache-line-aligned format.
+ * The 64-byte cache-line-aligned header layout.
  *
- * <p>This is the sole header layout shipped in Spector 1.0. The class retains
- * the name {@code HeaderLayoutV3} for internal continuity during development;
- * the on-disk version byte is {@code 1}.</p>
+ * <p>This is the sole header layout shipped in Spector. The 64-byte size
+ * matches exactly one CPU cache line, eliminating split-line reads during
+ * sequential scans. The on-disk version byte is {@code 1}.</p>
  *
  * <h3>Layout (64 bytes)</h3>
  * <pre>
@@ -49,10 +49,10 @@ import static com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.*;
  * @see HeaderLayout
  * @see SynapticHeaderConstants
  */
-public record HeaderLayoutV3() implements HeaderLayout {
+public record HeaderLayout64() implements HeaderLayout {
 
     /** Singleton instance. */
-    public static final HeaderLayoutV3 INSTANCE = new HeaderLayoutV3();
+    public static final HeaderLayout64 INSTANCE = new HeaderLayout64();
 
     @Override public int headerBytes() { return HEADER_BYTES; }
     @Override public int version() { return HEADER_VERSION; }

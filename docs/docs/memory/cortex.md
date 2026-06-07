@@ -245,5 +245,5 @@ public final class TierRouter implements AutoCloseable {
 ## Next Steps
 
 - :material-sleep: [**Hippocampus — Sleep Consolidation**](hippocampus.md) — how episodic memories are consolidated into semantic knowledge
-- :material-flash: [**Synapse — Tags & Scoring**](synapse.md) — the 32-byte header and Bloom filter
+- :material-flash: [**Synapse — Tags & Scoring**](synapse.md) — the 64-byte header and Bloom filter
 - :material-lightning-bolt: [**6-Phase Scoring Pipeline**](scoring-pipeline.md) — the SIMD hot-loop

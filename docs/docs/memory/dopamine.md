@@ -159,5 +159,5 @@ if (flashbulb.isFlashbulb()) {
 ## Next Steps
 
 - :material-emoticon: [**Amygdala — Emotional Valence**](amygdala.md) — emotional coloring of memories
-- :material-flash: [**Synapse — Tags & Scoring**](synapse.md) — the 32-byte header
+- :material-flash: [**Synapse — Tags & Scoring**](synapse.md) — the 64-byte header
 - :material-sleep: [**Hippocampus — Sleep Consolidation**](hippocampus.md) — what happens to important memories

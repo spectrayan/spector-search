@@ -122,7 +122,7 @@ By default, no valence filter is applied — the agent sees the full emotional s
 
 ## Storage
 
-Valence is stored in the 32-byte synaptic header at **offset 30** as a single signed byte:
+Valence is stored in the 64-byte synaptic header at **offset 2** as a single signed byte:
 
 ```
 Offset 30: [1B valence] — signed byte [-128 to +127]

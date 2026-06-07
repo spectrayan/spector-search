@@ -13,31 +13,28 @@
 package com.spectrayan.spector.memory.synapse;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-
-import static com.spectrayan.spector.memory.synapse.SynapticHeaderConstants.*;
 
 /**
- * Polymorphic, versioned accessor for synaptic memory record headers.
+ * Polymorphic accessor for synaptic memory record headers.
  *
  * <h3>Design: Strategy Pattern with Sealed Interface</h3>
- * <p>The header format is a 64-byte cache-line-aligned binary layout (V1).
- * The sealed interface enables future layout versions (V2 with 128-bit tags,
- * etc.) to be added without modifying existing code. The JIT devirtualizes
- * the sealed hierarchy into direct method calls — zero overhead vs. hardcoded
+ * <p>The header format is a 64-byte cache-line-aligned binary layout.
+ * The sealed interface enables future layout versions to be added
+ * without modifying existing code. The JIT devirtualizes the sealed
+ * hierarchy into direct method calls — zero overhead vs. hardcoded
  * constants.</p>
  *
- * <h3>Current Version</h3>
+ * <h3>Current Implementation</h3>
  * <ul>
- *   <li><b>V1 (64B)</b> — Full cache-line-aligned format. All fields included.
- *       Default for all stores. See {@link HeaderLayoutV3}.</li>
+ *   <li><b>{@link HeaderLayout64} (64B)</b> — Full cache-line-aligned format.
+ *       All fields included. Default for all stores.</li>
  * </ul>
  *
- * @see HeaderLayoutV3
+ * @see HeaderLayout64
  * @see CognitiveRecordLayout
  */
 public sealed interface HeaderLayout
-        permits HeaderLayoutV3 {
+        permits HeaderLayout64 {
 
     // ── Layout metadata ──
 
@@ -200,7 +197,7 @@ public sealed interface HeaderLayout
      */
     static HeaderLayout forVersion(int version) {
         return switch (version) {
-            case 1 -> HeaderLayoutV3.INSTANCE;
+            case 1 -> HeaderLayout64.INSTANCE;
             default -> throw new IllegalArgumentException(
                     "Unknown header layout version: " + version + ". Supported: 1");
         };
@@ -208,7 +205,7 @@ public sealed interface HeaderLayout
 
     /** Default layout for all new stores (V1, 64 bytes). */
     static HeaderLayout defaultLayout() {
-        return HeaderLayoutV3.INSTANCE;
+        return HeaderLayout64.INSTANCE;
     }
 
     /**
@@ -219,7 +216,7 @@ public sealed interface HeaderLayout
      */
     static HeaderLayout detect(int metadataVersion) {
         if (metadataVersion <= 0) {
-            return HeaderLayoutV3.INSTANCE; // assume current version
+            return HeaderLayout64.INSTANCE; // assume current version
         }
         return forVersion(metadataVersion);
     }
