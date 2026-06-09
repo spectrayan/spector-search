@@ -62,7 +62,7 @@ public final class MemoryRememberTool extends MemoryToolHandler {
     @Override
     public Map<String, Object> inputSchema() {
         return ToolSchemaBuilder.object()
-                .requiredString("id", "Unique identifier for this memory (e.g., 'user-pref-dark-mode').")
+                .optionalString("id", "Unique identifier for this memory. If omitted, a TSID is auto-generated.", "")
                 .requiredString("text", "The fact, experience, or knowledge to remember.")
                 .optionalString("tags", "Comma-separated contextual tags for Bloom filter encoding.", "")
                 .optionalString("source",
@@ -95,7 +95,7 @@ public final class MemoryRememberTool extends MemoryToolHandler {
     protected McpSchema.CallToolResult executeMemory(SpectorMemory memory,
                                                        SpectorEngine engine,
                                                        Map<String, Object> args) throws Exception {
-        String id = requireString(args, "id");
+        String id = optionalString(args, "id", "");
         String text = requireString(args, "text");
         String[] tags = optionalTags(args, "tags");
         String sourceName = optionalString(args, "source", "OBSERVED");
@@ -140,10 +140,18 @@ public final class MemoryRememberTool extends MemoryToolHandler {
             // Non-fatal: importance display is best-effort
         }
 
-        memory.remember(id, text, type, source, hints, tags).join();
+        // Ingest: auto-generate ID if not provided
+        boolean autoId = id.isEmpty();
+        if (autoId) {
+            var future = memory.remember(text, type, source, hints, tags);
+            id = future.join();
+        } else {
+            memory.remember(id, text, type, source, hints, tags).join();
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("✅ Stored ").append(type).append(" memory '").append(id).append("'");
+        if (autoId) sb.append(" (auto-generated TSID)");
         if (tags.length > 0) sb.append(" with ").append(tags.length).append(" tags");
         sb.append(" (source=").append(source).append(")");
 

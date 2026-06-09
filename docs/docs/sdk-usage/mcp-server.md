@@ -40,7 +40,7 @@ Add the following to your agent's MCP configuration (see per-agent sections belo
 
 ### 3. Start Using
 
-Your AI agent now has access to up to 17 tools. With cognitive memory enabled (`spector.memory.enabled: true`), all tools are registered. In `SEARCH` mode, only the 6 engine tools are available:
+Your AI agent now has access to up to 21 tools. With cognitive memory enabled (`spector.memory.enabled: true`), all tools are registered. In `SEARCH` mode, only the 6 engine tools are available:
 
 - *"Search for documents about SIMD acceleration"* → `engine_search`
 - *"Find articles mentioning 'Panama' and related to memory management"* → `engine_hybrid_search`
@@ -215,13 +215,17 @@ Once connected, your agent has access to these tools:
 
 | Tool | Description |
 |:---|:---|
-| `memory_remember` | Store a cognitive memory with tags and source |
+| `memory_remember` | Store a cognitive memory with tags and source (ID auto-generated) |
 | `memory_recall` | Cognitive recall with fused scoring across tiers |
+| `memory_inspect` | Full cognitive X-ray of a memory (header + vector + metadata) |
+| `memory_browse` | Browse memories by tag (AND semantics, no vector search) |
+| `memory_export` | Bulk JSON export of all live memories |
 | `memory_forget` | Tombstone a memory by ID |
 | `memory_reinforce` | Report positive/negative outcome for a memory |
 | `memory_suppress` | Suppress a memory from recall results |
 | `memory_resolve` | Mark a memory as resolved |
 | `memory_introspect` | Metamemory self-analysis on a topic |
+| `memory_compute_importance` | Read-only importance estimation for text |
 | `memory_scratchpad` | Quick-write to working memory |
 | `memory_reminder` | Schedule a time-triggered reminder |
 | `memory_why_not` | Explain why a memory was not recalled |
@@ -303,5 +307,6 @@ That's it — the tool is automatically available to all connected agents.
 ## See Also
 
 - [MCP Integration Architecture](../architecture/mcp-integration.md) — Module structure, data flow, and performance analysis
+- [Python SDK](python-sdk.md) — Python client wrapping the MCP server
 - [Architecture Overview](../architecture/overview.md) — Full system architecture
 - [REST API Reference](../api-reference/rest-endpoints.md) — Alternative HTTP interface

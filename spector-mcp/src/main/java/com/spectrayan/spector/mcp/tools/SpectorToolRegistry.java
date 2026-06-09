@@ -42,6 +42,9 @@ import com.spectrayan.spector.mcp.tools.memory.MemoryResolveTool;
 import com.spectrayan.spector.mcp.tools.memory.MemoryReminderTool;
 import com.spectrayan.spector.mcp.tools.memory.MemoryWhyNotTool;
 import com.spectrayan.spector.mcp.tools.memory.MemoryComputeImportanceTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryInspectTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryExportTool;
+import com.spectrayan.spector.mcp.tools.memory.MemoryBrowseTool;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
 
@@ -104,6 +107,9 @@ public final class SpectorToolRegistry {
             handlers.add(new MemoryReminderTool(memory));
             handlers.add(new MemoryWhyNotTool(memory));
             handlers.add(new MemoryComputeImportanceTool(memory));
+            handlers.add(new MemoryInspectTool(memory));
+            handlers.add(new MemoryExportTool(memory));
+            handlers.add(new MemoryBrowseTool(memory));
         }
 
         return List.copyOf(handlers);
@@ -178,6 +184,9 @@ public final class SpectorToolRegistry {
             handlers.add(new MemoryReminderTool(memory));
             handlers.add(new MemoryWhyNotTool(memory));
             handlers.add(new MemoryComputeImportanceTool(memory));
+            handlers.add(new MemoryInspectTool(memory));
+            handlers.add(new MemoryExportTool(memory));
+            handlers.add(new MemoryBrowseTool(memory));
         }
 
         return handlers.stream()
