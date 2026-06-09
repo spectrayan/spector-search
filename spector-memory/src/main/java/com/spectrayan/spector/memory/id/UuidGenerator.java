@@ -1,0 +1,34 @@
+/*
+ * Copyright 2026 Spectrayan
+ *
+ * Licensed under the Business Source License 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://github.com/spectrayan/spector/blob/main/spector-memory/LICENSE
+ *
+ * Change Date: May 27, 2030
+ * Change License: Apache License, Version 2.0
+ */
+package com.spectrayan.spector.memory.id;
+
+import java.util.UUID;
+
+/**
+ * UUID v4 (random) generator.
+ *
+ * <p>Uses {@link UUID#randomUUID()} which is backed by {@code SecureRandom}.
+ * Produces 36-character strings in the standard {@code 8-4-4-4-12} format.</p>
+ *
+ * <p>Slowest generation (~200ns) and longest string (worst ConcurrentHashMap
+ * performance). Use only when UUID format compatibility is required.</p>
+ *
+ * @see IdStrategy#UUID
+ */
+public final class UuidGenerator implements MemoryIdGenerator {
+
+    @Override
+    public String generate() {
+        return UUID.randomUUID().toString();
+    }
+}
