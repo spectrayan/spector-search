@@ -130,6 +130,7 @@ public final class EpisodicMemoryStore extends AbstractTierStore {
 
         count++;
         persistCount();
+        publishVisible(); // SWMR: make record visible to scanners
     }
 
     /**
@@ -219,6 +220,9 @@ public final class EpisodicMemoryStore extends AbstractTierStore {
         }
 
         public int count() { return store.count; }
+
+        /** Returns the acquire-fenced visible count for concurrent readers. */
+        public int visibleCount() { return store.visibleCount(); }
 
         public MemorySegment segment() { return store.segment; }
 

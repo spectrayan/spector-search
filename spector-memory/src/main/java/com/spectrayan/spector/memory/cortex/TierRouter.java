@@ -166,6 +166,19 @@ public final class TierRouter implements AutoCloseable {
     /** Returns the Procedural Memory store (for flat scan). */
     public ProceduralMemoryStore procedural() { return proceduralStore; }
 
+    /**
+     * Forces all persistent tier store segments to be written to disk.
+     * Used by {@code CheckpointDaemon} before recording a WAL checkpoint.
+     */
+    public void forceAll() {
+        for (TierStore store : stores.values()) {
+            if (store instanceof AbstractTierStore ats && ats.isPersistent()) {
+                ats.force();
+            }
+        }
+    }
+
+
     @Override
     public void close() {
         stores.values().forEach(store -> {

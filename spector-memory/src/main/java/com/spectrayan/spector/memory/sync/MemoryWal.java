@@ -311,6 +311,7 @@ public final class MemoryWal implements AutoCloseable {
 
     // ── Internal: File I/O ──
 
+
     /**
      * Recovers state from existing WAL chunk files on disk.
      * Rebuilds the in-memory event cache and restores the sequence counter.

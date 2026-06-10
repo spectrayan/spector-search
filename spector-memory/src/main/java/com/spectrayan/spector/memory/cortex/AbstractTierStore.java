@@ -13,6 +13,7 @@
 package com.spectrayan.spector.memory.cortex;
 
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
+import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout.CognitiveHeader;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 import com.spectrayan.spector.commons.error.ErrorCode;
 import com.spectrayan.spector.commons.error.SpectorStorageException;
@@ -25,6 +26,8 @@ import java.io.UncheckedIOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
@@ -94,11 +97,33 @@ public abstract class AbstractTierStore implements TierStore {
     static final int META_EXTRA1   = 24;
     static final int META_EXTRA2   = 28;
 
+    // ── SWMR Visibility Barrier ──
+    // VarHandle for release/acquire access to maxVisibleRecord.
+    // Writers call publishVisible() after completing a record write;
+    // readers call visibleCount() to get the acquire-fenced count.
+    private static final VarHandle VISIBLE_COUNT_HANDLE;
+    static {
+        try {
+            VISIBLE_COUNT_HANDLE = MethodHandles.lookup()
+                    .findVarHandle(AbstractTierStore.class, "maxVisibleRecord", int.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
     protected final CognitiveRecordLayout layout;
     protected final int capacity;
     protected final Arena arena;
     protected final MemorySegment segment;
     protected int count = 0;
+
+    /**
+     * The number of records visible to concurrent readers.
+     * Published with release semantics after each complete record write.
+     * Read with acquire semantics by scanners before entering scoring loops.
+     */
+    @SuppressWarnings("unused") // accessed via VarHandle
+    private volatile int maxVisibleRecord = 0;
 
     /** True if this store is backed by a file (persistent). */
     protected final boolean persistent;
@@ -178,6 +203,7 @@ public abstract class AbstractTierStore implements TierStore {
             } else {
                 // Restore state from existing file
                 readMetadata();
+                publishVisible(); // SWMR: make restored records visible to readers
                 log.info("{} loaded from persistent file: {} ({} records)",
                         getClass().getSimpleName(), filePath, count);
             }
@@ -240,6 +266,23 @@ public abstract class AbstractTierStore implements TierStore {
     }
 
     @Override
+    public int visibleCount() {
+        return (int) VISIBLE_COUNT_HANDLE.getAcquire(this);
+    }
+
+    /**
+     * Publishes the current {@code count} as visible to concurrent readers.
+     *
+     * <p>Must be called by subclasses after completing a record write
+     * (header + vector fully written) and updating {@code count}.
+     * Uses release semantics to ensure all prior writes (the record data)
+     * are visible before the count update is observed by readers.</p>
+     */
+    protected void publishVisible() {
+        VISIBLE_COUNT_HANDLE.setRelease(this, count);
+    }
+
+    @Override
     public CognitiveRecordLayout layout() {
         return layout;
     }
@@ -284,6 +327,41 @@ public abstract class AbstractTierStore implements TierStore {
         if (persistent && segment != null) {
             segment.force();
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // COMPACTION SUPPORT
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Counts the number of tombstoned records in this store.
+     *
+     * <p>Scans all records and checks the tombstone flag in each header.
+     * This is O(n) but only called before compaction decisions.</p>
+     *
+     * @return the number of tombstoned records
+     */
+    public int tombstoneCount() {
+        int tombstones = 0;
+        long baseOffset = dataOffset();
+        for (int i = 0; i < count; i++) {
+            long offset = baseOffset + (long) i * layout.stride();
+            CognitiveHeader header = layout.readHeader(segment, offset);
+            if (SynapticHeaderConstants.isTombstoned(header.flags())) {
+                tombstones++;
+            }
+        }
+        return tombstones;
+    }
+
+    /**
+     * Returns the ratio of tombstoned records to total records.
+     *
+     * @return tombstone ratio (0.0 = no tombstones, 1.0 = all tombstoned)
+     */
+    public float tombstoneRatio() {
+        if (count == 0) return 0.0f;
+        return (float) tombstoneCount() / count;
     }
 
     @Override

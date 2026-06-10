@@ -25,9 +25,12 @@ import com.spectrayan.spector.memory.pipeline.CognitiveIngestionTarget;
 import com.spectrayan.spector.memory.pipeline.RecallPipeline;
 import com.spectrayan.spector.memory.prospective.ProspectiveScheduler;
 import com.spectrayan.spector.memory.sync.MemoryWal;
+import com.spectrayan.spector.memory.model.MemoryType;
+import com.spectrayan.spector.memory.sync.CompactionResult;
 import com.spectrayan.spector.memory.temporal.TemporalChain;
 
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * Administrative interface for the Spector Cognitive Memory system.
@@ -108,4 +111,26 @@ public interface SpectorMemoryAdmin {
 
     /** Explicitly decays importance of old episodic memories. */
     int decay(Duration olderThan, float factor);
+
+    // ══════════════════════════════════════════════════════════════
+    // VACUUM / COMPACTION
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Vacuums (compacts) a specific memory tier by removing tombstoned records.
+     *
+     * <p>Copies only live records to a new segment, updates the index,
+     * and reclaims space. The operation is synchronized with writers.</p>
+     *
+     * @param tier the memory tier to compact
+     * @return compaction result with statistics, or null if no compaction needed
+     */
+    CompactionResult vacuum(MemoryType tier);
+
+    /**
+     * Returns the tombstone ratio for each memory tier.
+     *
+     * @return map of tier → tombstone ratio (0.0 to 1.0)
+     */
+    Map<MemoryType, Float> tombstoneRatios();
 }

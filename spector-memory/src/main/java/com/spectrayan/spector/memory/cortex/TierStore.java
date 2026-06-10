@@ -50,6 +50,19 @@ public interface TierStore extends AutoCloseable {
     int size();
 
     /**
+     * Returns the number of records visible to concurrent readers (SWMR barrier).
+     *
+     * <p>This count is published with {@code VarHandle.setRelease()} after each
+     * complete record write, ensuring readers never see partially-written records.
+     * Scanners (e.g., {@code CognitiveScorer}) should use this instead of
+     * {@link #size()} to determine how many records to process.</p>
+     *
+     * @return the acquire-fenced record count safe for scanning
+     */
+    int visibleCount();
+
+
+    /**
      * Returns the record layout for this store.
      */
     CognitiveRecordLayout layout();

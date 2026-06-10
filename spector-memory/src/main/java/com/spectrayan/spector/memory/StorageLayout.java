@@ -111,6 +111,9 @@ public final class StorageLayout {
     /** Global co-activation frequency tracker. */
     public static final String FILE_COACTIVATION = "coactivation.tracker";
 
+    /** Checkpoint metadata — WAL high-water mark for crash recovery. */
+    public static final String FILE_CHECKPOINT_META = "checkpoint.meta";
+
     // ═══════════════════════════════════════════════════════════════
     // Partition Files (inside each partition directory)
     // ═══════════════════════════════════════════════════════════════
@@ -276,6 +279,11 @@ public final class StorageLayout {
     /** Resolves the co-activation tracker file path. */
     public static Path coactivationTracker(Path basePath) {
         return globalDir(basePath).resolve(FILE_COACTIVATION);
+    }
+
+    /** Resolves the checkpoint metadata file path. */
+    public static Path checkpointMeta(Path basePath) {
+        return globalDir(basePath).resolve(FILE_CHECKPOINT_META);
     }
 
     // ── Partition resolvers ──

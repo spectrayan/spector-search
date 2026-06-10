@@ -126,6 +126,7 @@ public final class SemanticMemoryStore extends AbstractTierStore {
 
         count++;
         persistCount();
+        publishVisible(); // SWMR: make record visible to scanners
     }
 
     /**
@@ -143,6 +144,7 @@ public final class SemanticMemoryStore extends AbstractTierStore {
         layout.writeHeader(segment, offset, header);
         int index = count++;
         persistCount();
+        publishVisible(); // SWMR: make record visible to scanners
         return index;
     }
 

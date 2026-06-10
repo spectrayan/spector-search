@@ -119,6 +119,6 @@ public final class ProceduralMemoryStore extends AbstractTierStore {
         );
         count++;
         persistCount();
+        publishVisible(); // SWMR: make record visible to scanners
     }
 }
-

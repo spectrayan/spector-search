@@ -15,7 +15,7 @@ package com.spectrayan.spector.memory;
 import com.spectrayan.spector.memory.cortex.TierRouter;
 import com.spectrayan.spector.memory.error.SpectorGraphDecayException;
 import com.spectrayan.spector.memory.graph.EntityGraph;
-import com.spectrayan.spector.memory.graph.RelationType;
+// RelationType enum replaced by open-schema strings via TypeRegistry
 import com.spectrayan.spector.memory.hebbian.HebbianGraph;
 import com.spectrayan.spector.memory.hippocampus.ReflectDaemon;
 import com.spectrayan.spector.memory.index.MemoryIndex;
@@ -212,7 +212,7 @@ final class ReflectionOrchestrator {
                 for (int eA : entitiesA) {
                     for (int eB : entitiesB) {
                         if (eA != eB) {
-                            entityGraph.addRelation(eA, eB, RelationType.RELATED_TO);
+                            entityGraph.addRelation(eA, eB, "RELATED_TO");
                             promoted++;
                         }
                     }

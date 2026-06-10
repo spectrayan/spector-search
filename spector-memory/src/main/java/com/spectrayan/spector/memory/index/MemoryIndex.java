@@ -244,6 +244,48 @@ public final class MemoryIndex {
     }
 
     // ══════════════════════════════════════════════════════════════
+    // COMPACTION SUPPORT
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * Relocates a single memory to a new offset within the same tier.
+     *
+     * <p>Called during vacuum compaction when live records are copied to
+     * a new segment. Updates both forward and reverse indexes atomically.</p>
+     *
+     * @param id        the memory ID
+     * @param newOffset the new byte offset in the compacted segment
+     */
+    public void relocate(String id, long newOffset) {
+        MemoryLocation oldLoc = locations.get(id);
+        if (oldLoc == null) return;
+
+        // Remove old reverse entry
+        reverseIndex.remove(reverseKey(oldLoc.type(), oldLoc.offset()));
+
+        // Update forward index with new offset
+        MemoryLocation newLoc = new MemoryLocation(oldLoc.type(), newOffset, oldLoc.partitionIndex());
+        locations.put(id, newLoc);
+
+        // Add new reverse entry
+        reverseIndex.put(reverseKey(newLoc.type(), newOffset), id);
+    }
+
+    /**
+     * Batch-relocates multiple memories to new offsets.
+     *
+     * <p>More efficient than calling {@link #relocate(String, long)} individually
+     * because it avoids repeated concurrent map overhead for large compactions.</p>
+     *
+     * @param relocations map of memory ID → new byte offset
+     */
+    public void relocateBatch(Map<String, Long> relocations) {
+        for (Map.Entry<String, Long> entry : relocations.entrySet()) {
+            relocate(entry.getKey(), entry.getValue());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // PERSISTENCE: save / load
     // ══════════════════════════════════════════════════════════════
 

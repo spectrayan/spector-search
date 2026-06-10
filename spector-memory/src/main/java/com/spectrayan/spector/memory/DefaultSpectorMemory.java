@@ -68,6 +68,11 @@ import com.spectrayan.spector.memory.prospective.ProspectiveScheduler;
 import com.spectrayan.spector.memory.prospective.Reminder;
 import com.spectrayan.spector.memory.sync.MemoryWal;
 import com.spectrayan.spector.memory.sync.WalEvent;
+import com.spectrayan.spector.memory.sync.CheckpointDaemon;
+import com.spectrayan.spector.memory.sync.CompactionResult;
+import com.spectrayan.spector.memory.sync.VacuumCompactor;
+import com.spectrayan.spector.commons.concurrent.DaemonSupervisor;
+import com.spectrayan.spector.commons.concurrent.DaemonPolicy;
 import com.spectrayan.spector.memory.synapse.ActRActivation;
 import com.spectrayan.spector.memory.synapse.CognitiveRecordLayout;
 import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
@@ -173,6 +178,10 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
 
     // ── Circadian trigger counter ──
     private final AtomicInteger episodicIngestCount = new AtomicInteger(0);
+
+    // ── Automatic Checkpointing ──
+    private final CheckpointDaemon checkpointDaemon;
+    private final DaemonSupervisor daemonSupervisor;
 
     private DefaultSpectorMemory(Builder builder) {
         this.dimensions = builder.dimensions;
@@ -467,6 +476,22 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         this.idGenerator = builder.idGenerator != null
                 ? builder.idGenerator
                 : builder.idStrategy.createGenerator();
+
+        // ── Daemon Supervisor + Checkpoint Daemon ── (DISK mode only)
+        if (isDisk && basePath != null && builder.checkpointIntervalSeconds > 0) {
+            this.checkpointDaemon = new CheckpointDaemon(
+                    tierRouter, wal,
+                    StorageLayout.checkpointMeta(basePath));
+            this.daemonSupervisor = new DaemonSupervisor("memory");
+            this.daemonSupervisor.schedule(
+                    "checkpoint",
+                    checkpointDaemon::checkpoint,
+                    java.time.Duration.ofSeconds(builder.checkpointIntervalSeconds),
+                    DaemonPolicy.CRITICAL);
+        } else {
+            this.checkpointDaemon = null;
+            this.daemonSupervisor = null;
+        }
     }
 
     /**
@@ -1009,10 +1034,54 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
     /** Returns the namespace manager (null if IN_MEMORY mode). */
     public SpectorNamespaceManager namespaceManager() { return namespaceManager; }
 
+    // ══════════════════════════════════════════════════════════════
+    // VACUUM / COMPACTION
+    // ══════════════════════════════════════════════════════════════
+
+    @Override
+    public CompactionResult vacuum(MemoryType tier) {
+        TierRouter router = partitionManager.tierRouter();
+        com.spectrayan.spector.memory.cortex.TierStore store = router.get(tier);
+        if (!(store instanceof com.spectrayan.spector.memory.cortex.AbstractTierStore ats)) {
+            log.warn("Vacuum: tier {} is not compactable", tier);
+            return null;
+        }
+        synchronized (this) {
+            return VacuumCompactor.compact(ats, tier, index);
+        }
+    }
+
+    @Override
+    public java.util.Map<MemoryType, Float> tombstoneRatios() {
+        TierRouter router = partitionManager.tierRouter();
+        java.util.Map<MemoryType, Float> ratios = new java.util.EnumMap<>(MemoryType.class);
+        for (MemoryType type : MemoryType.values()) {
+            com.spectrayan.spector.memory.cortex.TierStore store = router.get(type);
+            if (store instanceof com.spectrayan.spector.memory.cortex.AbstractTierStore ats) {
+                ratios.put(type, ats.tombstoneRatio());
+            }
+        }
+        return ratios;
+    }
+
     @Override
     public void close() {
         log.info("SpectorMemory closing ({} total memories, mode={})",
                 totalMemories(), persistenceMode);
+
+        // Stop daemon supervisor (stops all managed daemons)
+        if (daemonSupervisor != null) {
+            daemonSupervisor.close();
+        }
+
+        // Final checkpoint flush before closing storage
+        if (checkpointDaemon != null) {
+            try {
+                checkpointDaemon.checkpoint();
+            } catch (Exception e) {
+                log.warn("Final checkpoint on close failed: {}", e.getMessage());
+            }
+        }
 
         PersistenceManager.flushAndClose(
                 persistenceMode, persistencePath,
@@ -1070,6 +1139,9 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         // ID generation strategy
         IdStrategy idStrategy = IdStrategy.TSID;
         MemoryIdGenerator idGenerator;
+
+        // Checkpoint daemon configuration
+        int checkpointIntervalSeconds = 30;
 
         public Builder dimensions(int dimensions) { this.dimensions = dimensions; return this; }
         public Builder embeddingProvider(EmbeddingProvider p) { this.embeddingProvider = p; return this; }
@@ -1145,6 +1217,9 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
 
         /** Temporal chain retention in days — links older than this are pruned during reflect() (default: 7). */
         public Builder temporalRetentionDays(int days) { this.temporalRetentionDays = days; return this; }
+
+        /** Checkpoint interval in seconds (default: 30). Set to 0 to disable automatic checkpointing. */
+        public Builder checkpointIntervalSeconds(int seconds) { this.checkpointIntervalSeconds = seconds; return this; }
 
         /** Two-Factor Memory (Bjork & Bjork) configuration (default: TwoFactorConfig.DEFAULT). */
         public Builder twoFactorConfig(com.spectrayan.spector.memory.synapse.TwoFactorConfig config) { this.twoFactorConfig = config; return this; }

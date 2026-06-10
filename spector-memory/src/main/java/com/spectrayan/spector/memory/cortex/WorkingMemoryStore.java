@@ -158,6 +158,7 @@ public final class WorkingMemoryStore extends AbstractTierStore {
         if (persistent) {
             segment.set(ValueLayout.JAVA_INT, META_EXTRA1, writeIndex);
         }
+        publishVisible(); // SWMR: make record visible to scanners
     }
 
     /**
