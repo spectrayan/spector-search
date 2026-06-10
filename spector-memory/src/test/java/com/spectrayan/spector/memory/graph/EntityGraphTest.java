@@ -45,16 +45,16 @@ class EntityGraphTest {
 
     @Test
     void addEntityReturnsId() {
-        int id = graph.addEntity("Alice", EntityType.PERSON);
+        int id = graph.addEntity("Alice", "PERSON");
         assertThat(id).isEqualTo(0);
         assertThat(graph.entityCount()).isEqualTo(1);
     }
 
     @Test
     void addDuplicateEntityReturnsExistingId() {
-        int id1 = graph.addEntity("Alice", EntityType.PERSON);
-        int id2 = graph.addEntity("alice", EntityType.PERSON); // case-insensitive
-        int id3 = graph.addEntity("ALICE", EntityType.PERSON);
+        int id1 = graph.addEntity("Alice", "PERSON");
+        int id2 = graph.addEntity("alice", "PERSON"); // case-insensitive
+        int id3 = graph.addEntity("ALICE", "PERSON");
 
         assertThat(id1).isEqualTo(id2).isEqualTo(id3);
         assertThat(graph.entityCount()).isEqualTo(1);
@@ -62,7 +62,7 @@ class EntityGraphTest {
 
     @Test
     void findEntityCaseInsensitive() {
-        graph.addEntity("Project Alpha", EntityType.PROJECT);
+        graph.addEntity("Project Alpha", "PROJECT");
 
         assertThat(graph.findEntity("project alpha")).isEqualTo(0);
         assertThat(graph.findEntity("PROJECT ALPHA")).isEqualTo(0);
@@ -71,34 +71,43 @@ class EntityGraphTest {
 
     @Test
     void entityTypePreserved() {
-        graph.addEntity("Alice", EntityType.PERSON);
-        graph.addEntity("Acme", EntityType.ORGANIZATION);
+        graph.addEntity("Alice", "PERSON");
+        graph.addEntity("Acme", "ORGANIZATION");
 
-        assertThat(graph.entityType(0)).isEqualTo(EntityType.PERSON);
-        assertThat(graph.entityType(1)).isEqualTo(EntityType.ORGANIZATION);
+        assertThat(graph.entityType(0)).isEqualTo("PERSON");
+        assertThat(graph.entityType(1)).isEqualTo("ORGANIZATION");
+    }
+
+    @Test
+    void customEntityTypeAccepted() {
+        graph.addEntity("Tesla", "VEHICLE_MANUFACTURER");
+        graph.addEntity("ChatGPT", "SOFTWARE");
+
+        assertThat(graph.entityType(0)).isEqualTo("VEHICLE_MANUFACTURER");
+        assertThat(graph.entityType(1)).isEqualTo("SOFTWARE");
     }
 
     @Test
     void addRelation() {
-        int alice = graph.addEntity("Alice", EntityType.PERSON);
-        int project = graph.addEntity("Project Alpha", EntityType.PROJECT);
+        int alice = graph.addEntity("Alice", "PERSON");
+        int project = graph.addEntity("Project Alpha", "PROJECT");
 
-        graph.addRelation(alice, project, RelationType.MANAGES);
+        graph.addRelation(alice, project, "MANAGES");
 
         List<EntityGraph.EntityEdge> edges = graph.edges(alice);
         assertThat(edges).hasSize(1);
         assertThat(edges.get(0).targetEntityId()).isEqualTo(project);
-        assertThat(edges.get(0).relationType()).isEqualTo(RelationType.MANAGES);
+        assertThat(edges.get(0).relationType()).isEqualTo("MANAGES");
         assertThat(edges.get(0).weight()).isEqualTo(1.0f);
     }
 
     @Test
     void duplicateRelationStrengthensWeight() {
-        int alice = graph.addEntity("Alice", EntityType.PERSON);
-        int project = graph.addEntity("Project Alpha", EntityType.PROJECT);
+        int alice = graph.addEntity("Alice", "PERSON");
+        int project = graph.addEntity("Project Alpha", "PROJECT");
 
-        graph.addRelation(alice, project, RelationType.MANAGES);
-        graph.addRelation(alice, project, RelationType.MANAGES);
+        graph.addRelation(alice, project, "MANAGES");
+        graph.addRelation(alice, project, "MANAGES");
 
         List<EntityGraph.EntityEdge> edges = graph.edges(alice);
         assertThat(edges).hasSize(1);
@@ -107,7 +116,7 @@ class EntityGraphTest {
 
     @Test
     void linkEntityToMemory() {
-        int alice = graph.addEntity("Alice", EntityType.PERSON);
+        int alice = graph.addEntity("Alice", "PERSON");
 
         graph.linkEntityToMemory(alice, 42);
         graph.linkEntityToMemory(alice, 99);
@@ -119,7 +128,7 @@ class EntityGraphTest {
 
     @Test
     void maxMemoryRefsEnforced() {
-        int alice = graph.addEntity("Alice", EntityType.PERSON);
+        int alice = graph.addEntity("Alice", "PERSON");
 
         for (int i = 0; i < EntityGraph.MAX_MEMORY_REFS + 5; i++) {
             graph.linkEntityToMemory(alice, i);
@@ -131,12 +140,12 @@ class EntityGraphTest {
 
     @Test
     void bfsTraversal() {
-        int alice = graph.addEntity("Alice", EntityType.PERSON);
-        int project = graph.addEntity("Project Alpha", EntityType.PROJECT);
-        int bob = graph.addEntity("Bob", EntityType.PERSON);
+        int alice = graph.addEntity("Alice", "PERSON");
+        int project = graph.addEntity("Project Alpha", "PROJECT");
+        int bob = graph.addEntity("Bob", "PERSON");
 
-        graph.addRelation(alice, project, RelationType.MANAGES);
-        graph.addRelation(project, bob, RelationType.PART_OF);
+        graph.addRelation(alice, project, "MANAGES");
+        graph.addRelation(project, bob, "PART_OF");
 
         // Traverse from alice: should reach project (hop 1) and bob (hop 2)
         var results = graph.traverse(alice, null, 2);
@@ -149,27 +158,27 @@ class EntityGraphTest {
 
     @Test
     void bfsTraversalWithFilter() {
-        int alice = graph.addEntity("Alice", EntityType.PERSON);
-        int project = graph.addEntity("Project Alpha", EntityType.PROJECT);
-        int bob = graph.addEntity("Bob", EntityType.PERSON);
+        int alice = graph.addEntity("Alice", "PERSON");
+        int project = graph.addEntity("Project Alpha", "PROJECT");
+        int bob = graph.addEntity("Bob", "PERSON");
 
-        graph.addRelation(alice, project, RelationType.MANAGES);
-        graph.addRelation(alice, bob, RelationType.RELATED_TO);
+        graph.addRelation(alice, project, "MANAGES");
+        graph.addRelation(alice, bob, "RELATED_TO");
 
         // Filter: only MANAGES edges
-        var results = graph.traverse(alice, RelationType.MANAGES, 2);
+        var results = graph.traverse(alice, "MANAGES", 2);
         assertThat(results).hasSize(1);
         assertThat(results.get(0).entityId()).isEqualTo(project);
     }
 
     @Test
     void collectMemories() {
-        int alice = graph.addEntity("Alice", EntityType.PERSON);
-        int project = graph.addEntity("Project Alpha", EntityType.PROJECT);
+        int alice = graph.addEntity("Alice", "PERSON");
+        int project = graph.addEntity("Project Alpha", "PROJECT");
 
         graph.linkEntityToMemory(alice, 10);
         graph.linkEntityToMemory(project, 20);
-        graph.addRelation(alice, project, RelationType.MANAGES);
+        graph.addRelation(alice, project, "MANAGES");
 
         Set<Integer> memories = graph.collectMemories(alice, null, 2);
         assertThat(memories).containsExactlyInAnyOrder(10, 20);
@@ -177,9 +186,9 @@ class EntityGraphTest {
 
     @Test
     void saveAndLoadPreservesGraph() {
-        int alice = graph.addEntity("Alice", EntityType.PERSON);
-        int project = graph.addEntity("Project Alpha", EntityType.PROJECT);
-        graph.addRelation(alice, project, RelationType.MANAGES);
+        int alice = graph.addEntity("Alice", "PERSON");
+        int project = graph.addEntity("Project Alpha", "PROJECT");
+        graph.addRelation(alice, project, "MANAGES");
         graph.linkEntityToMemory(alice, 42);
 
         Path file = tempDir.resolve("test.entity");
@@ -194,7 +203,7 @@ class EntityGraphTest {
         // Relations preserved
         var edges = graph.edges(0);
         assertThat(edges).hasSize(1);
-        assertThat(edges.get(0).relationType()).isEqualTo(RelationType.MANAGES);
+        assertThat(edges.get(0).relationType()).isEqualTo("MANAGES");
 
         // Memory refs preserved
         int[] memories = graph.memoriesForEntity(0);
@@ -212,18 +221,18 @@ class EntityGraphTest {
 
     @Test
     void boundsCheckDoesNotCrash() {
-        graph.addRelation(-1, 0, RelationType.OTHER); // ignored
-        graph.addRelation(0, 500, RelationType.OTHER); // ignored
+        graph.addRelation(-1, 0, "OTHER"); // ignored
+        graph.addRelation(0, 500, "OTHER"); // ignored
         graph.linkEntityToMemory(-1, 0); // ignored
         assertThat(graph.edges(-1)).isEmpty();
         assertThat(graph.memoriesForEntity(-1)).isEmpty();
-        assertThat(graph.entityType(-1)).isEqualTo(EntityType.OTHER);
+        assertThat(graph.entityType(-1)).isEqualTo("OTHER");
     }
 
     @Test
     void nameIndexSnapshot() {
-        graph.addEntity("Alice", EntityType.PERSON);
-        graph.addEntity("Bob", EntityType.PERSON);
+        graph.addEntity("Alice", "PERSON");
+        graph.addEntity("Bob", "PERSON");
 
         var snapshot = graph.nameIndex();
         assertThat(snapshot).containsKeys("alice", "bob");

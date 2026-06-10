@@ -14,9 +14,7 @@ package com.spectrayan.spector.memory.e2e;
 
 import com.spectrayan.spector.memory.graph.EntityExtractor;
 import com.spectrayan.spector.memory.graph.EntityRelation;
-import com.spectrayan.spector.memory.graph.EntityType;
 import com.spectrayan.spector.memory.graph.ExtractedEntity;
-import com.spectrayan.spector.memory.graph.RelationType;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -52,31 +50,31 @@ public final class TestEntityExtractor implements EntityExtractor {
     private static final Pattern PROJECT_PATTERN = Pattern.compile(
             "\\bProject\\s+([A-Z][a-zA-Z]+)\\b");
 
-    /** Known technology names → EntityType mapping. */
-    private static final Map<String, EntityType> TECH_NAMES = Map.ofEntries(
-            Map.entry("postgresql", EntityType.TECHNOLOGY),
-            Map.entry("postgres", EntityType.TECHNOLOGY),
-            Map.entry("redis", EntityType.TECHNOLOGY),
-            Map.entry("kafka", EntityType.TOOL),
-            Map.entry("kubernetes", EntityType.TOOL),
-            Map.entry("docker", EntityType.TOOL),
-            Map.entry("grafana", EntityType.TOOL),
-            Map.entry("prometheus", EntityType.TOOL),
-            Map.entry("jenkins", EntityType.TOOL),
-            Map.entry("terraform", EntityType.TOOL),
-            Map.entry("spring boot", EntityType.TECHNOLOGY),
-            Map.entry("spring", EntityType.TECHNOLOGY),
-            Map.entry("flyway", EntityType.TECHNOLOGY),
-            Map.entry("gatling", EntityType.TOOL),
-            Map.entry("hibernate", EntityType.TECHNOLOGY),
-            Map.entry("hikaricp", EntityType.TECHNOLOGY),
-            Map.entry("java", EntityType.SKILL),
-            Map.entry("grpc", EntityType.API),
-            Map.entry("jwt", EntityType.API),
-            Map.entry("oauth2", EntityType.API),
-            Map.entry("avro", EntityType.API),
-            Map.entry("aws", EntityType.PRODUCT),
-            Map.entry("github", EntityType.PRODUCT)
+    /** Known technology names → entity type string mapping. */
+    private static final Map<String, String> TECH_NAMES = Map.ofEntries(
+            Map.entry("postgresql", "TECHNOLOGY"),
+            Map.entry("postgres", "TECHNOLOGY"),
+            Map.entry("redis", "TECHNOLOGY"),
+            Map.entry("kafka", "TOOL"),
+            Map.entry("kubernetes", "TOOL"),
+            Map.entry("docker", "TOOL"),
+            Map.entry("grafana", "TOOL"),
+            Map.entry("prometheus", "TOOL"),
+            Map.entry("jenkins", "TOOL"),
+            Map.entry("terraform", "TOOL"),
+            Map.entry("spring boot", "TECHNOLOGY"),
+            Map.entry("spring", "TECHNOLOGY"),
+            Map.entry("flyway", "TECHNOLOGY"),
+            Map.entry("gatling", "TOOL"),
+            Map.entry("hibernate", "TECHNOLOGY"),
+            Map.entry("hikaricp", "TECHNOLOGY"),
+            Map.entry("java", "SKILL"),
+            Map.entry("grpc", "API"),
+            Map.entry("jwt", "API"),
+            Map.entry("oauth2", "API"),
+            Map.entry("avro", "API"),
+            Map.entry("aws", "PRODUCT"),
+            Map.entry("github", "PRODUCT")
     );
 
     /** Common words to exclude from person name detection. */
@@ -90,18 +88,18 @@ public final class TestEntityExtractor implements EntityExtractor {
             "Auto Configuration", "Point Recovery"
     );
 
-    /** Relation keyword → RelationType mapping. */
-    private static final Map<String, RelationType> RELATION_KEYWORDS = Map.of(
-            "manages", RelationType.MANAGES,
-            "manage", RelationType.MANAGES,
-            "authored", RelationType.AUTHORED,
-            "created", RelationType.CREATED_BY,
-            "reports to", RelationType.REPORTS_TO,
-            "depends on", RelationType.DEPENDS_ON,
-            "uses", RelationType.USES,
-            "reviewed", RelationType.AUTHORED,
-            "implemented", RelationType.IMPLEMENTS,
-            "designed", RelationType.CREATED_BY
+    /** Relation keyword → relation type string mapping. */
+    private static final Map<String, String> RELATION_KEYWORDS = Map.of(
+            "manages", "MANAGES",
+            "manage", "MANAGES",
+            "authored", "AUTHORED",
+            "created", "CREATED_BY",
+            "reports to", "REPORTS_TO",
+            "depends on", "DEPENDS_ON",
+            "uses", "USES",
+            "reviewed", "AUTHORED",
+            "implemented", "IMPLEMENTS",
+            "designed", "CREATED_BY"
     );
 
     @Override
@@ -109,7 +107,7 @@ public final class TestEntityExtractor implements EntityExtractor {
         if (text == null || text.isBlank()) return List.of();
 
         // Use LinkedHashMap to maintain insertion order and deduplicate
-        Map<String, EntityType> entities = new LinkedHashMap<>();
+        Map<String, String> entities = new LinkedHashMap<>();
         List<RelationTriple> relations = new ArrayList<>();
 
         // Extract persons
@@ -118,7 +116,7 @@ public final class TestEntityExtractor implements EntityExtractor {
             String name = personMatcher.group(1);
             if (!COMMON_EXCLUSIONS.contains(name)
                     && !TECH_NAMES.containsKey(name.toLowerCase(Locale.ROOT))) {
-                entities.putIfAbsent(name, EntityType.PERSON);
+                entities.putIfAbsent(name, "PERSON");
             }
         }
 
@@ -126,12 +124,12 @@ public final class TestEntityExtractor implements EntityExtractor {
         Matcher projectMatcher = PROJECT_PATTERN.matcher(text);
         while (projectMatcher.find()) {
             String projectName = "Project " + projectMatcher.group(1);
-            entities.putIfAbsent(projectName, EntityType.PROJECT);
+            entities.putIfAbsent(projectName, "PROJECT");
         }
 
         // Extract technologies (case-insensitive search)
         String lower = text.toLowerCase(Locale.ROOT);
-        for (Map.Entry<String, EntityType> entry : TECH_NAMES.entrySet()) {
+        for (Map.Entry<String, String> entry : TECH_NAMES.entrySet()) {
             if (lower.contains(entry.getKey())) {
                 // Capitalize for consistency
                 String techName = capitalizeFirst(entry.getKey());
@@ -141,7 +139,7 @@ public final class TestEntityExtractor implements EntityExtractor {
 
         // Extract relations between found entities
         List<String> entityNames = new ArrayList<>(entities.keySet());
-        for (Map.Entry<String, RelationType> rkEntry : RELATION_KEYWORDS.entrySet()) {
+        for (Map.Entry<String, String> rkEntry : RELATION_KEYWORDS.entrySet()) {
             String keyword = rkEntry.getKey();
             if (lower.contains(keyword)) {
                 // Try to find source and target entities near the keyword
@@ -163,9 +161,9 @@ public final class TestEntityExtractor implements EntityExtractor {
 
         // Build result
         List<ExtractedEntity> result = new ArrayList<>();
-        for (Map.Entry<String, EntityType> entry : entities.entrySet()) {
+        for (Map.Entry<String, String> entry : entities.entrySet()) {
             String name = entry.getKey();
-            EntityType type = entry.getValue();
+            String type = entry.getValue();
 
             List<EntityRelation> entityRelations = relations.stream()
                     .filter(r -> r.source.equals(name))
@@ -188,5 +186,5 @@ public final class TestEntityExtractor implements EntityExtractor {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
-    private record RelationTriple(String source, RelationType type, String target) {}
+    private record RelationTriple(String source, String type, String target) {}
 }
