@@ -83,7 +83,7 @@ export class CortexStateService {
   // ── Connection ─────────────────────────────────────────────────────
   readonly connectionStatus = signal<ConnectionStatus>('disconnected');
   readonly selectedNode = signal<string>('local');
-  readonly useMockData = signal<boolean>(true);
+  readonly useMockData = signal<boolean>(false);
 
   // ── Query Trace ────────────────────────────────────────────────────
   readonly currentQueryTrace = signal<QueryTraceEvent | null>(null);
@@ -142,6 +142,11 @@ export class CortexStateService {
 
   // ── Query Input ────────────────────────────────────────────────────
   readonly isQueryRunning = signal<boolean>(false);
+  readonly lastQueryText = signal<string>('');
+  readonly recallResults = signal<any[]>([]);
+  readonly recallQueryTimeMs = signal<number>(0);
+  readonly recallTotalMemories = signal<number>(0);
+  readonly recallProfile = signal<string>('');
 
   // ── Memory Diff ────────────────────────────────────────────────────
   readonly memoryDiffs = signal<MemoryDiffPair[]>([]);

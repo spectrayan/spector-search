@@ -1,7 +1,6 @@
 import { Component, inject, OnInit, OnDestroy, effect } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { HeaderComponent } from '../header/header.component';
 import { NeuralGraphComponent } from '../neural-graph/neural-graph.component';
 import { VectorSpaceComponent } from '../vector-space/vector-space.component';
 import { PipelineFunnelComponent } from '../pipeline-funnel/pipeline-funnel.component';
@@ -25,7 +24,6 @@ import { CortexStateService } from '../../core/services/cortex-state.service';
   imports: [
     MatCardModule,
     MatIconModule,
-    HeaderComponent,
     NeuralGraphComponent,
     VectorSpaceComponent,
     PipelineFunnelComponent,

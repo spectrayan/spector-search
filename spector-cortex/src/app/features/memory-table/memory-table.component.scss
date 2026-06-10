@@ -1,0 +1,566 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  overflow: auto;
+  background: var(--mat-sys-surface);
+}
+
+// ── Page Container ──
+.table-page {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// ── Toolbar ──
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--mat-sys-outline-variant);
+  flex-wrap: wrap;
+  min-height: 48px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.toolbar-icon {
+  color: var(--mat-sys-primary);
+  font-size: 24px;
+  width: 24px;
+  height: 24px;
+}
+
+.toolbar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+  white-space: nowrap;
+}
+
+.record-count {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tier-select {
+  width: 140px;
+
+  ::ng-deep .mat-mdc-text-field-wrapper {
+    height: 36px;
+    padding: 0 8px;
+  }
+
+  ::ng-deep .mat-mdc-form-field-infix {
+    padding: 6px 0 !important;
+    min-height: 36px;
+  }
+}
+
+.tier-option-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+button.active {
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.add-memory-btn {
+  height: 36px;
+  font-size: 13px;
+  border-radius: 18px;
+
+  .add-label {
+    margin-left: 4px;
+  }
+}
+
+// ── Loading ──
+.table-loader {
+  border-radius: 4px;
+}
+
+// ── Tier Summary ──
+.tier-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.tier-card {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container);
+  border-left: 3px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.tier-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tier-badge {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: #fff;
+}
+
+.tier-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--mat-sys-on-surface);
+}
+
+.tier-tombstone {
+  font-size: 10px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.vacuum-btn {
+  width: 26px !important;
+  height: 26px !important;
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--mat-sys-tertiary);
+  }
+}
+
+// ── Error ──
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+  font-size: 13px;
+}
+
+// ── Table ──
+.table-wrapper {
+  border-radius: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface-container-lowest);
+  -webkit-overflow-scrolling: touch;
+}
+
+.memory-table {
+  width: 100%;
+  min-width: 900px; // ensures horizontal scroll on small screens
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+
+  thead {
+    background: var(--mat-sys-surface-container-high);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  th {
+    padding: 8px 10px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--mat-sys-on-surface-variant);
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--mat-sys-surface-container);
+    vertical-align: middle;
+  }
+}
+
+// ── Column widths (fixed layout) ──
+.col-id { width: 110px; }
+.col-text { width: 200px; }
+.col-tier { width: 90px; }
+.col-time { width: 80px; }
+.col-importance { width: 110px; }
+.col-valence { width: 70px; }
+.col-recall { width: 60px; }
+.col-flags { width: 80px; }
+.col-tags { width: 140px; }
+.col-actions { width: 120px; }
+
+// ── Column Styles ──
+.col-sortable {
+  cursor: pointer;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: var(--mat-sys-primary);
+  }
+
+  &.sorted {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.sort-icon {
+  font-size: 14px;
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  margin-left: 2px;
+}
+
+.id-text {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--mat-sys-surface-container-highest);
+  cursor: pointer;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: var(--mat-sys-primary-container);
+  }
+}
+
+.text-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.tier-badge-sm {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.col-time {
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant);
+  white-space: nowrap;
+}
+
+// ── Importance Bar ──
+.importance-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--mat-sys-surface-container-highest);
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+
+.importance-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 2px;
+}
+
+.importance-value {
+  font-size: 10px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// ── Valence ──
+.valence-value {
+  font-size: 12px;
+  font-weight: 600;
+
+  &.positive {
+    color: #22c55e;
+  }
+
+  &.negative {
+    color: #ef4444;
+  }
+}
+
+// ── Recall Badge ──
+.recall-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container-highest);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+}
+
+// ── Flags ──
+.col-flags {
+  white-space: nowrap;
+  font-size: 14px;
+
+  span {
+    margin-right: 2px;
+    cursor: default;
+  }
+}
+
+// ── Tags ──
+.tag-chip {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+  margin: 1px 2px;
+  white-space: nowrap;
+}
+
+// ── Row States ──
+.table-row {
+  transition: background 0.15s ease;
+  animation: fade-in-row 0.3s ease both;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container);
+
+    .action-buttons {
+      opacity: 1;
+    }
+  }
+
+  &.tombstoned {
+    opacity: 0.5;
+
+    td {
+      text-decoration: line-through;
+      text-decoration-color: var(--mat-sys-error);
+    }
+
+    .col-flags, .col-tags, .col-actions {
+      text-decoration: none;
+    }
+  }
+
+  &:nth-child(even) {
+    background: var(--mat-sys-surface-container-low);
+
+    &:hover {
+      background: var(--mat-sys-surface-container);
+    }
+  }
+}
+
+// ── Actions Column ──
+.action-buttons {
+  display: flex;
+  gap: 0;
+  opacity: 0.3;
+  transition: opacity 0.2s ease;
+}
+
+.action-btn {
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.reinforce-btn mat-icon { color: #22c55e; }
+.suppress-btn mat-icon { color: #f59e0b; }
+.resolve-btn mat-icon { color: #3b82f6; }
+.forget-btn mat-icon { color: #ef4444; }
+.forget-btn:disabled mat-icon { color: var(--mat-sys-on-surface-variant); opacity: 0.3; }
+
+// ── Empty State ──
+.empty-state {
+  text-align: center;
+  padding: 48px 24px !important;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    opacity: 0.3;
+    margin-bottom: 12px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  span {
+    font-size: 14px;
+  }
+}
+
+// ── Mat Paginator ──
+mat-paginator {
+  background: transparent;
+  border-radius: 8px;
+}
+
+// ── Animations ──
+@keyframes fade-in-row {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RESPONSIVE BREAKPOINTS
+// ══════════════════════════════════════════════════════════════
+
+// Tablets (< 1024px)
+@media (max-width: 1024px) {
+  .table-page {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .tier-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .toolbar-title {
+    font-size: 14px;
+  }
+
+  .add-label {
+    display: none;  // icon-only on tablet
+  }
+}
+
+// Mobile (< 768px)
+@media (max-width: 768px) {
+  .table-page {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .table-toolbar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .toolbar-left {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .toolbar-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .tier-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .tier-card {
+    padding: 8px 10px;
+  }
+
+  .tier-count {
+    font-size: 18px;
+  }
+
+  .tier-select {
+    width: 120px;
+  }
+
+  .add-label {
+    display: none;
+  }
+}
+
+// Very small (< 480px)
+@media (max-width: 480px) {
+  .tier-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tier-badge {
+    font-size: 7px;
+    padding: 1px 6px;
+  }
+
+  .table-toolbar {
+    padding: 6px 8px;
+  }
+
+  .toolbar-title {
+    font-size: 13px;
+  }
+}

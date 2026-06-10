@@ -1,0 +1,139 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+// ── Shell Layout ──
+.shell-layout {
+  display: flex;
+  height: calc(100vh - 56px); // subtract header height
+  overflow: hidden;
+}
+
+// ── Side Rail ──
+.side-rail {
+  display: flex;
+  flex-direction: column;
+  width: 180px;
+  min-width: 180px;
+  background: var(--mat-sys-surface-container);
+  border-right: 1px solid var(--mat-sys-outline-variant);
+  padding: 8px 0;
+  overflow: hidden;
+  z-index: 10;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &.collapsed {
+    width: 56px;
+    min-width: 56px;
+  }
+}
+
+// ── Nav Item ──
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin: 2px 8px;
+  border-radius: 12px;
+  color: var(--mat-sys-on-surface-variant);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+
+  .collapsed & {
+    justify-content: center;
+    padding: 10px 0;
+  }
+
+  &:hover {
+    background: var(--mat-sys-surface-container-highest);
+    color: var(--mat-sys-on-surface);
+  }
+
+  &.active {
+    background: var(--mat-sys-primary-container);
+    color: var(--mat-sys-on-primary-container);
+
+    .nav-icon {
+      color: var(--mat-sys-on-primary-container);
+    }
+  }
+}
+
+.nav-icon {
+  font-size: 22px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.nav-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nav-spacer {
+  flex: 1;
+}
+
+.nav-version {
+  padding: 8px 16px;
+}
+
+.version-text {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mat-sys-on-surface-variant);
+  opacity: 0.5;
+}
+
+// ── Toggle Button ──
+.nav-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;  // icon on right when expanded
+  margin: 2px 8px 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+
+  .collapsed & {
+    justify-content: center;
+    padding: 10px 0;
+  }
+
+  &:hover {
+    background: var(--mat-sys-surface-container-highest);
+    color: var(--mat-sys-on-surface);
+  }
+
+  mat-icon {
+    font-size: 20px;
+    width: 24px;
+    height: 24px;
+  }
+}
+
+// ── Main Content ──
+.shell-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--mat-sys-surface);
+}

@@ -1,4 +1,5 @@
 import { Component, inject, ViewChild, ElementRef } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -25,6 +26,7 @@ import { PROFILE_PARAMS } from '../../core/models/memory-types';
     MatChipsModule,
     MatTooltipModule,
     MatMenuModule,
+    RouterLink,
   ],
   templateUrl: './header.component.html',
   styleUrl: './header.component.scss',

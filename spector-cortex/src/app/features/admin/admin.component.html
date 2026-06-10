@@ -1,0 +1,133 @@
+<div class="admin-page">
+  <header class="page-header">
+    <mat-icon class="page-icon">admin_panel_settings</mat-icon>
+    <div>
+      <h1 class="page-title">System Administration</h1>
+      <p class="page-subtitle">Memory system operations, maintenance, and diagnostics</p>
+    </div>
+    <button mat-icon-button (click)="loadStatus()" matTooltip="Refresh status">
+      <mat-icon>refresh</mat-icon>
+    </button>
+  </header>
+
+  <div class="admin-grid">
+
+    <!-- ═══ Memory Status ═══ -->
+    <mat-card appearance="outlined" class="card" style="animation: fade-in-up 0.3s ease both">
+      <mat-card-header>
+        <mat-icon mat-card-avatar class="panel-icon">analytics</mat-icon>
+        <mat-card-title>Memory Status</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        @if (loading()) {
+          <mat-progress-bar mode="indeterminate" />
+        } @else if (status(); as s) {
+          <div class="stat-grid">
+            <div class="stat-item">
+              <span class="stat-value">{{ s.totalMemories }}</span>
+              <span class="stat-label">Total Memories</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ s.hebbianEdges }}</span>
+              <span class="stat-label">Hebbian Edges</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ s.temporalLinks }}</span>
+              <span class="stat-label">Temporal Links</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ s.entityNodes }}</span>
+              <span class="stat-label">Entity Nodes</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ s.entityEdges }}</span>
+              <span class="stat-label">Entity Edges</span>
+            </div>
+          </div>
+
+          <mat-divider />
+
+          <div class="tier-breakdown">
+            <h4>Tier Breakdown</h4>
+            @for (entry of s.tierCounts | keyvalue; track entry.key) {
+              <div class="tier-row">
+                <span class="tier-name">{{ entry.key }}</span>
+                <div class="tier-bar-container">
+                  <div class="tier-bar"
+                       [style.width.%]="s.totalMemories > 0 ? (entry.value / s.totalMemories * 100) : 0"
+                       [attr.data-tier]="entry.key">
+                  </div>
+                </div>
+                <span class="tier-count">{{ entry.value }}</span>
+              </div>
+            }
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <!-- ═══ Vacuum / Compaction ═══ -->
+    <mat-card appearance="outlined" class="card" style="animation: fade-in-up 0.4s ease both">
+      <mat-card-header>
+        <mat-icon mat-card-avatar class="panel-icon">cleaning_services</mat-icon>
+        <mat-card-title>Vacuum / Compaction</mat-card-title>
+        <mat-card-subtitle>Reclaim tombstoned segments</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="vacuum-controls">
+          <mat-form-field appearance="outline" class="tier-select">
+            <mat-label>Target Tier</mat-label>
+            <mat-select [(value)]="vacuumTier">
+              <mat-option value="WORKING">WORKING</mat-option>
+              <mat-option value="EPISODIC">EPISODIC</mat-option>
+              <mat-option value="SEMANTIC">SEMANTIC</mat-option>
+              <mat-option value="PROCEDURAL">PROCEDURAL</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <button mat-flat-button (click)="triggerVacuum()" [disabled]="vacuumLoading()" class="vacuum-btn">
+            @if (vacuumLoading()) {
+              <mat-icon>hourglass_empty</mat-icon> Running...
+            } @else {
+              <mat-icon>cleaning_services</mat-icon> Run Vacuum
+            }
+          </button>
+        </div>
+
+        @if (vacuumResult(); as result) {
+          <mat-divider />
+          <div class="result-block">
+            <h4>Last Vacuum Result</h4>
+            <pre class="result-json">{{ result | json }}</pre>
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <!-- ═══ Consolidation (Reflect) ═══ -->
+    <mat-card appearance="outlined" class="card" style="animation: fade-in-up 0.5s ease both">
+      <mat-card-header>
+        <mat-icon mat-card-avatar class="panel-icon">nights_stay</mat-icon>
+        <mat-card-title>Sleep Consolidation</mat-card-title>
+        <mat-card-subtitle>Trigger reflect cycle (Deep Sleep + REM)</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <button mat-flat-button (click)="triggerReflect()" [disabled]="reflectLoading()" class="reflect-btn">
+          @if (reflectLoading()) {
+            <mat-icon>hourglass_empty</mat-icon> Consolidating...
+          } @else {
+            <mat-icon>nights_stay</mat-icon> Trigger Reflect
+          }
+        </button>
+
+        @if (reflectResult(); as result) {
+          <mat-divider />
+          <div class="result-block">
+            <h4>Last Reflect Result</h4>
+            <pre class="result-json">{{ result | json }}</pre>
+          </div>
+        }
+      </mat-card-content>
+    </mat-card>
+
+  </div>
+</div>

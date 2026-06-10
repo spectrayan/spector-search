@@ -1,0 +1,236 @@
+<div class="table-page">
+
+  <!-- ── Toolbar ── -->
+  <div class="table-toolbar">
+    <div class="toolbar-left">
+      <mat-icon class="toolbar-icon">table_chart</mat-icon>
+      <h2 class="toolbar-title">Memory Table</h2>
+      <span class="record-count cortex-mono">{{ table.totalCount() }}</span>
+    </div>
+
+    <div class="toolbar-right">
+      <!-- Tier Filter -->
+      <mat-form-field appearance="outline" class="tier-select" subscriptSizing="dynamic">
+        <mat-select [value]="table.tierFilter() || 'ALL'"
+                    (selectionChange)="table.setTierFilter($event.value === 'ALL' ? null : $event.value)">
+          <mat-option value="ALL">All Tiers</mat-option>
+          @for (tier of tiers; track tier) {
+            <mat-option [value]="tier">
+              <span class="tier-option-dot" [style.background]="tierColors[tier]"></span>
+              {{ tier }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <!-- Tombstone Toggle -->
+      <button mat-icon-button
+              (click)="table.toggleTombstoned()"
+              [class.active]="table.showTombstoned()"
+              matTooltip="Show/hide tombstoned records">
+        <mat-icon>{{ table.showTombstoned() ? 'visibility' : 'visibility_off' }}</mat-icon>
+      </button>
+
+      <!-- Reflect -->
+      <button mat-icon-button
+              (click)="onReflect()"
+              matTooltip="Trigger sleep consolidation cycle">
+        <mat-icon>bedtime</mat-icon>
+      </button>
+
+      <!-- Add Memory -->
+      <button mat-flat-button color="primary"
+              class="add-memory-btn"
+              (click)="openAddDialog()">
+        <mat-icon>add</mat-icon>
+        <span class="add-label">Add Memory</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Loading Bar ── -->
+  @if (table.loading()) {
+    <mat-progress-bar mode="indeterminate" class="table-loader"></mat-progress-bar>
+  }
+
+  <!-- ── Tier Summary Cards ── -->
+  <div class="tier-summary">
+    @for (tier of tiers; track tier) {
+      <div class="tier-card" [style.border-left-color]="tierColors[tier]">
+        <div class="tier-card-header">
+          <span class="tier-badge" [style.background]="tierColors[tier]">{{ tier }}</span>
+          @if ((table.tombstoneRatios()[tier] ?? 0) > 0.1) {
+            <button mat-icon-button
+                    class="vacuum-btn"
+                    (click)="table.vacuum(tier)"
+                    [matTooltip]="'Vacuum ' + tier">
+              <mat-icon>cleaning_services</mat-icon>
+            </button>
+          }
+        </div>
+        <span class="tier-count cortex-mono">{{ table.tierCounts()[tier] ?? 0 }}</span>
+        <span class="tier-tombstone">💀 {{ formatRatio(table.tombstoneRatios()[tier] ?? 0) }}</span>
+      </div>
+    }
+  </div>
+
+  <!-- ── Error State ── -->
+  @if (table.error(); as error) {
+    <div class="error-banner">
+      <mat-icon>error_outline</mat-icon>
+      {{ error }}
+    </div>
+  }
+
+  <!-- ── Data Table ── -->
+  <div class="table-wrapper">
+    <table class="memory-table">
+      <thead>
+        <tr>
+          <th class="col-id">ID</th>
+          <th class="col-text">Text</th>
+          <th class="col-tier">Tier</th>
+          @for (col of sortableColumns; track col.key) {
+            <th class="col-sortable"
+                (click)="table.setSort(col.key)"
+                [class.sorted]="table.sortField() === col.key">
+              {{ col.label }}
+              @if (table.sortField() === col.key) {
+                <mat-icon class="sort-icon">
+                  {{ table.sortDirection() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
+                </mat-icon>
+              }
+            </th>
+          }
+          <th class="col-flags">Flags</th>
+          <th class="col-tags">Tags</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of table.rows(); track trackRow($index, row)) {
+          <tr class="table-row"
+              [class.tombstoned]="row.tombstoned"
+              [style.animation-delay]="($index * 20) + 'ms'"
+              (click)="onRowClick(row)">
+            <!-- ID -->
+            <td class="col-id">
+              <span class="id-text cortex-mono"
+                    (click)="copyId(row.id, $event)"
+                    matTooltip="Click to copy">
+                {{ row.id.length > 12 ? row.id.substring(0, 12) + '…' : row.id }}
+              </span>
+            </td>
+
+            <!-- Text -->
+            <td class="col-text">
+              <span class="text-preview" [matTooltip]="row.textPreview">
+                {{ row.textPreview }}
+              </span>
+            </td>
+
+            <!-- Tier -->
+            <td class="col-tier">
+              <span class="tier-badge-sm" [style.background]="tierColors[row.tier]">
+                {{ row.tier }}
+              </span>
+            </td>
+
+            <!-- Time -->
+            <td class="col-time cortex-mono">
+              {{ relativeTime(row.timestampMs) }}
+            </td>
+
+            <!-- Importance -->
+            <td class="col-importance">
+              <div class="importance-bar-track">
+                <div class="importance-bar"
+                     [style.width.%]="row.importance * 100"
+                     [style.background]="'linear-gradient(90deg, #6366f1, #a855f7)'">
+                </div>
+              </div>
+              <span class="importance-value cortex-mono">{{ row.importance.toFixed(2) }}</span>
+            </td>
+
+            <!-- Valence -->
+            <td class="col-valence">
+              <span class="valence-value cortex-mono"
+                    [class.positive]="row.valence > 0"
+                    [class.negative]="row.valence < 0">
+                {{ row.valence > 0 ? '+' : '' }}{{ row.valence }}
+              </span>
+            </td>
+
+            <!-- Recall Count -->
+            <td class="col-recall cortex-mono">
+              <span class="recall-badge">{{ row.agentRecallCount }}</span>
+            </td>
+
+            <!-- Flags -->
+            <td class="col-flags">
+              @if (row.tombstoned) { <span matTooltip="Tombstoned">💀</span> }
+              @if (row.pinned) { <span matTooltip="Pinned">📌</span> }
+              @if (row.resolved) { <span matTooltip="Resolved">✅</span> }
+              @if (row.consolidated) { <span matTooltip="Consolidated">🧠</span> }
+            </td>
+
+            <!-- Tags -->
+            <td class="col-tags">
+              @for (tag of row.tags; track tag) {
+                <span class="tag-chip">{{ tag }}</span>
+              }
+            </td>
+
+            <!-- Actions -->
+            <td class="col-actions">
+              <div class="action-buttons">
+                <button mat-icon-button
+                        class="action-btn reinforce-btn"
+                        (click)="onReinforce(row, $event)"
+                        matTooltip="Reinforce">
+                  <mat-icon>thumb_up</mat-icon>
+                </button>
+                <button mat-icon-button
+                        class="action-btn suppress-btn"
+                        (click)="onSuppress(row, $event)"
+                        matTooltip="Suppress">
+                  <mat-icon>block</mat-icon>
+                </button>
+                <button mat-icon-button
+                        class="action-btn resolve-btn"
+                        (click)="onResolve(row, $event)"
+                        [matTooltip]="row.resolved ? 'Unresolve' : 'Resolve'">
+                  <mat-icon>{{ row.resolved ? 'undo' : 'check_circle' }}</mat-icon>
+                </button>
+                <button mat-icon-button
+                        class="action-btn forget-btn"
+                        (click)="onForget(row, $event)"
+                        matTooltip="Forget"
+                        [disabled]="row.tombstoned">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="10" class="empty-state">
+              <mat-icon>inbox</mat-icon>
+              <span>No memory records found</span>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Mat Paginator ── -->
+  <mat-paginator
+    [length]="table.totalCount()"
+    [pageIndex]="table.page()"
+    [pageSize]="table.pageSize()"
+    [pageSizeOptions]="[25, 50, 100]"
+    (page)="onPageChange($event)"
+    showFirstLastButtons>
+  </mat-paginator>
+</div>

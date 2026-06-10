@@ -1,0 +1,249 @@
+:host {
+  display: block;
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.page-icon {
+  font-size: 32px;
+  width: 40px;
+  height: 40px;
+  color: var(--mat-sys-primary);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+}
+
+.page-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.query-section {
+  margin-bottom: 24px;
+}
+
+// ── Results ───────────────────────────────────────────────
+
+.results-section {
+  margin-bottom: 24px;
+  animation: fade-in-up 0.4s ease both;
+}
+
+.results-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+
+  &.profile {
+    background: var(--mat-sys-primary-container);
+    color: var(--mat-sys-on-primary-container);
+  }
+}
+
+.meta-query {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--mat-sys-on-surface-variant);
+  opacity: 0.7;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-card {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container-low);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--mat-sys-surface-container);
+    border-color: var(--mat-sys-outline-variant);
+    transform: translateX(4px);
+  }
+}
+
+.result-rank {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
+.result-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.result-id {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mat-sys-primary);
+}
+
+.flag-chip {
+  font-size: 10px !important;
+  padding: 0 6px !important;
+  min-height: 20px !important;
+
+  &.lateral {
+    background: rgba(251, 191, 36, 0.15) !important;
+    color: #fbbf24 !important;
+  }
+  &.hyper {
+    background: rgba(96, 165, 250, 0.15) !important;
+    color: #60a5fa !important;
+  }
+  &.negative {
+    background: rgba(248, 113, 113, 0.15) !important;
+    color: #f87171 !important;
+  }
+}
+
+.result-text {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--mat-sys-on-surface);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.result-scores {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.score {
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+
+  &.primary {
+    color: var(--mat-sys-primary);
+    font-weight: 600;
+
+    mat-icon {
+      font-size: 13px;
+      width: 13px;
+      height: 13px;
+    }
+  }
+
+  &.boost {
+    color: #34d399;
+  }
+
+  &.penalty {
+    color: #f87171;
+  }
+
+  &.faint {
+    opacity: 0.5;
+  }
+}
+
+.result-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// ── History ───────────────────────────────────────────────
+
+.history-section {
+  animation: fade-in-up 0.4s ease both;
+}
+
+.history-card {
+  background: var(--mat-sys-surface-container-low);
+}
+
+.panel-icon {
+  color: var(--mat-sys-primary);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

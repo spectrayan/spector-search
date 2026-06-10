@@ -1,0 +1,120 @@
+<div class="query-page">
+  <header class="page-header">
+    <mat-icon class="page-icon">search</mat-icon>
+    <div>
+      <h1 class="page-title">Cognitive Query</h1>
+      <p class="page-subtitle">Recall memories with multi-layer cognitive search</p>
+    </div>
+  </header>
+
+  <section class="query-section">
+    <cortex-query-input />
+  </section>
+
+  <!-- Recall Results -->
+  @if (state.recallResults().length > 0) {
+    <section class="results-section">
+      <div class="results-meta">
+        <span class="meta-badge">
+          <mat-icon>query_stats</mat-icon>
+          {{ state.recallResults().length }} results
+        </span>
+        <span class="meta-badge">
+          <mat-icon>timer</mat-icon>
+          {{ state.recallQueryTimeMs() }}ms
+        </span>
+        <span class="meta-badge">
+          <mat-icon>database</mat-icon>
+          {{ state.recallTotalMemories() }} memories
+        </span>
+        <span class="meta-badge profile">
+          <mat-icon>psychology</mat-icon>
+          {{ state.recallProfile() }}
+        </span>
+        @if (state.lastQueryText()) {
+          <span class="meta-query">"{{ state.lastQueryText() }}"</span>
+        }
+      </div>
+
+      <div class="results-list">
+        @for (result of state.recallResults(); track result.id; let i = $index) {
+          <a class="result-card" [routerLink]="['/memories', result.id]">
+            <div class="result-rank">{{ i + 1 }}</div>
+            <div class="result-body">
+              <div class="result-header">
+                <span class="result-id">{{ result.id }}</span>
+                <mat-chip-set>
+                  <mat-chip [style.--mdc-chip-label-text-color]="tierColor(result.memoryType)"
+                            [style.--mdc-chip-elevated-container-color]="tierColor(result.memoryType) + '20'">
+                    {{ result.memoryType }}
+                  </mat-chip>
+                </mat-chip-set>
+                @if (result.lateral) {
+                  <mat-chip class="flag-chip lateral">⚡ lateral</mat-chip>
+                }
+                @if (result.hyperfocused) {
+                  <mat-chip class="flag-chip hyper">🎯 hyperfocused</mat-chip>
+                }
+                @if (result.negativeOutcome) {
+                  <mat-chip class="flag-chip negative">⚠ negative</mat-chip>
+                }
+              </div>
+              <p class="result-text">{{ result.text }}</p>
+              <div class="result-scores">
+                <span class="score primary" matTooltip="Final composite score">
+                  <mat-icon>star</mat-icon>
+                  {{ formatScore(result.breakdown.finalScore) }}
+                </span>
+                <span class="score" matTooltip="Vector similarity">
+                  sim: {{ result.breakdown.similarity.toFixed(4) }}
+                </span>
+                <span class="score" matTooltip="Importance × decay">
+                  imp: {{ result.breakdown.importanceDecay.toFixed(2) }}
+                </span>
+                @if (result.breakdown.tagBoostFactor !== 1.0) {
+                  <span class="score boost" matTooltip="Synaptic tag boost">
+                    tag: ×{{ result.breakdown.tagBoostFactor.toFixed(1) }}
+                  </span>
+                }
+                @if (result.breakdown.graphBoost !== 1.0) {
+                  <span class="score boost" matTooltip="Graph co-activation boost">
+                    graph: ×{{ result.breakdown.graphBoost.toFixed(2) }}
+                  </span>
+                }
+                @if (result.breakdown.habituationPenalty !== 1.0) {
+                  <span class="score penalty" matTooltip="Habituation penalty">
+                    hab: ×{{ result.breakdown.habituationPenalty.toFixed(2) }}
+                  </span>
+                }
+                <span class="score faint">
+                  valence: {{ result.valence }}
+                </span>
+              </div>
+              @if (result.synapticTags.length > 0) {
+                <div class="result-tags">
+                  @for (tag of result.synapticTags; track tag) {
+                    <span class="tag">{{ tag }}</span>
+                  }
+                </div>
+              }
+            </div>
+          </a>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- Query History -->
+  <section class="history-section">
+    <mat-card appearance="outlined" class="history-card">
+      <mat-card-header>
+        <mat-icon mat-card-avatar class="panel-icon">history</mat-icon>
+        <mat-card-title>Query History</mat-card-title>
+        <mat-card-subtitle>Recent Recall Timeline</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <cortex-query-history />
+      </mat-card-content>
+    </mat-card>
+  </section>
+</div>

@@ -1,0 +1,41 @@
+<cortex-header />
+
+<div class="shell-layout">
+  <!-- Side Navigation -->
+  <nav class="side-rail" [class.collapsed]="collapsed()">
+
+    @for (item of navItems; track item.route) {
+      <a class="nav-item"
+         [routerLink]="item.route"
+         routerLinkActive="active"
+         [matTooltip]="collapsed() ? item.label : ''"
+         matTooltipPosition="right">
+        <mat-icon class="nav-icon">{{ item.icon }}</mat-icon>
+        @if (!collapsed()) {
+          <span class="nav-label">{{ item.label }}</span>
+        }
+      </a>
+    }
+
+    <div class="nav-spacer"></div>
+
+    <!-- Version badge -->
+    @if (!collapsed()) {
+      <div class="nav-version">
+        <span class="version-text">Cortex v3</span>
+      </div>
+    }
+
+    <!-- Collapse / Expand toggle -->
+    <button class="nav-toggle" (click)="collapsed.set(!collapsed())"
+            [matTooltip]="collapsed() ? 'Expand' : 'Collapse'"
+            matTooltipPosition="right">
+      <mat-icon>{{ collapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="shell-content">
+    <router-outlet />
+  </main>
+</div>

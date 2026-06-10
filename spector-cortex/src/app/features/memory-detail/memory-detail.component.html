@@ -1,0 +1,287 @@
+<div class="memory-detail-page">
+  <!-- Breadcrumb -->
+  <nav class="breadcrumb">
+    <a routerLink="/memories" class="breadcrumb-link">
+      <mat-icon>arrow_back</mat-icon>
+      <span>Memories</span>
+    </a>
+    <mat-icon class="breadcrumb-sep">chevron_right</mat-icon>
+    <span class="breadcrumb-current">{{ memoryId() }}</span>
+  </nav>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <mat-progress-bar mode="indeterminate" />
+    </div>
+  } @else if (error()) {
+    <mat-card appearance="outlined" class="error-card">
+      <mat-card-content>
+        <mat-icon class="error-icon">error_outline</mat-icon>
+        <p>{{ error() }}</p>
+        <button mat-stroked-button (click)="goBack()">Back to Memories</button>
+      </mat-card-content>
+    </mat-card>
+  } @else if (memory(); as mem) {
+    <div class="detail-grid">
+
+      <!-- ═══ Identity Card ═══ -->
+      <mat-card appearance="outlined" class="card card-identity" style="animation: fade-in-up 0.3s ease both">
+        <mat-card-header>
+          <mat-icon mat-card-avatar class="panel-icon">fingerprint</mat-icon>
+          <mat-card-title>Identity</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="identity-row">
+            <span class="label">ID</span>
+            <code class="value mono">{{ mem.id }}</code>
+          </div>
+          <div class="identity-row">
+            <span class="label">Tier</span>
+            <span class="tier-badge" [style.background]="tierColor()">{{ mem.tier }}</span>
+          </div>
+          <div class="identity-row">
+            <span class="label">Source</span>
+            <mat-chip-set>
+              <mat-chip>{{ mem.source || 'OBSERVED' }}</mat-chip>
+            </mat-chip-set>
+          </div>
+          <div class="identity-row">
+            <span class="label">Created</span>
+            <span class="value">{{ ageLabel() }}</span>
+          </div>
+          <div class="identity-row">
+            <span class="label">Status</span>
+            <div class="status-flags">
+              @if (mem.tombstoned) {
+                <mat-chip class="status-chip tombstoned">
+                  <mat-icon>delete</mat-icon> Tombstoned
+                </mat-chip>
+              }
+              @if (mem.suppressed) {
+                <mat-chip class="status-chip suppressed">
+                  <mat-icon>visibility_off</mat-icon> Suppressed
+                </mat-chip>
+              }
+              @if (mem.resolved) {
+                <mat-chip class="status-chip resolved">
+                  <mat-icon>check_circle</mat-icon> Resolved
+                </mat-chip>
+              }
+              @if (!mem.tombstoned && !mem.suppressed) {
+                <mat-chip class="status-chip active">
+                  <mat-icon>check</mat-icon> Active
+                </mat-chip>
+              }
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- ═══ Content Card ═══ -->
+      <mat-card appearance="outlined" class="card card-content" style="animation: fade-in-up 0.4s ease both">
+        <mat-card-header>
+          <mat-icon mat-card-avatar class="panel-icon">article</mat-icon>
+          <mat-card-title>Memory Content</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="memory-text">{{ mem.text }}</div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- ═══ Cognitive State Card ═══ -->
+      <mat-card appearance="outlined" class="card card-cognitive" style="animation: fade-in-up 0.5s ease both">
+        <mat-card-header>
+          <mat-icon mat-card-avatar class="panel-icon">psychology</mat-icon>
+          <mat-card-title>Cognitive State</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="metric-row">
+            <span class="metric-label">Importance</span>
+            <div class="metric-bar-container">
+              <div class="metric-bar importance" [style.width.%]="importancePct()"></div>
+            </div>
+            <span class="metric-value">{{ importancePct() }}%</span>
+          </div>
+
+          <div class="metric-row">
+            <span class="metric-label">Valence</span>
+            <div class="valence-gauge">
+              <div class="valence-track">
+                <div class="valence-marker"
+                     [style.left.%]="((mem.valence + 128) / 256) * 100"
+                     [class.positive]="mem.valence > 0"
+                     [class.negative]="mem.valence < 0">
+                </div>
+              </div>
+              <span class="valence-label">{{ valenceLabel() }} ({{ mem.valence }})</span>
+            </div>
+          </div>
+
+          <div class="metric-row">
+            <span class="metric-label">Arousal</span>
+            <div class="metric-bar-container">
+              <div class="metric-bar arousal" [style.width.%]="(mem.arousal / 255) * 100"></div>
+            </div>
+            <span class="metric-value">{{ mem.arousal }}</span>
+          </div>
+
+          <div class="metric-row">
+            <span class="metric-label">Recall Count</span>
+            <span class="metric-value count">{{ mem.recallCount ?? 0 }}</span>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- ═══ Synaptic Tags Card ═══ -->
+      <mat-card appearance="outlined" class="card card-tags" style="animation: fade-in-up 0.55s ease both">
+        <mat-card-header>
+          <mat-icon mat-card-avatar class="panel-icon">label</mat-icon>
+          <mat-card-title>Synaptic Tags</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="tag-cloud">
+            @if (mem.tags && mem.tags.length > 0) {
+              @for (tag of mem.tags; track tag) {
+                <mat-chip class="tag-chip">{{ tag }}</mat-chip>
+              }
+            } @else {
+              <span class="no-tags">No tags encoded</span>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <!-- ═══ Relationships Card ═══ -->
+      <mat-card appearance="outlined" class="card card-relationships" style="animation: fade-in-up 0.6s ease both">
+        <mat-card-header>
+          <mat-icon mat-card-avatar class="panel-icon">hub</mat-icon>
+          <mat-card-title>Relationships</mat-card-title>
+          <mat-card-subtitle>Hebbian · Temporal · Entity</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          @if (graphLoading()) {
+            <mat-progress-bar mode="indeterminate" class="graph-loader"></mat-progress-bar>
+          } @else if (graphError()) {
+            <div class="graph-error">
+              <mat-icon>cloud_off</mat-icon>
+              <span>{{ graphError() }}</span>
+            </div>
+          } @else if (graphData(); as graph) {
+            <!-- Hebbian Associations -->
+            @if (hebbianEdges().length > 0) {
+              <div class="edge-section">
+                <div class="edge-section-header">
+                  <mat-icon class="edge-icon hebbian">link</mat-icon>
+                  <span class="edge-type-label">Hebbian Associations</span>
+                  <span class="edge-count">{{ hebbianEdges().length }}</span>
+                </div>
+                @for (edge of hebbianEdges(); track edge.toId) {
+                  @if (graphNodeById(neighborId(edge)); as neighbor) {
+                    <div class="neighbor-row" [routerLink]="['/memories', neighbor.id]">
+                      <span class="neighbor-tier" [style.background]="nodeTierColor(neighbor)">{{ neighbor.tier }}</span>
+                      <span class="neighbor-text">{{ neighbor.textPreview }}</span>
+                      <span class="neighbor-weight cortex-mono" matTooltip="Association strength">
+                        {{ edge.weight.toFixed(2) }}
+                      </span>
+                    </div>
+                  }
+                }
+              </div>
+            }
+
+            <!-- Temporal Chain -->
+            @if (temporalEdges().length > 0) {
+              <div class="edge-section">
+                <div class="edge-section-header">
+                  <mat-icon class="edge-icon temporal">timeline</mat-icon>
+                  <span class="edge-type-label">Temporal Chain</span>
+                  <span class="edge-count">{{ temporalEdges().length }}</span>
+                </div>
+                @for (edge of temporalEdges(); track edge.toId) {
+                  @if (graphNodeById(neighborId(edge)); as neighbor) {
+                    <div class="neighbor-row" [routerLink]="['/memories', neighbor.id]">
+                      <span class="neighbor-tier" [style.background]="nodeTierColor(neighbor)">{{ neighbor.tier }}</span>
+                      <span class="neighbor-text">{{ neighbor.textPreview }}</span>
+                      <mat-icon class="temporal-arrow" [matTooltip]="edge.fromId === memoryId() ? 'Next' : 'Previous'">
+                        {{ edge.fromId === memoryId() ? 'arrow_forward' : 'arrow_back' }}
+                      </mat-icon>
+                    </div>
+                  }
+                }
+              </div>
+            }
+
+            <!-- Entity Relationships -->
+            @if (entityEdges().length > 0) {
+              <div class="edge-section">
+                <div class="edge-section-header">
+                  <mat-icon class="edge-icon entity">category</mat-icon>
+                  <span class="edge-type-label">Entity Relationships</span>
+                  <span class="edge-count">{{ entityEdges().length }}</span>
+                </div>
+                @for (edge of entityEdges(); track edge.toId) {
+                  @if (graphNodeById(neighborId(edge)); as neighbor) {
+                    <div class="neighbor-row" [routerLink]="['/memories', neighbor.id]">
+                      <span class="neighbor-tier" [style.background]="nodeTierColor(neighbor)">{{ neighbor.tier }}</span>
+                      <span class="neighbor-text">{{ neighbor.textPreview }}</span>
+                      <mat-chip class="entity-label" matTooltip="Entity relation">{{ edge.relation }}</mat-chip>
+                    </div>
+                  }
+                }
+              </div>
+            }
+
+            <!-- No relationships -->
+            @if (hebbianEdges().length === 0 && temporalEdges().length === 0 && entityEdges().length === 0) {
+              <div class="graph-empty">
+                <mat-icon>device_hub</mat-icon>
+                <span>No relationships found for this memory</span>
+              </div>
+            }
+
+            <!-- Graph Explorer link -->
+            <div class="graph-explore-link">
+              <a mat-stroked-button routerLink="/graph" class="explore-link">
+                <mat-icon>explore</mat-icon>
+                Open in Graph Explorer
+              </a>
+            </div>
+          }
+        </mat-card-content>
+      </mat-card>
+
+      <!-- ═══ Actions Card ═══ -->
+      <mat-card appearance="outlined" class="card card-actions" style="animation: fade-in-up 0.65s ease both">
+        <mat-card-header>
+          <mat-icon mat-card-avatar class="panel-icon">bolt</mat-icon>
+          <mat-card-title>Actions</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <div class="action-buttons">
+            <button mat-flat-button class="action-btn reinforce" (click)="onReinforce()"
+                    matTooltip="Strengthen this memory's recall weight">
+              <mat-icon>thumb_up</mat-icon>
+              Reinforce
+            </button>
+            <button mat-flat-button class="action-btn suppress" (click)="onSuppress()"
+                    matTooltip="Suppress this memory from recall results">
+              <mat-icon>visibility_off</mat-icon>
+              Suppress
+            </button>
+            <button mat-flat-button class="action-btn resolve" (click)="onResolve()"
+                    matTooltip="Mark as resolved (Zeigarnik release)">
+              <mat-icon>check_circle</mat-icon>
+              Resolve
+            </button>
+            <button mat-flat-button class="action-btn forget" (click)="onForget()"
+                    matTooltip="Tombstone this memory (soft delete)">
+              <mat-icon>delete_forever</mat-icon>
+              Forget
+            </button>
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+    </div>
+  }
+</div>

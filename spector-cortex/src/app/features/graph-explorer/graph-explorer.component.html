@@ -1,0 +1,198 @@
+<div class="graph-explorer-page">
+  <!-- Toolbar -->
+  <header class="explorer-toolbar">
+    <div class="toolbar-left">
+      <mat-icon class="page-icon">hub</mat-icon>
+      <div>
+        <h1 class="page-title">Graph Explorer</h1>
+        <p class="page-subtitle">{{ nodeCount() }} nodes · {{ edgeCount() }} edges</p>
+      </div>
+    </div>
+
+    <div class="toolbar-controls">
+      <!-- Layer toggles -->
+      <mat-chip-set>
+        <mat-chip [highlighted]="showHebbian()" (click)="showHebbian.set(!showHebbian())"
+                  class="layer-chip hebbian">
+          <mat-icon matChipAvatar>link</mat-icon>
+          Hebbian
+        </mat-chip>
+        <mat-chip [highlighted]="showTemporal()" (click)="showTemporal.set(!showTemporal())"
+                  class="layer-chip temporal">
+          <mat-icon matChipAvatar>timeline</mat-icon>
+          Temporal
+        </mat-chip>
+        <mat-chip [highlighted]="showEntity()" (click)="showEntity.set(!showEntity())"
+                  class="layer-chip entity">
+          <mat-icon matChipAvatar>category</mat-icon>
+          Entity
+        </mat-chip>
+      </mat-chip-set>
+
+      <button mat-icon-button [matTooltip]="showLabels() ? 'Hide labels' : 'Show labels'"
+              (click)="showLabels.set(!showLabels())"
+              [class.label-active]="showLabels()">
+        <mat-icon>{{ showLabels() ? 'label' : 'label_off' }}</mat-icon>
+      </button>
+
+      <button mat-icon-button matTooltip="Refresh graph" (click)="refreshGraph()">
+        <mat-icon>refresh</mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <div class="explorer-layout">
+    <!-- Graph Canvas -->
+    <div class="graph-canvas-container"
+         #graphCanvas
+         (mousemove)="onMouseMove($event)"
+         (mousedown)="onMouseDown($event)"
+         (mouseup)="onMouseUp($event)"
+         (mouseleave)="onMouseUp($event)"
+         (wheel)="onWheel($event)"
+         (click)="onClick($event)"
+         (dblclick)="onDoubleClick()">
+    </div>
+
+    <!-- Hover Tooltip -->
+    @if (hoverInfo(); as h) {
+      <div class="hover-tooltip"
+           [style.left.px]="h.x + 16"
+           [style.top.px]="h.y - 8">
+        <div class="hover-header">
+          <span class="hover-id">{{ h.id }}</span>
+          <span class="hover-tier" [attr.data-tier]="h.tier">{{ h.tier }}</span>
+        </div>
+        <p class="hover-text">{{ h.text }}</p>
+        <div class="hover-bar-row">
+          <span class="hover-bar-label">IMP</span>
+          <div class="hover-bar-track">
+            <div class="hover-bar-fill" [style.width.%]="h.importance * 100"
+                 [attr.data-tier]="h.tier"></div>
+          </div>
+          <span class="hover-bar-value">{{ (h.importance * 100).toFixed(0) }}%</span>
+        </div>
+      </div>
+    }
+
+    <!-- Scientific HUD Panel (top-left) -->
+    <div class="hud-panel">
+      <div class="hud-title">
+        <mat-icon class="hud-icon">analytics</mat-icon>
+        NEURAL TOPOLOGY
+      </div>
+      <div class="hud-grid">
+        <div class="hud-stat">
+          <span class="hud-stat-value cortex-mono">{{ nodeCount() }}</span>
+          <span class="hud-stat-label">NODES</span>
+        </div>
+        <div class="hud-stat">
+          <span class="hud-stat-value cortex-mono">{{ edgeCount() }}</span>
+          <span class="hud-stat-label">SYNAPSES</span>
+        </div>
+        <div class="hud-stat">
+          <span class="hud-stat-value cortex-mono">{{ (avgImportance() * 100).toFixed(0) }}%</span>
+          <span class="hud-stat-label">AVG IMP</span>
+        </div>
+        <div class="hud-stat">
+          <span class="hud-stat-value cortex-mono">{{ (densityRatio() * 100).toFixed(1) }}%</span>
+          <span class="hud-stat-label">DENSITY</span>
+        </div>
+      </div>
+      <div class="hud-edge-counts">
+        <div class="hud-edge-row">
+          <span class="hud-edge-dot hebbian"></span>
+          <span class="hud-edge-label">Hebbian</span>
+          <span class="hud-edge-count cortex-mono">{{ hebbianCount() }}</span>
+        </div>
+        <div class="hud-edge-row">
+          <span class="hud-edge-dot temporal"></span>
+          <span class="hud-edge-label">Temporal</span>
+          <span class="hud-edge-count cortex-mono">{{ temporalCount() }}</span>
+        </div>
+        <div class="hud-edge-row">
+          <span class="hud-edge-dot entity"></span>
+          <span class="hud-edge-label">Entity</span>
+          <span class="hud-edge-count cortex-mono">{{ entityCount() }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Node Detail Panel -->
+    @if (selectedNode(); as node) {
+      <aside class="detail-panel" id="node-detail-panel">
+        <mat-card appearance="outlined">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>psychology</mat-icon>
+            <mat-card-title>{{ node.id }}</mat-card-title>
+            <mat-card-subtitle>{{ node.tier }}</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <p class="node-text">{{ node.text }}</p>
+            <div class="node-metric">
+              <span class="metric-label">Importance</span>
+              <span class="metric-value">{{ (node.importance * 100).toFixed(0) }}%</span>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </aside>
+    }
+
+    <!-- Edge Detail Panel -->
+    @if (selectedEdge(); as edge) {
+      <aside class="detail-panel" id="edge-detail-panel">
+        <mat-card appearance="outlined">
+          <mat-card-header>
+            <mat-icon mat-card-avatar>{{ edgeIcon(edge.type) }}</mat-icon>
+            <mat-card-title>
+              <span class="edge-type-badge" [attr.data-type]="edge.type">{{ edge.type }}</span>
+            </mat-card-title>
+            <mat-card-subtitle>Edge Connection</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="edge-connection">
+              <div class="edge-endpoint">
+                <span class="endpoint-label">From</span>
+                <span class="endpoint-id">{{ edge.from }}</span>
+              </div>
+              <mat-icon class="edge-arrow">arrow_forward</mat-icon>
+              <div class="edge-endpoint">
+                <span class="endpoint-label">To</span>
+                <span class="endpoint-id">{{ edge.to }}</span>
+              </div>
+            </div>
+            @if (edge.relation) {
+              <div class="node-metric">
+                <span class="metric-label">Relation</span>
+                <span class="metric-value relation-tag">{{ edge.relation }}</span>
+              </div>
+            }
+            <div class="node-metric">
+              <span class="metric-label">Weight</span>
+              <span class="metric-value">{{ edge.weight.toFixed(2) }}</span>
+            </div>
+            <p class="edge-description">
+              @switch (edge.type) {
+                @case ('HEBBIAN') { Co-recall association — memories frequently retrieved together }
+                @case ('TEMPORAL') { Session sequence — memories created in order }
+                @case ('ENTITY') { Entity relationship — shared knowledge graph connection }
+              }
+            </p>
+          </mat-card-content>
+        </mat-card>
+      </aside>
+    }
+
+    <!-- Legend (bottom-right) -->
+    <div class="graph-legend">
+      <div class="legend-item"><span class="legend-dot working"></span> Working</div>
+      <div class="legend-item"><span class="legend-dot episodic"></span> Episodic</div>
+      <div class="legend-item"><span class="legend-dot semantic"></span> Semantic</div>
+      <div class="legend-item"><span class="legend-dot procedural"></span> Procedural</div>
+      <div class="legend-separator"></div>
+      <div class="legend-item"><span class="legend-line hebbian"></span> Hebbian</div>
+      <div class="legend-item"><span class="legend-line temporal"></span> Temporal</div>
+      <div class="legend-item"><span class="legend-line entity"></span> Entity</div>
+    </div>
+  </div>
+</div>
