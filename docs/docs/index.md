@@ -39,6 +39,7 @@ Connect AI agents via the **built-in MCP server** (Claude Desktop, Cursor, custo
     | [Configuration](configuration/parameters.md) | All parameters with tuning advice |
     | [REST API Reference](api-reference/rest-endpoints.md) | All endpoints with curl examples |
     | [Cognitive Memory](memory/index.md) | Getting started with AI agent memory |
+    | [Cortex Dashboard](cortex/index.md) | Real-time neural visualization dashboard |
 
 === "🧠 I want to understand how it works"
 
@@ -48,6 +49,7 @@ Connect AI agents via the **built-in MCP server** (Claude Desktop, Cursor, custo
     | [Core Concepts](architecture/core-concepts.md) | HNSW, IVF-PQ, BM25, RRF, SIMD deep-dives |
     | [Memory Architecture](memory/architecture.md) | How cognitive memory works under the hood |
     | [6-Phase Scoring Pipeline](memory/scoring-pipeline.md) | Fused SIMD scoring across memory tiers |
+    | [Cortex Dashboard](cortex/index.md) | Watch your AI's brain think — 12+ live panels |
     | [SVASQ Quantization](deep-dives/svasq-deep-dive.md) | Our proprietary SIMD-first quantization engine |
     | [Benchmarks](deep-dives/real-embedding-benchmarks.md) | Empirical sweeps on 4096-dim embeddings |
 

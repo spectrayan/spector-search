@@ -10,15 +10,66 @@ description: "Real-time visualization dashboard for Spector's cognitive memory e
 
 ---
 
+## Visual Showcase
+
+### 🎥 Neural Graph in Action
+
+<video controls width="100%" poster="spector-cortex-graph.png">
+  <source src="spector-cortex-neural-graph.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+*The 3D neural graph explorer — fly through the cognitive galaxy, explore Hebbian associations, temporal chains, and entity relationships as glowing star constellations.*
+
+---
+
+### 📊 Dashboard — 12+ Live Cognitive Panels
+
 ![Spector Cortex Dashboard](spector-cortex-dashboard.png)
+
+Real-time scoring pipeline, SIMD lanes, decay curves, vector space, Hebbian graph, cognitive profiles, live metrics — all rendered with Three.js, Canvas 2D, and Angular Signals.
+
+---
+
+### 🌌 Graph Explorer — 3D Neural Galaxy
+
+![Spector Graph Explorer](spector-cortex-graph.png)
+
+Interactive 3D graph with glowing star nodes, Hebbian/temporal/entity edges, fly-to navigation, click-to-explore, and real-time topology stats. Toggle edge types independently with the toolbar.
+
+---
+
+### 🧠 Memory Table — Browse & Manage Memories
+
+![Spector Memory Table](spector-cortex-memory-table.png)
+
+Full CRUD with tier filtering, importance bars, valence indicators, synaptic tags, recall counts, tombstone ratios, and bulk actions. Sortable columns, pagination, and tier summary cards.
+
+---
+
+### 🔬 Memory Detail — Deep Cognitive Inspection
+
+![Spector Memory Detail](spector-memory-detail.png)
+
+Identity card, cognitive state (importance/valence/arousal gauges), synaptic tags, and full relationship graph showing Hebbian associations (weighted), temporal chains (directional), and entity links.
 
 ---
 
 ## Overview
 
-Spector Cortex is an Angular 21 standalone application that provides a real-time, interactive visualization of Spector's cognitive memory engine. It connects to a running Spector Node via SSE (Server-Sent Events) and renders every cognitive event — queries, recalls, consolidation cycles, graph mutations — as they happen.
+Spector Cortex is an Angular 21 standalone application that provides a real-time, interactive visualization of Spector's cognitive memory engine. It connects to a running Spector Node via SSE (Server-Sent Events) and REST APIs, rendering every cognitive event as it happens.
 
-The dashboard is built around **12 panels** organized in a responsive 3-column grid, each visualizing a different aspect of the cognitive pipeline:
+The application includes **5 main views**:
+
+| View | Description |
+|:-----|:------------|
+| **Dashboard** | 12+ live cognitive panels in a responsive 3-column grid — neural graph, vector space, scoring pipeline, SIMD, memory heatmap, decay curve, and more |
+| **Cognitive Query** | Real-time recall against the memory subsystem with score breakdowns, tier badges, and synaptic tags |
+| **Memory Table** | Paginated table of all stored memories with sorting, filtering, and CRUD operations |
+| **Graph Explorer** | Full-screen 3D neural galaxy with fly-to navigation, edge filtering, and topology stats |
+| **Memory Detail** | Deep inspection of individual memories with cognitive state, relationships, and actions |
+
+The dashboard is built around **12+ panels** in the main view, each visualizing a different aspect of the cognitive pipeline:
 
 | Panel | Visualization | What It Shows |
 |:------|:--------------|:--------------|
@@ -226,24 +277,31 @@ spector-cortex/
 │   │   │   │   └── memory-types.ts        # CognitiveProfile, PROFILE_PARAMS
 │   │   │   └── services/
 │   │   │       ├── cortex-state.service.ts # Signal store (single source of truth)
+│   │   │       ├── memory-table.service.ts # REST API client (CRUD, recall, graph)
 │   │   │       ├── mock-data.service.ts    # Simulated event generator
 │   │   │       └── theme.service.ts        # Dark/light theme toggle
 │   │   ├── features/
 │   │   │   ├── dashboard/                  # Main layout (3-col grid)
 │   │   │   ├── header/                     # Toolbar with status & controls
-│   │   │   ├── neural-graph/               # Three.js neural graph
-│   │   │   ├── vector-space/               # Three.js vector space
+│   │   │   ├── side-nav/                   # Collapsible navigation sidebar
+│   │   │   ├── neural-graph/               # Three.js neural graph (dashboard)
+│   │   │   ├── vector-space/               # Three.js vector space (dashboard)
 │   │   │   ├── pipeline-funnel/            # Scoring pipeline funnel
 │   │   │   ├── simd-panel/                 # SIMD lane heatmap
 │   │   │   ├── memory-heatmap/             # Off-heap segment visualization
 │   │   │   ├── profile-radar/              # Cognitive profile radar chart
 │   │   │   ├── metrics-chart/              # Live metrics time-series
 │   │   │   ├── decay-curve/                # Ebbinghaus + LTP chart
-│   │   │   ├── query-input/                # Search bar
+│   │   │   ├── query/                      # Query page (input + results + history)
+│   │   │   ├── query-input/                # Search bar with live recall
 │   │   │   ├── query-history/              # Query timeline
+│   │   │   ├── memory-table/               # Paginated memory browser
+│   │   │   ├── memory-detail/              # Deep memory inspection
+│   │   │   ├── graph-explorer/             # Full-screen 3D neural galaxy
+│   │   │   ├── admin/                      # Admin panel (vacuum, reflect)
 │   │   │   ├── zeigarnik-tracker/          # Incomplete tension gauge
 │   │   │   └── habituation-meter/          # Anti-loop mechanism gauges
-│   │   └── app.component.ts                # Root component
+│   │   └── app.component.ts                # Root component with routing
 │   ├── styles.scss                          # Global M3 theme
 │   └── index.html
 ├── angular.json

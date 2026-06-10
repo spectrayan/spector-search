@@ -53,13 +53,44 @@ Spector Memory is a **biologically-inspired cognitive memory engine** that gives
 
 ## 📸 Demo
 
-<details>
-<summary>Cortex Neural Dashboard</summary>
+<p align="center">
+  <a href="docs/screenshots/spector-cortex-neural-graph.mp4">
+    <img src="docs/screenshots/spector-cortex-graph.png" alt="Spector Cortex — Neural Graph Explorer" width="800" />
+  </a>
+  <br />
+  <sub>🎥 <a href="docs/screenshots/spector-cortex-neural-graph.mp4">Watch the Neural Graph in action →</a></sub>
+</p>
 
+<details open>
+<summary><b>📊 Dashboard — 12+ live cognitive panels</b></summary>
 <p align="center">
   <img src="docs/screenshots/spector-cortex-dashboard.png" alt="Spector Cortex Dashboard" width="800" />
 </p>
+Real-time scoring pipeline, SIMD lanes, decay curves, vector space, Hebbian graph, cognitive profiles, live metrics — all rendered with Three.js, Canvas 2D, and Angular Signals.
+</details>
 
+<details>
+<summary><b>🌌 Graph Explorer — 3D neural galaxy</b></summary>
+<p align="center">
+  <img src="docs/screenshots/spector-cortex-graph.png" alt="Spector Cortex Graph Explorer" width="800" />
+</p>
+Interactive 3D graph with glowing star nodes, Hebbian/temporal/entity edges, fly-to navigation, and real-time topology stats.
+</details>
+
+<details>
+<summary><b>🧠 Memory Table — browse & manage memories</b></summary>
+<p align="center">
+  <img src="docs/screenshots/spector-cortex-memory-table.png" alt="Spector Cortex Memory Table" width="800" />
+</p>
+Full CRUD with tier filtering, importance bars, valence indicators, synaptic tags, recall counts, and bulk actions.
+</details>
+
+<details>
+<summary><b>🔬 Memory Detail — deep cognitive inspection</b></summary>
+<p align="center">
+  <img src="docs/screenshots/spector-memory-detail.png" alt="Spector Memory Detail" width="800" />
+</p>
+Identity, cognitive state (importance/valence/arousal), synaptic tags, and full relationship graph (Hebbian associations, temporal chains, entity links).
 </details>
 
 ---
