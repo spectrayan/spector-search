@@ -134,18 +134,18 @@ class GraphLoadingPropertyTest {
      */
     @Property(tries = 100)
     void entityRelation_createsTypedEdge(
-            @ForAll("relationTypes") RelationType relationType) {
+            @ForAll("relationTypes") String relationType) {
 
         EntityGraph graph = new EntityGraph(50, 50);
 
-        int entityA = graph.addEntity("Alice", EntityType.PERSON);
-        int entityB = graph.addEntity("ProjectX", EntityType.PRODUCT);
+        int entityA = graph.addEntity("Alice", "PERSON");
+        int entityB = graph.addEntity("ProjectX", "PRODUCT");
         graph.addRelation(entityA, entityB, relationType);
 
         // Verify the edge exists with the correct type
         var edges = graph.edges(entityA);
         boolean found = edges.stream()
-                .anyMatch(e -> e.targetEntityId() == entityB && e.relationType() == relationType);
+                .anyMatch(e -> e.targetEntityId() == entityB && e.relationType().equals(relationType));
 
         assert found
                 : String.format("Expected typed edge %s from %d to %d",
@@ -159,7 +159,7 @@ class GraphLoadingPropertyTest {
     // ══════════════════════════════════════════════════════════════
 
     @Provide
-    Arbitrary<RelationType> relationTypes() {
-        return Arbitraries.of(RelationType.values());
+    Arbitrary<String> relationTypes() {
+        return Arbitraries.of(RelationType.SEED);
     }
 }

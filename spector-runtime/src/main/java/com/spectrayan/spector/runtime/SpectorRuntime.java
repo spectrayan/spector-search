@@ -157,7 +157,10 @@ public final class SpectorRuntime implements AutoCloseable {
                     .persistenceMode(MemoryPersistenceMode.valueOf(memoryConfig.persistenceMode()))
                     .persistence(memoryConfig.persistencePath())
                     .semanticCapacity(memoryConfig.capacity())  // from spector.memory.capacity config
-                    .nodesPerPartition(memoryConfig.nodesPerPartition());
+                    .nodesPerPartition(memoryConfig.nodesPerPartition())
+                    .hebbianGraphCapacity(memoryConfig.capacity())
+                    .temporalChainCapacity(memoryConfig.capacity())
+                    .entityExtractionMode(com.spectrayan.spector.memory.graph.EntityExtractionMode.CUSTOM);
 
             // ── Create HNSW index for memory's semantic recall ──
             // Without this, SemanticRecallStrategy falls back to header-only scoring

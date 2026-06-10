@@ -254,11 +254,13 @@
                 <version>${jackson.version}</version>
             </dependency>
 
-            <!-- ── Jackson 2.x (required by Javalin 6.x which uses com.fasterxml.jackson) ── -->
+            <!-- ── Jackson 2.x BOM (aligns all com.fasterxml.jackson modules) ── -->
             <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
                 <version>${jackson2.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
 
             <!-- ── Apache Commons Configuration (hierarchical config) ── -->

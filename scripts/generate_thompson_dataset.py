@@ -1579,35 +1579,114 @@ with open(temporal_file, "w", encoding="utf-8") as f:
         f.write(json.dumps(tc) + "\n")
 print(f"Wrote {len(temporal_chains)} temporal chains to temporal_chains.jsonl")
 
-# 3. Hebbian edges
-tag_index = {}
-for record in dedup_merged:
-    tags = record.get("synapticTags", [])
-    for tag in tags:
-        if tag not in tag_index:
-            tag_index[tag] = []
-        tag_index[tag].append(record["id"])
+# 3. Hebbian edges — multi-signal co-activation
+#    Signal A: Shared SPECIFIC tags (exclude broad category tags)
+#    Signal B: Entity co-occurrence (same people/projects mentioned)
+#    Signal C: Session-adjacent memories with topical overlap
+print("Building Hebbian edges with multi-signal co-activation...")
 
-edge_counts = {}
-for tag, mem_ids in tag_index.items():
-    if len(mem_ids) > 100:
+# Tags that are too broad to indicate semantic relationship
+BROAD_TAGS = {
+    "parenting", "reflection", "work", "school", "hobbies", "finance",
+    "health", "personal", "biographical", "morning-routine", "evening-journal",
+    "calendar", "reminder", "cooking", "relaxation", "exercise", "shopping",
+    "greeting", "planning", "coding", "research", "sleep"
+}
+
+edge_scores = {}  # edge_key -> float score
+
+def add_edge_score(id_a, id_b, score):
+    """Accumulate co-activation score for a memory pair."""
+    key = f"{id_a}|{id_b}" if id_a < id_b else f"{id_b}|{id_a}"
+    edge_scores[key] = edge_scores.get(key, 0.0) + score
+
+# Build indexes
+id_to_record = {r["id"]: r for r in dedup_merged}
+
+# ── Signal A: Shared specific tags ──
+# Only use tags that are specific enough to indicate real topical overlap
+specific_tag_index = {}
+for record in dedup_merged:
+    tags = set(record.get("synapticTags", [])) - BROAD_TAGS
+    for tag in tags:
+        if tag not in specific_tag_index:
+            specific_tag_index[tag] = []
+        specific_tag_index[tag].append(record["id"])
+
+for tag, mem_ids in specific_tag_index.items():
+    # Still skip very large groups (>60), but now they're specific tags
+    if len(mem_ids) > 60:
         continue
+    # Build pairwise edges, weighted by how specific the tag group is
+    # Smaller groups = more specific = stronger signal
+    weight = 1.0 if len(mem_ids) <= 15 else 0.6 if len(mem_ids) <= 30 else 0.3
     for i in range(len(mem_ids)):
         for j in range(i + 1, len(mem_ids)):
-            a = mem_ids[i]
-            b = mem_ids[j]
-            edge_key = f"{a}|{b}" if a < b else f"{b}|{a}"
-            edge_counts[edge_key] = edge_counts.get(edge_key, 0) + 1
+            add_edge_score(mem_ids[i], mem_ids[j], weight)
 
+# ── Signal B: Entity co-occurrence ──
+# Memories mentioning the same specific entities (people, software, orgs)
+entity_index = {}  # entity_name -> [memory_ids]
+for record in dedup_merged:
+    mentions = record.get("entityMentions", [])
+    for em in mentions:
+        name = em.get("name", "")
+        if not name or name.lower() in ("jarvis", "mike"):  # Too ubiquitous
+            continue
+        if name not in entity_index:
+            entity_index[name] = []
+        entity_index[name].append(record["id"])
+
+for entity, mem_ids in entity_index.items():
+    if len(mem_ids) > 80 or len(mem_ids) < 2:
+        continue
+    # Entity co-occurrence is a strong signal
+    weight = 1.5 if len(mem_ids) <= 10 else 1.0 if len(mem_ids) <= 30 else 0.5
+    for i in range(len(mem_ids)):
+        for j in range(i + 1, min(i + 20, len(mem_ids))):
+            # Limit pairwise to avoid O(n²) explosion on large entity groups
+            add_edge_score(mem_ids[i], mem_ids[j], weight)
+
+# ── Signal C: Session-adjacent with topical overlap ──
+# Memories in the same session that share ≥1 specific tag
+session_index = {}
+for record in dedup_merged:
+    sid = record.get("sessionId")
+    if sid:
+        if sid not in session_index:
+            session_index[sid] = []
+        session_index[sid].append(record)
+
+for sid, recs in session_index.items():
+    if len(recs) < 2:
+        continue
+    recs.sort(key=lambda x: x.get("timestampMs", 0))
+    # Connect adjacent memories in the same session
+    for i in range(len(recs) - 1):
+        tags_a = set(recs[i].get("synapticTags", [])) - BROAD_TAGS
+        for j in range(i + 1, min(i + 3, len(recs))):  # up to 2 ahead
+            tags_b = set(recs[j].get("synapticTags", [])) - BROAD_TAGS
+            shared = tags_a & tags_b
+            if shared:
+                # Strong signal: same session + same specific topic
+                add_edge_score(recs[i]["id"], recs[j]["id"], 2.0)
+
+# ── Threshold and emit ──
+# Require minimum accumulated score to create an edge
+MIN_SCORE = 2.0  # At least 2 independent signals or 1 strong one
 hebbian_edges = []
-for edge_key, count in edge_counts.items():
-    if count >= 2:
+for edge_key, score in edge_scores.items():
+    if score >= MIN_SCORE:
         parts = edge_key.split("|")
+        co_act = min(int(round(score)), 10)
         hebbian_edges.append({
             "memoryIdA": parts[0],
             "memoryIdB": parts[1],
-            "coActivationCount": min(count, 10)
+            "coActivationCount": co_act
         })
+
+# Sort for determinism
+hebbian_edges.sort(key=lambda x: (x["memoryIdA"], x["memoryIdB"]))
 
 hebbian_file = os.path.join(DATASET_DIR, "hebbian_edges.jsonl")
 with open(hebbian_file, "w", encoding="utf-8") as f:

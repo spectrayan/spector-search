@@ -19,6 +19,9 @@
 
 spector:
 
+  # ─── Global Mode (SEARCH, MEMORY, or HYBRID) ───
+  mode: MEMORY
+
   # ─── Engine (core search engine) ───
   engine:
     dimensions: 384
@@ -87,7 +90,7 @@ spector:
 
   # ─── Cognitive Memory Module ───
   memory:
-    enabled: false
+    enabled: true
     persistence-mode: DISK
     persistence-path: .spector/memory
     dimensions: 384

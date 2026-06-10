@@ -259,25 +259,21 @@ public final class BenchmarkSetup implements AutoCloseable {
         int relationsLoaded = 0;
 
         for (EntityRelation relation : relations) {
-            // Add or find the from entity
-            EntityType fromType = parseEntityType(relation.fromEntity().type());
-            int fromEntityId = graph.addEntity(relation.fromEntity().name(), fromType);
+            // Pass type strings directly — TypeRegistry auto-registers unknown types
+            int fromEntityId = graph.addEntity(relation.fromEntity().name(), relation.fromEntity().type());
             if (fromEntityId < 0) {
                 log.warn("Failed to add from-entity '{}' to graph", relation.fromEntity().name());
                 continue;
             }
 
-            // Add or find the to entity
-            EntityType toType = parseEntityType(relation.toEntity().type());
-            int toEntityId = graph.addEntity(relation.toEntity().name(), toType);
+            int toEntityId = graph.addEntity(relation.toEntity().name(), relation.toEntity().type());
             if (toEntityId < 0) {
                 log.warn("Failed to add to-entity '{}' to graph", relation.toEntity().name());
                 continue;
             }
 
             // Add the typed relation
-            RelationType relType = parseRelationType(relation.relationType());
-            graph.addRelation(fromEntityId, toEntityId, relType);
+            graph.addRelation(fromEntityId, toEntityId, relation.relationType());
             relationsLoaded++;
 
             // Link entities to their source memories
@@ -298,6 +294,7 @@ public final class BenchmarkSetup implements AutoCloseable {
 
     /**
      * Releases all off-heap resources held by the SpectorMemory instance.
+
      *
      * <p>Closes the underlying SpectorMemory which in turn releases Arena-backed
      * MemorySegments for HebbianGraph, TemporalChain, EntityGraph, tier stores,
@@ -330,40 +327,5 @@ public final class BenchmarkSetup implements AutoCloseable {
      */
     public Map<String, Integer> idToSlot() {
         return idToSlot != null ? java.util.Collections.unmodifiableMap(idToSlot) : Map.of();
-    }
-
-    // ── Private helpers ──
-
-    private static EntityType parseEntityType(String typeName) {
-        if (typeName == null || typeName.isBlank()) {
-            return EntityType.OTHER;
-        }
-        String upper = typeName.trim().toUpperCase();
-        // Map common LLM-generated aliases to valid enum values
-        return switch (upper) {
-            case "SOFTWARE" -> EntityType.PRODUCT;
-            case "GROUP" -> EntityType.TEAM;
-            case "HOBBY", "HOBBI", "ACTIVITY" -> EntityType.OTHER;
-            default -> {
-                try {
-                    yield EntityType.valueOf(upper);
-                } catch (IllegalArgumentException e) {
-                    log.warn("Unknown entity type '{}', defaulting to OTHER", typeName);
-                    yield EntityType.OTHER;
-                }
-            }
-        };
-    }
-
-    private static RelationType parseRelationType(String typeName) {
-        if (typeName == null || typeName.isBlank()) {
-            return RelationType.OTHER;
-        }
-        try {
-            return RelationType.valueOf(typeName.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            log.warn("Unknown relation type '{}', defaulting to OTHER", typeName);
-            return RelationType.OTHER;
-        }
     }
 }

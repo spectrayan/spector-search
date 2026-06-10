@@ -150,8 +150,8 @@ class GraphTraversalPropertyTest {
         var graph = new com.spectrayan.spector.memory.graph.EntityGraph(20, 20);
 
         // Build a graph: Entity0 → Entity1 → Entity2
-        var entityType = com.spectrayan.spector.memory.graph.EntityType.PERSON;
-        var relType = com.spectrayan.spector.memory.graph.RelationType.KNOWS;
+        String entityType = "PERSON";
+        String relType = "KNOWS";
 
         int e0 = graph.addEntity("Entity0", entityType);
         int e1 = graph.addEntity("Entity1", entityType);

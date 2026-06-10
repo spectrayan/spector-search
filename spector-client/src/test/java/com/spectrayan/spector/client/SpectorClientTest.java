@@ -151,7 +151,11 @@ class SpectorClientTest {
     @Test
     void clientIsThreadSafe() throws InterruptedException {
         // Verify that building and closing the client from multiple threads doesn't throw
-        try (var client = SpectorClient.builder().build()) {
+        try (var client = SpectorClient.builder()
+                .port(59999) // Use high ephemeral port unlikely to be in use
+                .connectTimeout(Duration.ofSeconds(2))
+                .requestTimeout(Duration.ofSeconds(2))
+                .build()) {
             var threads = new Thread[10];
             var errors = new java.util.concurrent.atomic.AtomicInteger(0);
             for (int i = 0; i < threads.length; i++) {
