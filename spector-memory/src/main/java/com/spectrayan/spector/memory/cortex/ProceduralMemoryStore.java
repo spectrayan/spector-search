@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
+import java.util.concurrent.locks.ReentrantLock;
 import com.spectrayan.spector.commons.error.SpectorServerException;
 import com.spectrayan.spector.memory.error.SpectorMemoryTierFullException;
 import com.spectrayan.spector.commons.error.ErrorCode;
@@ -99,26 +100,33 @@ public final class ProceduralMemoryStore extends AbstractTierStore {
         return offset;
     }
 
+    private final ReentrantLock writeLock = new ReentrantLock();
+
     /**
      * Appends a procedural memory.
      *
      * @param header       cognitive header
      * @param quantizedVec quantized vector bytes
      */
-    public synchronized void append(CognitiveHeader header, byte[] quantizedVec) {
-        if (count >= capacity) {
-            throw new SpectorMemoryTierFullException("PROCEDURAL", capacity);
-        }
+    public void append(CognitiveHeader header, byte[] quantizedVec) {
+        writeLock.lock();
+        try {
+            if (count >= capacity) {
+                throw new SpectorMemoryTierFullException("PROCEDURAL", capacity);
+            }
 
-        long offset = dataOffset() + (long) count * layout.stride();
-        layout.writeHeader(segment, offset, header);
-        MemorySegment.copy(
-                MemorySegment.ofArray(quantizedVec), 0,
-                segment, layout.vectorOffset(offset),
-                quantizedVec.length
-        );
-        count++;
-        persistCount();
-        publishVisible(); // SWMR: make record visible to scanners
+            long offset = dataOffset() + (long) count * layout.stride();
+            layout.writeHeader(segment, offset, header);
+            MemorySegment.copy(
+                    MemorySegment.ofArray(quantizedVec), 0,
+                    segment, layout.vectorOffset(offset),
+                    quantizedVec.length
+            );
+            count++;
+            persistCount();
+            publishVisible(); // SWMR: make record visible to scanners
+        } finally {
+            writeLock.unlock();
+        }
     }
 }

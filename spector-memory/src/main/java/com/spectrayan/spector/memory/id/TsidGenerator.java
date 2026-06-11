@@ -12,6 +12,8 @@
  */
 package com.spectrayan.spector.memory.id;
 
+import java.util.concurrent.locks.ReentrantLock;
+
 /**
  * Time-Sorted ID generator — Twitter Snowflake-style 64-bit IDs encoded as
  * 13-character Crockford Base32 strings.
@@ -116,27 +118,34 @@ public final class TsidGenerator implements MemoryIdGenerator {
         this.nodeId = nodeId;
     }
 
+    private final ReentrantLock idLock = new ReentrantLock();
+
     @Override
-    public synchronized String generate() {
-        long timestamp = currentTimestamp();
+    public String generate() {
+        idLock.lock();
+        try {
+            long timestamp = currentTimestamp();
 
-        if (timestamp == lastTimestamp) {
-            sequence = (sequence + 1) & MAX_SEQUENCE;
-            if (sequence == 0) {
-                // Sequence exhausted — wait for next millisecond
-                timestamp = waitNextMillis(lastTimestamp);
+            if (timestamp == lastTimestamp) {
+                sequence = (sequence + 1) & MAX_SEQUENCE;
+                if (sequence == 0) {
+                    // Sequence exhausted — wait for next millisecond
+                    timestamp = waitNextMillis(lastTimestamp);
+                }
+            } else {
+                sequence = 0;
             }
-        } else {
-            sequence = 0;
+
+            lastTimestamp = timestamp;
+
+            long id = (timestamp << (NODE_BITS + SEQUENCE_BITS))
+                    | ((long) nodeId << SEQUENCE_BITS)
+                    | sequence;
+
+            return encodeCrockford(id);
+        } finally {
+            idLock.unlock();
         }
-
-        lastTimestamp = timestamp;
-
-        long id = (timestamp << (NODE_BITS + SEQUENCE_BITS))
-                | ((long) nodeId << SEQUENCE_BITS)
-                | sequence;
-
-        return encodeCrockford(id);
     }
 
     /**
@@ -144,23 +153,28 @@ public final class TsidGenerator implements MemoryIdGenerator {
      *
      * @return 64-bit time-sorted unique identifier
      */
-    public synchronized long generateLong() {
-        long timestamp = currentTimestamp();
+    public long generateLong() {
+        idLock.lock();
+        try {
+            long timestamp = currentTimestamp();
 
-        if (timestamp == lastTimestamp) {
-            sequence = (sequence + 1) & MAX_SEQUENCE;
-            if (sequence == 0) {
-                timestamp = waitNextMillis(lastTimestamp);
+            if (timestamp == lastTimestamp) {
+                sequence = (sequence + 1) & MAX_SEQUENCE;
+                if (sequence == 0) {
+                    timestamp = waitNextMillis(lastTimestamp);
+                }
+            } else {
+                sequence = 0;
             }
-        } else {
-            sequence = 0;
+
+            lastTimestamp = timestamp;
+
+            return (timestamp << (NODE_BITS + SEQUENCE_BITS))
+                    | ((long) nodeId << SEQUENCE_BITS)
+                    | sequence;
+        } finally {
+            idLock.unlock();
         }
-
-        lastTimestamp = timestamp;
-
-        return (timestamp << (NODE_BITS + SEQUENCE_BITS))
-                | ((long) nodeId << SEQUENCE_BITS)
-                | sequence;
     }
 
     // ── Internal helpers ──

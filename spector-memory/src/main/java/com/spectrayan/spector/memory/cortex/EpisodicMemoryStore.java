@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.spectrayan.spector.memory.error.SpectorMemoryTierFullException;
 
@@ -106,31 +107,38 @@ public final class EpisodicMemoryStore extends AbstractTierStore {
         return offset;
     }
 
+    private final ReentrantLock writeLock = new ReentrantLock();
+
     /**
      * Appends a full episodic memory (header + quantized vector).
      *
      * @param header       cognitive header
      * @param quantizedVec quantized vector bytes (nullable for header-only writes)
      */
-    public synchronized void append(CognitiveHeader header, byte[] quantizedVec) {
-        if (count >= capacity) {
-            throw new SpectorMemoryTierFullException("EPISODIC", capacity);
+    public void append(CognitiveHeader header, byte[] quantizedVec) {
+        writeLock.lock();
+        try {
+            if (count >= capacity) {
+                throw new SpectorMemoryTierFullException("EPISODIC", capacity);
+            }
+
+            long offset = dataOffset() + (long) count * layout.stride();
+            layout.writeHeader(segment, offset, header);
+
+            if (quantizedVec != null) {
+                MemorySegment.copy(
+                        MemorySegment.ofArray(quantizedVec), 0,
+                        segment, layout.vectorOffset(offset),
+                        quantizedVec.length
+                );
+            }
+
+            count++;
+            persistCount();
+            publishVisible(); // SWMR: make record visible to scanners
+        } finally {
+            writeLock.unlock();
         }
-
-        long offset = dataOffset() + (long) count * layout.stride();
-        layout.writeHeader(segment, offset, header);
-
-        if (quantizedVec != null) {
-            MemorySegment.copy(
-                    MemorySegment.ofArray(quantizedVec), 0,
-                    segment, layout.vectorOffset(offset),
-                    quantizedVec.length
-            );
-        }
-
-        count++;
-        persistCount();
-        publishVisible(); // SWMR: make record visible to scanners
     }
 
     /**

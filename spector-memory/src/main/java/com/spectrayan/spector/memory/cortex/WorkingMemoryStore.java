@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Volatile or persistent scratchpad for short-term Working Memory.
@@ -122,6 +123,8 @@ public final class WorkingMemoryStore extends AbstractTierStore {
         return offset;
     }
 
+    private final ReentrantLock writeLock = new ReentrantLock();
+
     /**
      * Appends a record to the working memory circular buffer.
      *
@@ -131,34 +134,39 @@ public final class WorkingMemoryStore extends AbstractTierStore {
      * @param header       cognitive header for this memory
      * @param quantizedVec the quantized vector bytes
      */
-    public synchronized void put(CognitiveHeader header, byte[] quantizedVec) {
-        long offset = dataOffset() + (long) writeIndex * layout.stride();
+    public void put(CognitiveHeader header, byte[] quantizedVec) {
+        writeLock.lock();
+        try {
+            long offset = dataOffset() + (long) writeIndex * layout.stride();
 
-        // If we're overwriting an existing record, mark it as evicted
-        if (count >= capacity) {
-            log.trace("Working memory full — evicting slot {}", writeIndex);
+            // If we're overwriting an existing record, mark it as evicted
+            if (count >= capacity) {
+                log.trace("Working memory full — evicting slot {}", writeIndex);
+            }
+
+            // Write header
+            layout.writeHeader(segment, offset, header);
+
+            // Write quantized vector payload
+            MemorySegment.copy(
+                    MemorySegment.ofArray(quantizedVec), 0,
+                    segment, layout.vectorOffset(offset),
+                    quantizedVec.length
+            );
+
+            // Advance circular buffer
+            writeIndex = (writeIndex + 1) % capacity;
+            count = Math.min(count + 1, capacity);
+
+            // Persist count and writeIndex to metadata header
+            persistCount();
+            if (persistent) {
+                segment.set(ValueLayout.JAVA_INT, META_EXTRA1, writeIndex);
+            }
+            publishVisible(); // SWMR: make record visible to scanners
+        } finally {
+            writeLock.unlock();
         }
-
-        // Write header
-        layout.writeHeader(segment, offset, header);
-
-        // Write quantized vector payload
-        MemorySegment.copy(
-                MemorySegment.ofArray(quantizedVec), 0,
-                segment, layout.vectorOffset(offset),
-                quantizedVec.length
-        );
-
-        // Advance circular buffer
-        writeIndex = (writeIndex + 1) % capacity;
-        count = Math.min(count + 1, capacity);
-
-        // Persist count and writeIndex to metadata header
-        persistCount();
-        if (persistent) {
-            segment.set(ValueLayout.JAVA_INT, META_EXTRA1, writeIndex);
-        }
-        publishVisible(); // SWMR: make record visible to scanners
     }
 
     /**

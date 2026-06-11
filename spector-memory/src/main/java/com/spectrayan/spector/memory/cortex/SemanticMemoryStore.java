@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
+import java.util.concurrent.locks.ReentrantLock;
 import com.spectrayan.spector.commons.error.SpectorServerException;
 import com.spectrayan.spector.memory.error.SpectorMemoryTierFullException;
 import com.spectrayan.spector.commons.error.ErrorCode;
@@ -96,6 +97,8 @@ public final class SemanticMemoryStore extends AbstractTierStore {
         return offset;
     }
 
+    private final ReentrantLock writeLock = new ReentrantLock();
+
     /**
      * Appends a full semantic memory (header + quantized vector).
      *
@@ -106,27 +109,32 @@ public final class SemanticMemoryStore extends AbstractTierStore {
      * @param header       cognitive header
      * @param quantizedVec quantized vector bytes
      */
-    public synchronized void append(CognitiveHeader header, byte[] quantizedVec) {
-        if (count >= capacity) {
-            throw new SpectorMemoryTierFullException("SEMANTIC", capacity);
+    public void append(CognitiveHeader header, byte[] quantizedVec) {
+        writeLock.lock();
+        try {
+            if (count >= capacity) {
+                throw new SpectorMemoryTierFullException("SEMANTIC", capacity);
+            }
+
+            long offset = dataOffset() + (long) count * layout.stride();
+            layout.writeHeader(segment, offset, header);
+
+            // Write vector payload (if available — ReflectDaemon promotes with null vec)
+            if (quantizedVec != null) {
+                MemorySegment.copy(
+                        MemorySegment.ofArray(quantizedVec), 0,
+                        segment, layout.vectorOffset(offset),
+                        quantizedVec.length
+                );
+            }
+            // else: vector region stays zeroed (header-only consolidation)
+
+            count++;
+            persistCount();
+            publishVisible(); // SWMR: make record visible to scanners
+        } finally {
+            writeLock.unlock();
         }
-
-        long offset = dataOffset() + (long) count * layout.stride();
-        layout.writeHeader(segment, offset, header);
-
-        // Write vector payload (if available — ReflectDaemon promotes with null vec)
-        if (quantizedVec != null) {
-            MemorySegment.copy(
-                    MemorySegment.ofArray(quantizedVec), 0,
-                    segment, layout.vectorOffset(offset),
-                    quantizedVec.length
-            );
-        }
-        // else: vector region stays zeroed (header-only consolidation)
-
-        count++;
-        persistCount();
-        publishVisible(); // SWMR: make record visible to scanners
     }
 
     /**
@@ -135,17 +143,22 @@ public final class SemanticMemoryStore extends AbstractTierStore {
      * @param header cognitive header
      * @return the record index
      */
-    public synchronized int store(CognitiveHeader header) {
-        if (count >= capacity) {
-            throw new SpectorMemoryTierFullException("SEMANTIC", capacity);
-        }
+    public int store(CognitiveHeader header) {
+        writeLock.lock();
+        try {
+            if (count >= capacity) {
+                throw new SpectorMemoryTierFullException("SEMANTIC", capacity);
+            }
 
-        long offset = dataOffset() + (long) count * layout.stride();
-        layout.writeHeader(segment, offset, header);
-        int index = count++;
-        persistCount();
-        publishVisible(); // SWMR: make record visible to scanners
-        return index;
+            long offset = dataOffset() + (long) count * layout.stride();
+            layout.writeHeader(segment, offset, header);
+            int index = count++;
+            persistCount();
+            publishVisible(); // SWMR: make record visible to scanners
+            return index;
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     /**

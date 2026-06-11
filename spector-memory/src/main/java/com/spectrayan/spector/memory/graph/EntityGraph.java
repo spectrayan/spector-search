@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Off-heap entity-relationship graph for multi-hop knowledge traversal.
@@ -106,6 +107,7 @@ public final class EntityGraph implements AutoCloseable {
 
     /** On-heap name→entityId index for O(1) lookup (case-insensitive). */
     private final ConcurrentHashMap<String, Integer> nameIndex = new ConcurrentHashMap<>();
+    private final ReentrantLock graphLock = new ReentrantLock();
 
     /** Open-schema entity type registry (String ↔ int). */
     private final TypeRegistry entityTypeRegistry;
@@ -212,7 +214,9 @@ public final class EntityGraph implements AutoCloseable {
      * @param toEntity   target entity ID
      * @param type       relation type
      */
-    public synchronized void addRelation(int fromEntity, int toEntity, String type) {
+    public void addRelation(int fromEntity, int toEntity, String type) {
+        graphLock.lock();
+        try {
         if (fromEntity < 0 || fromEntity >= entityCount) return;
         if (toEntity < 0 || toEntity >= entityCount) return;
         if (fromEntity == toEntity) return;
@@ -266,6 +270,9 @@ public final class EntityGraph implements AutoCloseable {
 
         entitySegment.set(ValueLayout.JAVA_INT, entityOffset + ENT_OFF_DEGREE, degree + 1);
         edgeCount = Math.max(edgeCount, edgeIdx + 1);
+        } finally {
+            graphLock.unlock();
+        }
     }
 
     /**
@@ -477,7 +484,9 @@ public final class EntityGraph implements AutoCloseable {
      * @param minWeight   edges with weight below this after decay are pruned (e.g., 0.5)
      * @return number of edges pruned
      */
-    public synchronized int decayEdges(float decayFactor, float minWeight) {
+    public int decayEdges(float decayFactor, float minWeight) {
+        graphLock.lock();
+        try {
         int pruned = 0;
         for (int e = 0; e < entityCount; e++) {
             long entOffset = (long) e * ENTITY_NODE_BYTES;
@@ -514,6 +523,9 @@ public final class EntityGraph implements AutoCloseable {
             log.info("EntityGraph decayed edges: {} pruned below threshold {}", pruned, minWeight);
         }
         return pruned;
+        } finally {
+            graphLock.unlock();
+        }
     }
 
     /**
@@ -530,7 +542,9 @@ public final class EntityGraph implements AutoCloseable {
      * @param maxEditDistance maximum Levenshtein distance for merge (e.g., 2)
      * @return number of entities merged
      */
-    public synchronized int mergeSimilarEntities(int maxEditDistance) {
+    public int mergeSimilarEntities(int maxEditDistance) {
+        graphLock.lock();
+        try {
         if (maxEditDistance <= 0 || entityCount < 2) return 0;
 
         Set<Integer> merged = new HashSet<>();
@@ -571,6 +585,9 @@ public final class EntityGraph implements AutoCloseable {
             log.info("EntityGraph merged {} similar entities", mergeCount);
         }
         return mergeCount;
+        } finally {
+            graphLock.unlock();
+        }
     }
 
     /**

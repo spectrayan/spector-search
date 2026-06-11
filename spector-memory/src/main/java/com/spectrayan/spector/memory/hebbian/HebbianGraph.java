@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Off-heap adjacency list for full Hebbian graph associations (V2).
@@ -104,6 +105,8 @@ public final class HebbianGraph implements AutoCloseable {
         return capacity;
     }
 
+    private final ReentrantLock graphLock = new ReentrantLock();
+
     /**
      * Adds or strengthens a bidirectional Hebbian edge between two memories.
      *
@@ -111,11 +114,16 @@ public final class HebbianGraph implements AutoCloseable {
      * @param nodeB index of second memory
      * @param weightDelta weight to add to the edge (default: 1.0)
      */
-    public synchronized void strengthen(int nodeA, int nodeB, float weightDelta) {
-        if (nodeA < 0 || nodeA >= capacity || nodeB < 0 || nodeB >= capacity) return;
-        if (nodeA == nodeB) return;
-        addOrUpdateEdge(nodeA, nodeB, weightDelta);
-        addOrUpdateEdge(nodeB, nodeA, weightDelta);
+    public void strengthen(int nodeA, int nodeB, float weightDelta) {
+        graphLock.lock();
+        try {
+            if (nodeA < 0 || nodeA >= capacity || nodeB < 0 || nodeB >= capacity) return;
+            if (nodeA == nodeB) return;
+            addOrUpdateEdge(nodeA, nodeB, weightDelta);
+            addOrUpdateEdge(nodeB, nodeA, weightDelta);
+        } finally {
+            graphLock.unlock();
+        }
     }
 
     /**
@@ -256,43 +264,48 @@ public final class HebbianGraph implements AutoCloseable {
      * @param decayFactor multiplier (e.g., 0.9 = 10% decay per cycle)
      * @return number of edges that dropped below threshold and were removed
      */
-    public synchronized int decayEdges(float decayFactor) {
-        int removed = 0;
-        float removalThreshold = 0.01f; // edges below this are effectively dead
+    public int decayEdges(float decayFactor) {
+        graphLock.lock();
+        try {
+            int removed = 0;
+            float removalThreshold = 0.01f; // edges below this are effectively dead
 
-        for (int node = 0; node < capacity; node++) {
-            long nodeOffset = (long) node * NODE_BYTES;
-            int degree = segment.get(ValueLayout.JAVA_INT, nodeOffset);
-            int newDegree = 0;
+            for (int node = 0; node < capacity; node++) {
+                long nodeOffset = (long) node * NODE_BYTES;
+                int degree = segment.get(ValueLayout.JAVA_INT, nodeOffset);
+                int newDegree = 0;
 
-            for (int i = 0; i < degree; i++) {
-                long edgeOffset = nodeOffset + 4 + (long) i * EDGE_BYTES;
-                float weight = segment.get(ValueLayout.JAVA_FLOAT, edgeOffset + 4);
-                float decayed = weight * decayFactor;
+                for (int i = 0; i < degree; i++) {
+                    long edgeOffset = nodeOffset + 4 + (long) i * EDGE_BYTES;
+                    float weight = segment.get(ValueLayout.JAVA_FLOAT, edgeOffset + 4);
+                    float decayed = weight * decayFactor;
 
-                if (decayed >= removalThreshold) {
-                    // Keep edge — compact if needed
-                    if (newDegree != i) {
-                        long newOffset = nodeOffset + 4 + (long) newDegree * EDGE_BYTES;
-                        int neighbor = segment.get(ValueLayout.JAVA_INT, edgeOffset);
-                        segment.set(ValueLayout.JAVA_INT, newOffset, neighbor);
-                        segment.set(ValueLayout.JAVA_FLOAT, newOffset + 4, decayed);
+                    if (decayed >= removalThreshold) {
+                        // Keep edge — compact if needed
+                        if (newDegree != i) {
+                            long newOffset = nodeOffset + 4 + (long) newDegree * EDGE_BYTES;
+                            int neighbor = segment.get(ValueLayout.JAVA_INT, edgeOffset);
+                            segment.set(ValueLayout.JAVA_INT, newOffset, neighbor);
+                            segment.set(ValueLayout.JAVA_FLOAT, newOffset + 4, decayed);
+                        } else {
+                            segment.set(ValueLayout.JAVA_FLOAT, edgeOffset + 4, decayed);
+                        }
+                        newDegree++;
                     } else {
-                        segment.set(ValueLayout.JAVA_FLOAT, edgeOffset + 4, decayed);
+                        removed++;
                     }
-                    newDegree++;
-                } else {
-                    removed++;
                 }
+
+                segment.set(ValueLayout.JAVA_INT, nodeOffset, newDegree);
             }
 
-            segment.set(ValueLayout.JAVA_INT, nodeOffset, newDegree);
+            if (removed > 0) {
+                log.debug("Hebbian edge decay: {} edges removed (factor={})", removed, decayFactor);
+            }
+            return removed;
+        } finally {
+            graphLock.unlock();
         }
-
-        if (removed > 0) {
-            log.debug("Hebbian edge decay: {} edges removed (factor={})", removed, decayFactor);
-        }
-        return removed;
     }
 
     /**
