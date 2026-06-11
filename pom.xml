@@ -89,7 +89,7 @@
         <commons-beanutils.version>1.9.4</commons-beanutils.version>
         <snakeyaml.version>2.3</snakeyaml.version>
         <micrometer.version>1.14.5</micrometer.version>
-        <armeria.version>1.31.3</armeria.version>
+        <armeria.version>1.39.1</armeria.version>
 
         <!-- Test dependency versions -->
         <junit.version>5.11.4</junit.version>
