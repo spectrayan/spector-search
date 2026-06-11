@@ -515,9 +515,8 @@ export class GraphExplorerComponent implements AfterViewInit, OnDestroy {
         this.graphLoading.set(false);
       },
       error: (err) => {
-        console.warn('Graph API unavailable, falling back to sample data:', err);
-        this.graphError.set('Using sample data — backend unavailable');
-        this.generateSampleGraph();
+        console.warn('Graph API unavailable:', err);
+        this.graphError.set('Backend graph API unavailable — no memories to display');
         this.graphLoading.set(false);
       },
     });
@@ -525,7 +524,7 @@ export class GraphExplorerComponent implements AfterViewInit, OnDestroy {
 
   private buildGraphFromResponse(apiNodes: GraphNode[], apiEdges: GraphEdge[]): void {
     if (apiNodes.length === 0) {
-      this.generateSampleGraph();
+      this.graphError.set('No memories stored yet — add memories to see the graph');
       return;
     }
 

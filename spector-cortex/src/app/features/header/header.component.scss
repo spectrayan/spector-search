@@ -145,7 +145,7 @@
 
 // ── Node Select ──────────────────────────────────────────────────────
 .node-select {
-  width: 140px;
+  width: 160px;
   margin: 0;
 
   ::ng-deep {
@@ -163,6 +163,36 @@
     .mat-mdc-select-value-text {
       font-size: 12px;
     }
+  }
+}
+
+.node-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mat-sys-outline);
+  flex-shrink: 0;
+
+  &.active {
+    background: #4caf50;
+    box-shadow: 0 0 4px #4caf5088;
+  }
+
+  &.draining {
+    background: #ff9800;
+    box-shadow: 0 0 4px #ff980088;
+  }
+
+  &.down {
+    background: var(--mat-sys-error);
+    box-shadow: 0 0 4px color-mix(in srgb, var(--mat-sys-error) 50%, transparent);
   }
 }
 

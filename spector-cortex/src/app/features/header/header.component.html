@@ -120,9 +120,17 @@
                 (selectionChange)="state.selectedNode.set($event.value)">
       <mat-option value="local">Local Node</mat-option>
       <mat-option value="cluster">Cluster View</mat-option>
-      <mat-option value="node-1">node-1</mat-option>
-      <mat-option value="node-2">node-2</mat-option>
-      <mat-option value="node-3">node-3</mat-option>
+      @for (node of state.clusterNodes(); track node.nodeId) {
+        <mat-option [value]="node.nodeId">
+          <span class="node-option">
+            <span class="node-status-dot"
+                  [class.active]="node.status === 'active'"
+                  [class.draining]="node.status === 'draining'"
+                  [class.down]="node.status === 'down'"></span>
+            {{ node.nodeId }}
+          </span>
+        </mat-option>
+      }
     </mat-select>
   </mat-form-field>
 

@@ -81,6 +81,7 @@ export class NeuralGraphComponent implements AfterViewInit, OnDestroy {
   private mouseX = 0;
   private mouseY = 0;
   private timer = new THREE.Timer();
+  private nodesInitialized = false;
 
   // ── Orbit & zoom state ──
   private isDragging = false;
@@ -127,14 +128,27 @@ export class NeuralGraphComponent implements AfterViewInit, OnDestroy {
       const profile = this.state.activeProfile();
       if (this.scene) this.applyProfileVisuals(profile);
     });
+
+    // Only populate the visualization when real memory data arrives from SSE
+    effect(() => {
+      const diag = this.state.memoryDiag();
+      if (diag && this.scene && !this.nodesInitialized) {
+        const total = diag.workingCount + diag.episodicCount + diag.semanticCount + diag.proceduralCount;
+        if (total > 0) {
+          this.nodesInitialized = true;
+          // Scale visual nodes — cap at MAX_NODES for performance
+          this.generateNodes(Math.min(MAX_NODES, Math.max(20, total)));
+          this.generateEdges();
+          this.createQueryTrail();
+        }
+      }
+    });
   }
 
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
     this.initScene();
-    this.generateNodes();
-    this.generateEdges();
-    this.createQueryTrail();
+    // Nodes are generated reactively when memoryDiag data arrives via SSE
     this.animate();
   }
 
@@ -210,11 +224,11 @@ export class NeuralGraphComponent implements AfterViewInit, OnDestroy {
     observer.observe(container);
   }
 
-  private generateNodes(): void {
+  private generateNodes(count: number = MAX_NODES): void {
     const tiers = Object.keys(TIER_COLORS);
     const tierWeights = [0.05, 0.35, 0.45, 0.15];
 
-    for (let i = 0; i < MAX_NODES; i++) {
+    for (let i = 0; i < count; i++) {
       let rand = Math.random();
       let tierIdx = 0;
       for (let t = 0; t < tierWeights.length; t++) {
