@@ -31,6 +31,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 /**
  * Text generation provider backed by a local <a href="https://ollama.com">Ollama</a> server.
@@ -79,6 +80,14 @@ public class OllamaLlmProvider implements TextGenerationProvider {
     private final HttpClient httpClient;
     private final URI generateUri;
     private final URI tagsUri;
+
+    /**
+     * Serializes concurrent LLM generation calls. Ollama can only run one GPU
+     * inference at a time; additional concurrent requests queue internally and
+     * often timeout under bulk ingestion. This semaphore ensures orderly
+     * processing: at most 1 generate() call is in-flight at a time.
+     */
+    private final Semaphore llmGate = new Semaphore(1, true);
 
     /**
      * Creates a provider with full configuration.
@@ -143,6 +152,23 @@ public class OllamaLlmProvider implements TextGenerationProvider {
 
         long startNanos = System.nanoTime();
 
+        // Acquire the semaphore — block until it's our turn.
+        // Use timeout.multipliedBy(2) as the acquire deadline so we don't
+        // wait forever if other calls are pathologically slow.
+        boolean acquired;
+        try {
+            acquired = llmGate.tryAcquire(timeout.toMillis() * 2,
+                    java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new GenerationException("Interrupted while waiting for LLM gate", e);
+        }
+        if (!acquired) {
+            throw new GenerationException(
+                    "LLM gate acquire timed out — Ollama is likely overloaded (queue depth: "
+                    + llmGate.getQueueLength() + ")");
+        }
+
         try {
             Map<String, Object> requestMap = buildRequestBody(prompt, options);
             String requestBody = MAPPER.writeValueAsString(requestMap);
@@ -181,6 +207,8 @@ public class OllamaLlmProvider implements TextGenerationProvider {
             throw new GenerationException("Generation request interrupted", e);
         } catch (Exception e) {
             throw new GenerationException("Ollama generation failed: " + e.getMessage(), e);
+        } finally {
+            llmGate.release();
         }
     }
 
