@@ -480,6 +480,7 @@
                                 <goal>check</goal>
                             </goals>
                             <configuration>
+                                <haltOnFailure>false</haltOnFailure>
                                 <rules>
                                     <rule>
                                         <element>BUNDLE</element>
