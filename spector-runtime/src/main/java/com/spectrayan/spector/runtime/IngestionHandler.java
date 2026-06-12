@@ -96,6 +96,34 @@ public final class IngestionHandler {
     // ─────────────── File Ingestion ───────────────
 
     /**
+     * Ingests a single file using the given document ID.
+     *
+     * <p>Reads the file content, then delegates to the pipeline which uses
+     * its configured {@code TextChunker} for splitting and embedding. The
+     * chunk size and overlap come from the pipeline's configuration
+     * (from {@code spector.yml}).</p>
+     *
+     * @param file       path to the file
+     * @param documentId the ID to use as the document base (chunk IDs
+     *                   will be {@code documentId::chunk-N})
+     * @return ingestion result
+     */
+    public IngestionResult ingest(Path file, String documentId) {
+        try {
+            String content = Files.readString(file);
+            if (content.isBlank()) {
+                return IngestionResult.single(documentId, 0);
+            }
+
+            return pipeline.ingest(documentId, content);
+        } catch (Exception e) {
+            log.error("Failed to ingest file '{}' (id={}): {}", file, documentId, e.getMessage());
+            return IngestionResult.chunked(documentId, 0,
+                    List.of(documentId), 0);
+        }
+    }
+
+    /**
      * Ingests a single file. Reads content and delegates to the pipeline.
      *
      * @param file      path to the file
@@ -103,19 +131,19 @@ public final class IngestionHandler {
      * @return ingestion result
      */
     public IngestionResult ingest(Path file, int chunkSize) {
-        try {
-            String content = Files.readString(file);
-            if (content.isBlank()) {
-                return IngestionResult.single(file.toString(), 0);
-            }
+        return ingest(file, file.getFileName().toString());
+    }
 
-            String id = file.getFileName().toString();
-            return pipeline.ingest(id, content);
-        } catch (Exception e) {
-            log.error("Failed to ingest file '{}': {}", file, e.getMessage());
-            return IngestionResult.chunked(file.toString(), 0,
-                    List.of(file.toString()), 0);
-        }
+    /**
+     * Ingests a single file using the given document name as the memory ID.
+     *
+     * @param file         path to the file
+     * @param chunkSize    chunk size in characters
+     * @param documentName the human-readable name to use as the document ID
+     * @return ingestion result
+     */
+    public IngestionResult ingest(Path file, int chunkSize, String documentName) {
+        return ingest(file, documentName);
     }
 
     /**

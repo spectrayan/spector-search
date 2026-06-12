@@ -27,6 +27,8 @@ import com.spectrayan.spector.index.HnswIndex;
 import com.spectrayan.spector.core.similarity.SimilarityFunction;
 import com.spectrayan.spector.embed.EmbeddingProvider;
 import com.spectrayan.spector.embed.TextGenerationProvider;
+import com.spectrayan.spector.embed.ollama.OllamaSparseEncodingProvider;
+import com.spectrayan.spector.embed.ollama.OllamaTokenEmbeddingProvider;
 import com.spectrayan.spector.config.SpectorConfig;
 import com.spectrayan.spector.engine.DefaultSpectorEngine;
 import com.spectrayan.spector.engine.SpectorEngine;
@@ -159,8 +161,37 @@ public final class SpectorRuntime implements AutoCloseable {
                     .semanticCapacity(memoryConfig.capacity())  // from spector.memory.capacity config
                     .nodesPerPartition(memoryConfig.nodesPerPartition())
                     .hebbianGraphCapacity(memoryConfig.capacity())
-                    .temporalChainCapacity(memoryConfig.capacity())
-                    .entityExtractionMode(com.spectrayan.spector.memory.graph.EntityExtractionMode.CUSTOM);
+                    .temporalChainCapacity(memoryConfig.capacity());
+
+            // ── Entity extraction (LLM when available, otherwise disabled) ──
+            if (textGenProvider != null) {
+                memoryBuilder.entityExtractionMode(com.spectrayan.spector.memory.graph.EntityExtractionMode.LLM)
+                        .textGenerationProvider(textGenProvider);
+                // Pass configured LLM generation options
+                var llmConfig = memoryConfig.llm();
+                if (llmConfig != null) {
+                    var genOpts = com.spectrayan.spector.embed.GenerationOptions.builder()
+                            .temperature(llmConfig.temperature())
+                            .maxTokens(llmConfig.maxTokens())
+                            .topP(llmConfig.topP())
+                            .build();
+                    memoryBuilder.llmGenerationOptions(genOpts);
+                    log.info("[Runtime] LLM options: temperature={}, maxTokens={}, topP={}",
+                            llmConfig.temperature(), llmConfig.maxTokens(), llmConfig.topP());
+                }
+                log.info("[Runtime] Entity extraction: LLM (model={})", textGenProvider.modelName());
+            } else {
+                memoryBuilder.entityExtractionMode(com.spectrayan.spector.memory.graph.EntityExtractionMode.NONE);
+                log.info("[Runtime] Entity extraction: NONE (no TextGenerationProvider)");
+            }
+
+            // ── SPLADE + ColBERT providers (auto-created from embedding provider) ──
+            var sparseProvider = new OllamaSparseEncodingProvider(embedder);
+            var tokenProvider = new OllamaTokenEmbeddingProvider(embedder);
+            memoryBuilder.sparseEncodingProvider(sparseProvider)
+                    .tokenEmbeddingProvider(tokenProvider);
+            log.info("[Runtime] SPLADE provider: {}", sparseProvider.modelName());
+            log.info("[Runtime] ColBERT provider: {}", tokenProvider.modelName());
 
             // ── Create HNSW index for memory's semantic recall ──
             // Without this, SemanticRecallStrategy falls back to header-only scoring
