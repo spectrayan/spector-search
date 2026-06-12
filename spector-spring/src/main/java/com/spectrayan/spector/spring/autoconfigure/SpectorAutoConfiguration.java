@@ -134,14 +134,23 @@ public class SpectorAutoConfiguration {
                 .dimensions(memoryProps.getDimensions())
                 .embeddingProvider(embedder)
                 .persistenceMode(MemoryPersistenceMode.valueOf(memoryProps.getPersistenceMode()))
-                .semanticCapacity(memoryProps.getCapacity());
+                .semanticCapacity(memoryProps.getCapacity())
+                .hebbianGraphCapacity(memoryProps.getCapacity())
+                .temporalChainCapacity(memoryProps.getCapacity())
+                .entityGraphCapacity(memoryProps.getCapacity());
 
         if (memoryProps.getPersistencePath() != null) {
             builder.persistence(Path.of(memoryProps.getPersistencePath()));
         }
 
+        // ── SPLADE + ColBERT providers (auto-created from embedding provider) ──
+        builder.sparseEncodingProvider(
+                new com.spectrayan.spector.embed.ollama.OllamaSparseEncodingProvider(embedder));
+        builder.tokenEmbeddingProvider(
+                new com.spectrayan.spector.embed.ollama.OllamaTokenEmbeddingProvider(embedder));
+
         SpectorMemory raw = builder.build();
-        log.info("SpectorMemory auto-configured: dims={}, persistence={}, path={}",
+        log.info("SpectorMemory auto-configured: dims={}, persistence={}, path={}, entity=enabled, SPLADE=enabled, ColBERT=enabled",
                 memoryProps.getDimensions(), memoryProps.getPersistenceMode(),
                 memoryProps.getPersistencePath());
 
