@@ -46,7 +46,7 @@ class StreamingChunkerTest {
         assertThat(chunks).hasSizeGreaterThan(1);
         for (var chunk : chunks) {
             assertThat(chunk.parentId()).isEqualTo("doc");
-            assertThat(chunk.chunkId()).startsWith("doc#chunk-");
+            assertThat(chunk.chunkId()).startsWith("doc::chunk-");
         }
     }
 
@@ -66,7 +66,7 @@ class StreamingChunkerTest {
         }
 
         assertThat(chunks).hasSizeGreaterThan(1);
-        assertThat(chunks.getFirst().chunkId()).isEqualTo("file-doc#chunk-0");
+        assertThat(chunks.getFirst().chunkId()).isEqualTo("file-doc::chunk-0");
 
         // Verify chunk start positions are advancing
         for (int i = 1; i < chunks.size(); i++) {

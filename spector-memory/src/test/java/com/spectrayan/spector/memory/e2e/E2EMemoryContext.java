@@ -14,6 +14,8 @@ package com.spectrayan.spector.memory.e2e;
 
 import com.spectrayan.spector.embed.ollama.OllamaEmbeddingProvider;
 import com.spectrayan.spector.embed.ollama.OllamaLlmProvider;
+import com.spectrayan.spector.embed.ollama.OllamaSparseEncodingProvider;
+import com.spectrayan.spector.embed.ollama.OllamaTokenEmbeddingProvider;
 import com.spectrayan.spector.memory.DefaultSpectorMemory;
 import com.spectrayan.spector.memory.model.MemoryPersistenceMode;
 import com.spectrayan.spector.memory.SpectorMemory;
@@ -150,10 +152,16 @@ public final class E2EMemoryContext {
         int dims = embeddingProvider.dimensions();
         log.info("Embedding model: {} ({}D)", EMBEDDING_MODEL, dims);
 
+        // Create SPLADE + ColBERT providers (reuse the same embedding provider)
+        var sparseProvider = new OllamaSparseEncodingProvider(embeddingProvider);
+        var tokenProvider = new OllamaTokenEmbeddingProvider(embeddingProvider);
+
         // Build the memory system with all subsystems enabled
         memory = DefaultSpectorMemory.builder()
                 .dimensions(dims)
                 .embeddingProvider(embeddingProvider)
+                .sparseEncodingProvider(sparseProvider)
+                .tokenEmbeddingProvider(tokenProvider)
                 .persistenceMode(MemoryPersistenceMode.IN_MEMORY)
                 .workingCapacity(50)
                 .episodicPartitionCapacity(500)
