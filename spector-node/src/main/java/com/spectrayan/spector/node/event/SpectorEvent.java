@@ -55,6 +55,9 @@ public sealed interface SpectorEvent permits
         // ── Engine ──
         SpectorIndexRebuiltEvent,
         SpectorEmbeddingProviderChangedEvent,
+        // ── Ingestion Tasks ──
+        SpectorIngestionProgressEvent,
+        SpectorIngestionCompletedEvent,
         // ── Cortex Dashboard ──
         SpectorCortexQueryTraceEvent,
         SpectorCortexSimdLaneEvent,

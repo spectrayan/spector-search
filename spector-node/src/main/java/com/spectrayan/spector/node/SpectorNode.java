@@ -37,6 +37,7 @@ import com.spectrayan.spector.node.event.*;
 import com.spectrayan.spector.node.service.CortexMetricsPublisher;
 import com.spectrayan.spector.config.CortexTelemetryConfig;
 import com.spectrayan.spector.node.service.IngestService;
+import com.spectrayan.spector.node.service.IngestionTaskService;
 import com.spectrayan.spector.node.service.MemoryService;
 import com.spectrayan.spector.node.service.RagService;
 import com.spectrayan.spector.node.service.SearchService;
@@ -92,6 +93,7 @@ public class SpectorNode implements AutoCloseable {
     private final ClusterCoordinator coordinator; // null in standalone
     private final CortexTelemetryConfig cortexConfig;
     private MemoryService memoryService; // nullable — only when memory subsystem is present
+    private IngestionTaskService taskService; // nullable — only when memory subsystem is present
     private CortexMetricsPublisher cortexPublisher; // nullable
     private TelemetryBus telemetryBus; // nullable
     private SpectorRuntime runtime; // nullable — set when created from runtime
@@ -192,7 +194,9 @@ public class SpectorNode implements AutoCloseable {
         v1Modules.add(new StatusEndpoint(engine, nodeConfig, eventBus, coordinator));
 
         if (memoryService != null) {
-            v1Modules.add(new MemoryEndpoint(memoryService));
+            var ingestionHandler = runtime != null ? runtime.ingestion() : null;
+            this.taskService = new IngestionTaskService(eventBus, nodeConfig.nodeId());
+            v1Modules.add(new MemoryEndpoint(memoryService, ingestionHandler, taskService));
         }
 
         // ── Build Armeria server ──
@@ -422,21 +426,25 @@ public class SpectorNode implements AutoCloseable {
         // Load config (spector-defaults.yml has memory.enabled=true, mode=MEMORY)
         var props = com.spectrayan.spector.config.SpectorProperties.load();
 
-        // Create a lightweight random embedding provider for dev mode.
-        // In production, configure Ollama or another real provider.
-        int dims = props.getInt("spector.engine.dimensions", 384);
-        var embedder = new com.spectrayan.spector.embed.EmbeddingProvider() {
-            private final java.util.Random rng = new java.util.Random();
-            @Override public com.spectrayan.spector.embed.EmbeddingResult embed(String text) {
-                float[] vec = new float[dims];
-                for (int i = 0; i < dims; i++) vec[i] = rng.nextFloat() * 2 - 1;
-                return new com.spectrayan.spector.embed.EmbeddingResult(vec, text.split("\\s+").length, "random-dev");
-            }
-            @Override public int dimensions() { return dims; }
-            @Override public String modelName() { return "random-dev"; }
-        };
+        // ── Embedding provider (Ollama) ──
+        var embeddingConfig = com.spectrayan.spector.config.SpectorConfigFactory.embeddingDefaults(props);
+        var embedConfig = com.spectrayan.spector.embed.EmbeddingConfig.ollama(embeddingConfig.model())
+                .withBaseUrl(embeddingConfig.baseUrl())
+                .withTimeout(embeddingConfig.timeout());
+        var embedder = new com.spectrayan.spector.embed.ollama.OllamaEmbeddingProvider(embedConfig);
+        log.info("Embedding provider: model={}, baseUrl={}", embeddingConfig.model(), embeddingConfig.baseUrl());
 
-        SpectorRuntime runtime = SpectorRuntime.from(props, embedder);
+        // ── LLM provider for entity extraction + tag extraction ──
+        var memoryConfig = com.spectrayan.spector.config.SpectorConfigFactory.memoryDefaults(props);
+        com.spectrayan.spector.embed.TextGenerationProvider llmProvider = null;
+        String tagModel = memoryConfig.tagExtractorModel();
+        if (tagModel != null && !tagModel.isBlank()) {
+            llmProvider = com.spectrayan.spector.embed.ollama.OllamaLlmProvider.create(
+                    tagModel, embeddingConfig.baseUrl());
+            log.info("LLM provider: model={}, baseUrl={}", tagModel, embeddingConfig.baseUrl());
+        }
+
+        SpectorRuntime runtime = SpectorRuntime.from(props, embedder, llmProvider);
         SpectorNode node = SpectorNode.create(runtime, nodeConfig);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

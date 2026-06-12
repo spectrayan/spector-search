@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.linecorp.armeria.common.HttpResponse;
 import com.linecorp.armeria.common.HttpStatus;
 import com.linecorp.armeria.common.MediaType;
+import com.linecorp.armeria.common.MediaTypeNames;
+import com.linecorp.armeria.common.multipart.MultipartFile;
+import com.linecorp.armeria.server.annotation.Consumes;
+import com.linecorp.armeria.server.annotation.Default;
 import com.linecorp.armeria.server.annotation.Delete;
 import com.linecorp.armeria.server.annotation.ExceptionHandler;
 import com.linecorp.armeria.server.annotation.Get;
@@ -14,7 +18,9 @@ import com.spectrayan.spector.memory.model.MemoryType;
 import com.spectrayan.spector.memory.model.RecallOptions;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.neurodivergent.IngestionHints;
+import com.spectrayan.spector.memory.pipeline.ContentTagExtractor;
 import com.spectrayan.spector.node.api.ApiModule;
+import com.spectrayan.spector.node.api.dto.FileMemoryRequest;
 import com.spectrayan.spector.node.api.dto.IntrospectRequest;
 import com.spectrayan.spector.node.api.dto.IntrospectResponseDto;
 import com.spectrayan.spector.node.api.dto.MemoryRequest;
@@ -29,7 +35,21 @@ import com.spectrayan.spector.node.api.dto.WhyNotResponseDto;
 import com.spectrayan.spector.node.exception.ApiExceptionHandler;
 import com.spectrayan.spector.node.service.MemoryService;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+
+import com.spectrayan.spector.runtime.IngestionHandler;
+import com.spectrayan.spector.ingestion.IngestionResult;
+import com.spectrayan.spector.node.service.IngestionTask;
+import com.spectrayan.spector.node.service.IngestionTaskService;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Armeria endpoints for cognitive memory v1 REST API.
@@ -41,10 +61,23 @@ import java.time.Duration;
 @ExceptionHandler(ApiExceptionHandler.class)
 public class MemoryEndpoint implements ApiModule {
 
+    private static final Logger log = LoggerFactory.getLogger(MemoryEndpoint.class);
+
     private final MemoryService memoryService;
+    private final IngestionHandler ingestionHandler; // nullable — only when runtime is present
+    private final IngestionTaskService taskService;
+    private final ContentTagExtractor tagExtractor = new ContentTagExtractor();
 
     public MemoryEndpoint(MemoryService memoryService) {
+        this(memoryService, null, new IngestionTaskService(
+                new com.spectrayan.spector.node.event.SpectorEventBus(), "local"));
+    }
+
+    public MemoryEndpoint(MemoryService memoryService, IngestionHandler ingestionHandler,
+                          IngestionTaskService taskService) {
         this.memoryService = memoryService;
+        this.ingestionHandler = ingestionHandler;
+        this.taskService = taskService;
     }
 
     @Override
@@ -68,16 +101,139 @@ public class MemoryEndpoint implements ApiModule {
                     (byte) Math.clamp(arousal, 0, 255));
         }
 
+        // Auto-generate tags from text content if none were provided
+        String[] tags = request.tagsArray();
+        if (tags.length == 0 && request.text() != null && !request.text().isBlank()) {
+            tags = tagExtractor.extract(request.id(), request.text());
+            log.info("Auto-generated {} tags for memory: [{}]", tags.length, String.join(", ", tags));
+        }
+
         String effectiveId;
         if (request.id() != null && !request.id().isBlank()) {
             effectiveId = request.id();
-            memoryService.remember(effectiveId, request.text(), tier, source, hints, request.tagsArray()).join();
         } else {
-            // Auto-generate ID
-            effectiveId = memoryService.memory().remember(request.text(), tier, source, request.tagsArray()).join();
+            effectiveId = new com.spectrayan.spector.memory.id.TsidGenerator().generate();
         }
-        return HttpResponse.of(HttpStatus.OK, MediaType.JSON_UTF_8,
-                "{\"id\":\"" + effectiveId + "\",\"status\":\"stored\"}");
+
+        // Truncate description for display
+        String desc = request.text() != null && request.text().length() > 60
+                ? request.text().substring(0, 60) + "\u2026" : request.text();
+
+        var task = new IngestionTask(
+                effectiveId, "Remember: " + desc, IngestionTask.TaskType.REMEMBER);
+        task.setTotalChunks(1);
+
+        final String[] finalTags = tags;
+        final IngestionHints finalHints = hints;
+        taskService.submit(task, () -> {
+            memoryService.remember(effectiveId, request.text(), tier, source, finalHints, finalTags).join();
+            taskService.reportChunkStored(task);
+        });
+
+        return HttpResponse.of(HttpStatus.ACCEPTED, MediaType.JSON_UTF_8,
+                "{\"taskId\":\"" + task.taskId()
+                + "\",\"id\":\"" + effectiveId
+                + "\",\"status\":\"accepted\"}");
+    }
+
+    // ── File / Directory Ingestion ────────────────────────────────
+
+    @Consumes(MediaTypeNames.MULTIPART_FORM_DATA)
+    @Post("/ingest-file")
+    public HttpResponse ingestFile(
+            @Param("file") MultipartFile file,
+            @Param("tier") @Default("SEMANTIC") String tier,
+            @Param("source") @Default("OBSERVED") String source) {
+        if (ingestionHandler == null) {
+            return HttpResponse.of(HttpStatus.SERVICE_UNAVAILABLE, MediaType.PLAIN_TEXT_UTF_8,
+                    "File ingestion requires SpectorRuntime (not available in standalone engine mode)");
+        }
+
+        String originalName = file.filename() != null ? file.filename() : "uploaded-file";
+        Path tempFile = file.path();
+        log.info("File upload received: name={}, size={} bytes", originalName, tempFile.toFile().length());
+
+        var tsidGen = new com.spectrayan.spector.memory.id.TsidGenerator();
+        String documentId = tsidGen.generate();
+
+        var task = new IngestionTask(
+                documentId, "Ingest: " + originalName, IngestionTask.TaskType.FILE_INGEST);
+
+        taskService.submit(task, () -> {
+            try {
+                IngestionResult result = ingestionHandler.ingest(tempFile, documentId);
+                task.setTotalChunks(result.chunksStored());
+                for (int i = 0; i < result.chunksStored(); i++) {
+                    taskService.reportChunkStored(task);
+                }
+                log.info("File ingested: {} (id={}) \u2192 {} chunks", originalName, documentId, result.chunksStored());
+            } catch (Exception e) {
+                throw new RuntimeException("File ingestion failed for '" + originalName + "': " + e.getMessage(), e);
+            }
+        });
+
+        return HttpResponse.of(HttpStatus.ACCEPTED, MediaType.JSON_UTF_8,
+                "{\"taskId\":\"" + task.taskId()
+                + "\",\"fileName\":\"" + originalName
+                + "\",\"documentId\":\"" + documentId
+                + "\",\"status\":\"accepted\"}");
+    }
+
+    @Post("/ingest-directory")
+    public HttpResponse ingestDirectory(FileMemoryRequest request) {
+        if (ingestionHandler == null) {
+            return HttpResponse.of(HttpStatus.SERVICE_UNAVAILABLE, MediaType.PLAIN_TEXT_UTF_8,
+                    "Directory ingestion requires SpectorRuntime (not available in standalone engine mode)");
+        }
+
+        Path dirPath = Path.of(request.path());
+        if (!Files.isDirectory(dirPath)) {
+            return HttpResponse.of(HttpStatus.BAD_REQUEST, MediaType.PLAIN_TEXT_UTF_8,
+                    "Path is not a directory: " + request.path());
+        }
+
+        String filePattern = request.filePattern() != null ? request.filePattern() : "**/*.md,**/*.txt,**/*.java";
+        int chunkSize = request.chunkSize() > 0 ? request.chunkSize() : 800;
+        int chunkOverlap = request.chunkOverlap() > 0 ? request.chunkOverlap() : 100;
+        String skipDirs = request.skipDirs() != null ? request.skipDirs() : ".git,.idea,.mvn,target,node_modules";
+
+        var tsidGen = new com.spectrayan.spector.memory.id.TsidGenerator();
+        String taskId = tsidGen.generate();
+
+        var task = new IngestionTask(
+                taskId, "Ingest dir: " + request.path(), IngestionTask.TaskType.DIR_INGEST);
+
+        log.info("Directory ingestion submitted: path={}, pattern={}, chunkSize={}, taskId={}",
+                request.path(), filePattern, chunkSize, taskId);
+
+        taskService.submit(task, () -> {
+            try {
+                List<IngestionResult> results = ingestionHandler.ingest(
+                        dirPath, filePattern, chunkSize, chunkOverlap, skipDirs);
+
+                int totalChunks = results.stream().mapToInt(IngestionResult::chunksStored).sum();
+                task.setTotalChunks(totalChunks);
+                for (int i = 0; i < totalChunks; i++) {
+                    taskService.reportChunkStored(task);
+                }
+
+                long totalFailures = results.stream()
+                        .filter(r -> !r.failures().isEmpty()).count();
+                for (int i = 0; i < totalFailures; i++) {
+                    task.incrementFailures();
+                }
+
+                log.info("Directory ingested: {} files, {} chunks, {} failures",
+                        results.size(), totalChunks, totalFailures);
+            } catch (Exception e) {
+                throw new RuntimeException("Directory ingestion failed: " + e.getMessage(), e);
+            }
+        });
+
+        return HttpResponse.of(HttpStatus.ACCEPTED, MediaType.JSON_UTF_8,
+                "{\"taskId\":\"" + taskId
+                + "\",\"path\":\"" + request.path()
+                + "\",\"status\":\"accepted\"}");
     }
 
     @Post("/recall")
@@ -267,5 +423,45 @@ public class MemoryEndpoint implements ApiModule {
             java.util.List<java.util.Map<String, Object>> relations) {
         var result = memoryService.bulkImportEntityRelations(relations);
         return HttpResponse.ofJson(result);
+    }
+
+    // ── Task Status Endpoints ────────────────────────────────────
+
+    @Get("/tasks")
+    public HttpResponse listTasks() {
+        var tasks = taskService.getAllTasks().stream().map(t -> Map.of(
+                "taskId", (Object) t.taskId(),
+                "description", (Object) t.description(),
+                "type", (Object) t.type().name(),
+                "status", (Object) t.status().name(),
+                "chunksStored", (Object) t.chunksStored(),
+                "totalChunks", (Object) t.totalChunks(),
+                "failures", (Object) t.failures(),
+                "progressPercent", (Object) t.progressPercent(),
+                "durationMs", (Object) t.durationMs(),
+                "startedAt", (Object) t.startedAt().toString()
+        )).toList();
+        return HttpResponse.ofJson(tasks);
+    }
+
+    @Get("/tasks/{taskId}")
+    public HttpResponse getTask(@Param("taskId") String taskId) {
+        var task = taskService.getTask(taskId);
+        if (task == null) {
+            return HttpResponse.of(HttpStatus.NOT_FOUND, MediaType.PLAIN_TEXT_UTF_8,
+                    "Task not found: " + taskId);
+        }
+        return HttpResponse.ofJson(Map.of(
+                "taskId", task.taskId(),
+                "description", task.description(),
+                "type", task.type().name(),
+                "status", task.status().name(),
+                "chunksStored", task.chunksStored(),
+                "totalChunks", task.totalChunks(),
+                "failures", task.failures(),
+                "progressPercent", task.progressPercent(),
+                "durationMs", task.durationMs(),
+                "startedAt", task.startedAt().toString()
+        ));
     }
 }
