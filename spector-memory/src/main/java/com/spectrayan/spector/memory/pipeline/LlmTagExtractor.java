@@ -25,19 +25,25 @@ import java.util.Locale;
  * to extract semantic tags from document content.
  *
  * <h3>How It Works</h3>
- * <p>Sends a structured prompt to the LLM asking it to identify 5–10
+ * <p>
+ * Sends a structured prompt to the LLM asking it to identify 5–10
  * contextual tags from the text. The LLM returns comma-separated tags
- * which are parsed into the synaptic tag array.</p>
+ * which are parsed into the synaptic tag array.
+ * </p>
  *
  * <h3>Fallback</h3>
- * <p>If the LLM is unavailable or returns an unparseable response,
- * falls back to {@link ContentTagExtractor} for basic keyword extraction.</p>
+ * <p>
+ * If the LLM is unavailable or returns an unparseable response,
+ * falls back to {@link ContentTagExtractor} for basic keyword extraction.
+ * </p>
  *
  * <h3>Performance Note</h3>
- * <p>LLM inference adds ~500ms–2s per chunk. Use this extractor for
+ * <p>
+ * LLM inference adds ~500ms–2s per chunk. Use this extractor for
  * high-value ingestion (e.g., user-provided documents) where tag quality
  * justifies the latency. For bulk ingestion of thousands of files,
- * {@link ContentTagExtractor} is recommended.</p>
+ * {@link ContentTagExtractor} is recommended.
+ * </p>
  *
  * @see TagExtractor
  * @see TextGenerationProvider
@@ -46,18 +52,21 @@ public final class LlmTagExtractor implements TagExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(LlmTagExtractor.class);
 
-    private static final int MAX_TAGS = 10;
-    private static final int MAX_CONTENT_FOR_PROMPT = 1000;
+    private static final int MAX_TAGS = 30;
 
     private static final String PROMPT_TEMPLATE = """
-            Extract 5 to 10 contextual tags from the following text.
-            Tags should be single lowercase words or short phrases that describe \
-            the key topics, themes, entities, or categories in the text.
-            Return ONLY a comma-separated list of tags, nothing else.
-            
-            Text:
+            Extract 10 to 15 highly specific contextual tags from the following text.
+
+            Tag Formatting Rules:
+            1. All tags must be in lowercase.
+            2. Multi-word tags must be hyphenated instead of using spaces (e.g., "product launch" becomes "product-launch").
+            3. Do not include spaces, symbols, punctuation, or special characters (hyphens are allowed per rule 2).
+            4. Every tag must be directly derived from the text. Do not invent or infer tags that are not present.
+            5. Return ONLY a comma-separated list of tags. No markdown, no explanations, no preamble.
+
+            Text to extract from:
             %s
-            
+
             Tags:""";
 
     private final TextGenerationProvider generator;
@@ -92,10 +101,7 @@ public final class LlmTagExtractor implements TagExtractor {
 
         long startNs = System.nanoTime();
         try {
-            String content = text != null && text.length() > MAX_CONTENT_FOR_PROMPT
-                    ? text.substring(0, MAX_CONTENT_FOR_PROMPT) : text;
-
-            String prompt = String.format(PROMPT_TEMPLATE, content != null ? content : id);
+            String prompt = String.format(PROMPT_TEMPLATE, text != null ? text : id);
             log.debug("[TagExtract] LLM prompt for '{}': {} chars", truncId(id), prompt.length());
 
             String response = generator.generate(prompt);
@@ -114,7 +120,10 @@ public final class LlmTagExtractor implements TagExtractor {
             String[] tags = Arrays.stream(response.split("[,;\\n]"))
                     .map(String::trim)
                     .map(s -> s.toLowerCase(Locale.ROOT))
-                    .map(s -> s.replaceAll("[^a-z0-9\\-_ ]", ""))
+                    .map(s -> s.replaceAll("[^a-z0-9\\- ]", ""))
+                    .map(s -> s.replaceAll("\\s+", "-"))
+                    .map(s -> s.replaceAll("-{2,}", "-"))
+                    .map(s -> s.replaceAll("^-|-$", ""))
                     .filter(s -> !s.isBlank() && s.length() > 1)
                     .distinct()
                     .limit(MAX_TAGS)
@@ -140,7 +149,8 @@ public final class LlmTagExtractor implements TagExtractor {
 
     /** Truncate long IDs (file paths) for readable logs. */
     private static String truncId(String id) {
-        if (id == null) return "null";
+        if (id == null)
+            return "null";
         return id.length() > 60 ? "..." + id.substring(id.length() - 57) : id;
     }
 }

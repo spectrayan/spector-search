@@ -100,7 +100,10 @@ public record RecallOptions(
         float graphExpansionThreshold,
         // ── WAL Replay (Time-Travel) ──
         Instant replayTimestamp,
-        int maxReplayEvents
+        int maxReplayEvents,
+        // ── Reranker (ColBERT v2) ──
+        boolean enableReranker,
+        int rerankerDepth
 ) {
 
     /** Default options: top 10, no filters, balanced scoring. */
@@ -153,6 +156,10 @@ public record RecallOptions(
         // ── WAL Replay (Time-Travel) ──
         private Instant replayTimestamp = null;    // null = disabled
         private int maxReplayEvents = 100_000;     // cap to prevent OOM on large WALs
+
+        // ── Reranker (ColBERT v2) ──
+        private boolean enableReranker = false;     // default: off (requires TokenEmbeddingProvider)
+        private int rerankerDepth = 50;             // rerank top-50 first-stage candidates
 
         // ── Neurodivergent: Hyperfocus ──
         private long hyperfocusMask = 0L;       // 0 = disabled
@@ -452,6 +459,31 @@ public record RecallOptions(
         }
 
         /**
+         * Enables/disables the ColBERT v2 reranker (default: false).
+         *
+         * <p>When enabled, first-stage retrieval candidates are reranked using
+         * ColBERT's token-level MaxSim scoring. Requires a configured
+         * {@link com.spectrayan.spector.embed.TokenEmbeddingProvider}.</p>
+         */
+        public Builder enableReranker(boolean enable) {
+            this.enableReranker = enable;
+            return this;
+        }
+
+        /**
+         * Sets the number of first-stage candidates to rerank (default: 50).
+         *
+         * <p>Higher values improve recall at the cost of latency (each candidate
+         * requires per-token embedding computation).</p>
+         *
+         * @param depth number of candidates to rerank (typically 20-100)
+         */
+        public Builder rerankerDepth(int depth) {
+            this.rerankerDepth = depth;
+            return this;
+        }
+
+        /**
          * Sets the scoring mode (default: {@link ScoringMode#COGNITIVE}).
          *
          * <p>Use {@link ScoringMode#SIMILARITY} for pure vector retrieval
@@ -552,7 +584,8 @@ public record RecallOptions(
                     scoringMode, entityHints, enableTrace,
                     minTimestamp, maxTimestamp,
                     graphExpansionThreshold,
-                    replayTimestamp, maxReplayEvents);
+                    replayTimestamp, maxReplayEvents,
+                    enableReranker, rerankerDepth);
             return options;
         }
     }

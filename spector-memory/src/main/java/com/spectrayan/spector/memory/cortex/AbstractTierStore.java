@@ -44,7 +44,7 @@ import java.nio.file.StandardOpenOption;
  *   <li>Arena lifecycle (shared Arena for thread-safe access)</li>
  *   <li>Layout creation from vector byte count</li>
  *   <li>Capacity tracking and size reporting</li>
- *   <li>Segment allocation with 32-byte alignment</li>
+ *   <li>Segment allocation with 64-byte alignment</li>
  *   <li>Close/cleanup lifecycle</li>
  * </ul>
  *

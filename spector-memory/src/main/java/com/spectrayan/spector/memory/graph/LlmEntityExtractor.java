@@ -62,6 +62,10 @@ public final class LlmEntityExtractor implements EntityExtractor {
     private static final String PROMPT_RESOURCE = "prompts/entity-extraction.txt";
 
     private static final int MAX_CONTENT_FOR_PROMPT = 1500;
+
+    /** Pattern to strip <think>...</think> reasoning blocks from qwen3 output. */
+    private static final Pattern THINK_BLOCK = Pattern.compile(
+            "<think>.*?</think>", Pattern.DOTALL);
     private static final int DEFAULT_MAX_ENTITIES = 10;
     private static final int DEFAULT_MAX_RELATIONS = 20;
 
@@ -73,6 +77,15 @@ public final class LlmEntityExtractor implements EntityExtractor {
     private final TextGenerationProvider generator;
     private final int maxEntities;
     private final int maxRelations;
+    private final com.spectrayan.spector.embed.GenerationOptions generationOptions;
+
+    /** Default generation options for entity extraction. */
+    private static final com.spectrayan.spector.embed.GenerationOptions DEFAULT_OPTIONS =
+            com.spectrayan.spector.embed.GenerationOptions.builder()
+                    .temperature(0.3f)
+                    .maxTokens(1024)
+                    .topP(0.95f)
+                    .build();
 
     /**
      * Creates an LLM entity extractor with default limits.
@@ -80,7 +93,7 @@ public final class LlmEntityExtractor implements EntityExtractor {
      * @param generator the text generation provider
      */
     public LlmEntityExtractor(TextGenerationProvider generator) {
-        this(generator, DEFAULT_MAX_ENTITIES, DEFAULT_MAX_RELATIONS);
+        this(generator, DEFAULT_MAX_ENTITIES, DEFAULT_MAX_RELATIONS, null);
     }
 
     /**
@@ -92,9 +105,24 @@ public final class LlmEntityExtractor implements EntityExtractor {
      */
     public LlmEntityExtractor(TextGenerationProvider generator,
                                int maxEntities, int maxRelations) {
+        this(generator, maxEntities, maxRelations, null);
+    }
+
+    /**
+     * Creates an LLM entity extractor with custom limits and generation options.
+     *
+     * @param generator    the text generation provider
+     * @param maxEntities  maximum entities to extract per memory
+     * @param maxRelations maximum relations to extract per memory
+     * @param options      generation options (temperature, maxTokens, topP); null uses defaults
+     */
+    public LlmEntityExtractor(TextGenerationProvider generator,
+                               int maxEntities, int maxRelations,
+                               com.spectrayan.spector.embed.GenerationOptions options) {
         this.generator = generator;
         this.maxEntities = maxEntities;
         this.maxRelations = maxRelations;
+        this.generationOptions = options != null ? options : DEFAULT_OPTIONS;
     }
 
     @Override
@@ -112,12 +140,16 @@ public final class LlmEntityExtractor implements EntityExtractor {
             String prompt = String.format(promptTemplate,
                     maxEntities, maxRelations,
                     content != null ? content : id);
-            String response = generator.generate(prompt);
+            String response = generator.generate(prompt, generationOptions);
 
             if (response == null || response.isBlank()) {
-                log.debug("LLM returned empty entities for '{}', skipping", id);
+                log.info("[EntityExtract] LLM returned empty for '{}', skipping", id);
                 return List.of();
             }
+
+            // Log raw response for diagnostics (truncated)
+            String preview = response.length() > 300 ? response.substring(0, 300) + "..." : response;
+            log.info("[EntityExtract] Raw LLM response for '{}': {}", id, preview.replaceAll("\\n", " | "));
 
             return parseResponse(response, id);
 
@@ -136,7 +168,17 @@ public final class LlmEntityExtractor implements EntityExtractor {
     /**
      * Parses the LLM response into extracted entities with relations.
      */
-    private List<ExtractedEntity> parseResponse(String response, String id) {
+    private List<ExtractedEntity> parseResponse(String rawResponse, String id) {
+        // Strip <think>...</think> reasoning blocks (qwen3 models)
+        String response = THINK_BLOCK.matcher(rawResponse).replaceAll("").strip();
+        // Strip markdown code fences if model wraps output
+        response = response.replaceAll("```[a-z]*\n?", "").strip();
+
+        if (response.isBlank()) {
+            log.info("[EntityExtract] Response was all <think> content for '{}', no entities", id);
+            return List.of();
+        }
+
         // Parse entities
         List<String> entityNames = new ArrayList<>();
         List<String> entityTypes = new ArrayList<>();
@@ -185,8 +227,9 @@ public final class LlmEntityExtractor implements EntityExtractor {
             result.add(new ExtractedEntity(name, type, entityRelations));
         }
 
-        log.debug("LLM extracted {} entities, {} relations for '{}'",
-                entityNames.size(), relations.size(), id);
+        log.info("[EntityExtract] LLM extracted {} entities, {} relations for '{}': {}",
+                entityNames.size(), relations.size(), id,
+                entityNames.stream().collect(java.util.stream.Collectors.joining(", ")));
         return result;
     }
 

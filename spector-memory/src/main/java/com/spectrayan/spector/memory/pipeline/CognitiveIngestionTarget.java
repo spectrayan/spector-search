@@ -37,7 +37,11 @@ import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 import com.spectrayan.spector.memory.synapse.SynapticTagEncoder;
 import com.spectrayan.spector.memory.temporal.TemporalChain;
 import com.spectrayan.spector.memory.cortex.MemoryBM25Index;
+import com.spectrayan.spector.memory.cortex.MemorySpladeIndex;
 import com.spectrayan.spector.memory.cortex.TextDataStore;
+
+import com.spectrayan.spector.embed.SparseEncodingProvider;
+import com.spectrayan.spector.embed.SparseEncodingResult;
 
 import com.spectrayan.spector.memory.error.SpectorEntityGraphException;
 import com.spectrayan.spector.memory.error.SpectorHebbianException;
@@ -110,6 +114,10 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
     private final TextDataStore textDataStore;
     private final int activePartitionIndex;
 
+    // ── SPLADE Sparse Search (nullable — graceful degradation) ──
+    private final MemorySpladeIndex spladeIndex;
+    private final SparseEncodingProvider spladeProvider;
+
     // ── Session tracking for Hebbian co-ingestion and temporal chains ──
     private final AtomicInteger lastIngestedMemoryIdx = new AtomicInteger(-1);
     private volatile int currentSessionId = 0;
@@ -134,7 +142,9 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                                      EntityGraph entityGraph,
                                      MemoryBM25Index bm25Index,
                                      TextDataStore textDataStore,
-                                     int activePartitionIndex) {
+                                     int activePartitionIndex,
+                                     MemorySpladeIndex spladeIndex,
+                                     SparseEncodingProvider spladeProvider) {
         this.quantizer = quantizer;
         this.surpriseDetector = surpriseDetector;
         this.flashbulbPolicy = flashbulbPolicy;
@@ -153,6 +163,8 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         this.bm25Index = bm25Index;
         this.textDataStore = textDataStore;
         this.activePartitionIndex = activePartitionIndex;
+        this.spladeIndex = spladeIndex;
+        this.spladeProvider = spladeProvider;
     }
 
     /**
@@ -187,7 +199,8 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                 index, wal, workingStore, icnuWeights, semanticIndex,
                 tagExtractor, true,
                 null, null, null, null,
-                null, null, -1);
+                null, null, -1,
+                null, null);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -356,6 +369,16 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
             }
         }
 
+        // Step 9a-splade: SPLADE sparse index (if provider available)
+        if (spladeIndex != null && spladeProvider != null && activePartitionIndex >= 0) {
+            try {
+                SparseEncodingResult sparse = spladeProvider.encode(text);
+                spladeIndex.index(activePartitionIndex, id, sparse.weights());
+            } catch (RuntimeException e) {
+                log.warn("Failed SPLADE index for '{}': {}", id, e.getMessage());
+            }
+        }
+
         // Step 9b: Hebbian edge strengthening (co-ingestion within session)
         int memoryIdx = index.size() - 1; // approximate index of this memory
         if (hebbianGraph != null) {
@@ -395,10 +418,13 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         if (entityExtractor != null && entityGraph != null && entityExtractor.isAvailable()) {
             try {
                 List<ExtractedEntity> entities = entityExtractor.extract(id, text);
+                int entitiesAdded = 0;
+                int relationsAdded = 0;
                 for (ExtractedEntity entity : entities) {
                     int eid = entityGraph.addEntity(entity.name(), entity.typeName());
                     if (eid >= 0) {
                         entityGraph.linkEntityToMemory(eid, memoryIdx);
+                        entitiesAdded++;
 
                         // Add relations
                         for (EntityRelation rel : entity.relations()) {
@@ -411,14 +437,24 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
                             }
                             if (targetEid >= 0) {
                                 entityGraph.addRelation(eid, targetEid, rel.relationTypeName());
+                                relationsAdded++;
                             }
                         }
                     }
+                }
+                if (entitiesAdded > 0) {
+                    log.info("[Ingest] '{}' → {} entities, {} relations added to EntityGraph",
+                            id.length() > 60 ? "..." + id.substring(id.length() - 57) : id,
+                            entitiesAdded, relationsAdded);
                 }
             } catch (RuntimeException e) {
                 SpectorEntityGraphException ex = new SpectorEntityGraphException("extraction", e);
                 log.warn(ex.getMessage());
             }
+        } else if (entityGraph != null) {
+            log.debug("[Ingest] '{}' entity extraction skipped: extractor={}, available={}",
+                    id, entityExtractor != null ? entityExtractor.getClass().getSimpleName() : "null",
+                    entityExtractor != null && entityExtractor.isAvailable());
         }
 
         log.debug("Ingested '{}' as {} (importance={}, {} tags, hnswIdx={}, source={})",
@@ -549,6 +585,16 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
         if (bm25Index != null && activePartitionIndex >= 0) {
             try { bm25Index.index(activePartitionIndex, id, text); }
             catch (RuntimeException e) { log.warn("Failed BM25 index for '{}': {}", id, e.getMessage()); }
+        }
+
+        // Step 9a-splade: SPLADE sparse index (if provider available)
+        if (spladeIndex != null && spladeProvider != null && activePartitionIndex >= 0) {
+            try {
+                SparseEncodingResult sparse = spladeProvider.encode(text);
+                spladeIndex.index(activePartitionIndex, id, sparse.weights());
+            } catch (RuntimeException e) {
+                log.warn("Failed SPLADE index for '{}': {}", id, e.getMessage());
+            }
         }
 
         // Step 9b: Hebbian edge strengthening (automatic co-ingestion)

@@ -1,3 +1,4 @@
+/no_think
 Extract named entities and their relationships from the following text.
 
 For each entity, output a line in this exact format:
@@ -25,6 +26,7 @@ Valid relation types:
 
 Rules:
 - Output ONLY ENTITY and RELATION lines, nothing else.
+- Do NOT include any explanation, reasoning, or commentary.
 - Entity names should be concise but unambiguous.
 - Use the most specific type available; use OTHER only as a last resort.
 - Maximum %d entities and %d relations.

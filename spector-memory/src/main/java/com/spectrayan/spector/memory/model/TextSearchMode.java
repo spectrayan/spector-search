@@ -16,20 +16,32 @@ package com.spectrayan.spector.memory.model;
 /**
  * Controls which retrieval paths are active during recall.
  *
- * <h3>Modes</h3>
- * <ul>
- *   <li>{@link #HYBRID} — parallel vector + BM25 keyword search, fused via RRF-weighted scoring (default)</li>
- *   <li>{@link #KEYWORD_ONLY} — BM25 keyword search only, no vector similarity</li>
- *   <li>{@link #VECTOR_ONLY} — vector similarity search only, no BM25 keyword boost</li>
- * </ul>
+ * <h3>Retrieval Stack</h3>
+ * <pre>
+ *   Layer 4: ColBERT v2 Reranker   (token-level late interaction)
+ *   Layer 3: SPLADE / Li-LSR       (learned sparse retrieval)
+ *   Layer 2: BM25                  (keyword search, SIMD-accelerated)
+ *   Layer 1: Dense Vector           (HNSW semantic similarity)
+ *   ─────── RRF Fusion ─────────── (merges all layer signals)
+ * </pre>
  *
- * <h3>When to Use Each Mode</h3>
+ * <h3>Modes</h3>
  * <table>
- *   <tr><th>Query Type</th><th>Best Mode</th><th>Why</th></tr>
- *   <tr><td>"what's John's phone number?"</td><td>{@code KEYWORD_ONLY}</td><td>Exact term match; vector similarity doesn't help</td></tr>
- *   <tr><td>"explain the deployment process"</td><td>{@code HYBRID}</td><td>Both semantic meaning and keyword terms are useful</td></tr>
- *   <tr><td>"something like that error from last week"</td><td>{@code VECTOR_ONLY}</td><td>Vague query; keyword matching would miss it</td></tr>
+ *   <tr><th>Mode</th><th>Active Layers</th><th>Best For</th></tr>
+ *   <tr><td>{@link #HYBRID}</td><td>BM25 + Vector</td><td>General purpose (default)</td></tr>
+ *   <tr><td>{@link #KEYWORD_ONLY}</td><td>BM25 only</td><td>Exact terms: names, error codes, IDs</td></tr>
+ *   <tr><td>{@link #VECTOR_ONLY}</td><td>Vector only</td><td>Vague/conceptual queries</td></tr>
+ *   <tr><td>{@link #SPLADE}</td><td>SPLADE only</td><td>Synonym-aware keyword search</td></tr>
+ *   <tr><td>{@link #SPLADE_HYBRID}</td><td>SPLADE + Vector</td><td>Best quality without BM25</td></tr>
+ *   <tr><td>{@link #LI_LSR}</td><td>Li-LSR only</td><td>Fast inference-free sparse</td></tr>
+ *   <tr><td>{@link #COLBERT_RERANK}</td><td>All first-stage + ColBERT rerank</td><td>Maximum quality</td></tr>
+ *   <tr><td>{@link #FULL_STACK}</td><td>All layers active</td><td>Best possible recall + precision</td></tr>
  * </table>
+ *
+ * <h3>Graceful Degradation</h3>
+ * <p>If a mode requires a provider that is not configured (e.g., SPLADE mode without
+ * a {@link com.spectrayan.spector.embed.SparseEncodingProvider}), the pipeline will
+ * log a warning and silently degrade to the closest available mode.</p>
  *
  * @see RecallOptions#textSearchMode()
  */
@@ -53,5 +65,69 @@ public enum TextSearchMode {
      * Vector similarity search only — no BM25 keyword boost.
      * <p>Equivalent to the pre-text-search behavior.</p>
      */
-    VECTOR_ONLY
+    VECTOR_ONLY,
+
+    /**
+     * SPLADE learned sparse retrieval only — no BM25, no vector.
+     * <p>Neural term expansion captures synonyms and related concepts
+     * that BM25 misses. Requires a configured
+     * {@link com.spectrayan.spector.embed.SparseEncodingProvider}.</p>
+     */
+    SPLADE,
+
+    /**
+     * SPLADE + dense vector search, fused via RRF.
+     * <p>Recommended upgrade from {@link #HYBRID} when a SPLADE provider
+     * is available. Combines semantic recall (vector) with learned term
+     * expansion (SPLADE) without the limitations of exact-match BM25.</p>
+     */
+    SPLADE_HYBRID,
+
+    /**
+     * Li-LSR inference-free sparse retrieval.
+     * <p>Uses precomputed lookup tables for query encoding — no neural model
+     * needed at query time. Fastest sparse retrieval option.</p>
+     */
+    LI_LSR,
+
+    /**
+     * Any first-stage retrieval + ColBERT v2 reranking.
+     * <p>Runs the default first-stage retrieval (HYBRID) and then reranks
+     * the top-N candidates using ColBERT's token-level MaxSim scoring.
+     * Requires a configured
+     * {@link com.spectrayan.spector.embed.TokenEmbeddingProvider}.</p>
+     */
+    COLBERT_RERANK,
+
+    /**
+     * Full stack: BM25 + SPLADE + dense vector + ColBERT reranker.
+     * <p>All retrieval layers active with three-way RRF fusion, followed
+     * by ColBERT reranking. Maximum quality at the cost of latency.
+     * Requires both SparseEncodingProvider and TokenEmbeddingProvider.</p>
+     */
+    FULL_STACK;
+
+    // ── Convenience query methods ──
+
+    /** Returns true if this mode uses BM25 keyword search. */
+    public boolean usesBM25() {
+        return this == HYBRID || this == KEYWORD_ONLY
+                || this == COLBERT_RERANK || this == FULL_STACK;
+    }
+
+    /** Returns true if this mode uses dense vector search. */
+    public boolean usesVector() {
+        return this != KEYWORD_ONLY && this != SPLADE && this != LI_LSR;
+    }
+
+    /** Returns true if this mode uses SPLADE or Li-LSR sparse retrieval. */
+    public boolean usesSPLADE() {
+        return this == SPLADE || this == SPLADE_HYBRID
+                || this == LI_LSR || this == FULL_STACK;
+    }
+
+    /** Returns true if this mode uses ColBERT v2 reranking. */
+    public boolean usesColBERT() {
+        return this == COLBERT_RERANK || this == FULL_STACK;
+    }
 }

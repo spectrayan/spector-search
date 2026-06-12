@@ -15,8 +15,15 @@ package com.spectrayan.spector.memory;
 import com.spectrayan.spector.commons.concurrent.ConcurrentExecutionException;
 import com.spectrayan.spector.commons.concurrent.ConcurrentTasks;
 import com.spectrayan.spector.core.quantization.ScalarQuantizer;
+import com.spectrayan.spector.embed.EmbedConfig;
 import com.spectrayan.spector.embed.EmbeddingProvider;
+import com.spectrayan.spector.embed.ParallelEmbeddingPipeline;
+import com.spectrayan.spector.embed.PipelineEmbeddingResult;
+import com.spectrayan.spector.embed.SparseEncodingProvider;
 import com.spectrayan.spector.embed.TextGenerationProvider;
+import com.spectrayan.spector.embed.TokenEmbeddingProvider;
+import com.spectrayan.spector.index.ColBERTReranker;
+import com.spectrayan.spector.index.ColBERTTokenCache;
 import com.spectrayan.spector.memory.amygdala.ValenceTracker;
 import com.spectrayan.spector.memory.cortex.CentroidRouter;
 import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore;
@@ -79,6 +86,7 @@ import com.spectrayan.spector.memory.synapse.SynapticHeaderConstants;
 import com.spectrayan.spector.memory.namespace.SpectorNamespaceManager;
 import com.spectrayan.spector.memory.namespace.NamespaceQuotas;
 import com.spectrayan.spector.memory.temporal.TemporalChain;
+import com.spectrayan.spector.commons.TextChunker;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,6 +95,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -184,12 +193,17 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
     private final CheckpointDaemon checkpointDaemon;
     private final DaemonSupervisor daemonSupervisor;
 
+    // ── Chunking for remember() ──
+    private final TextChunker chunker;
+    private final ParallelEmbeddingPipeline parallelPipeline;
+
     private DefaultSpectorMemory(Builder builder) {
         this.dimensions = builder.dimensions;
         this.persistenceMode = builder.persistenceMode;
         this.persistencePath = builder.persistencePath;
         this.circadianPolicy = builder.circadianPolicy;
         this.profileConfig = builder.profileConfig;
+        this.chunker = builder.chunker;
 
         if (builder.embeddingProvider == null) {
             throw new SpectorValidationException(ErrorCode.ARGUMENT_NULL,
@@ -197,6 +211,7 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         }
         EmbeddingProvider embeddingProvider = builder.embeddingProvider;
         this.embeddingProvider = embeddingProvider;
+        this.parallelPipeline = new ParallelEmbeddingPipeline(embeddingProvider);
 
         boolean isDisk = persistenceMode == MemoryPersistenceMode.DISK;
 
@@ -361,7 +376,8 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
                 && builder.textGenerationProvider != null) {
             entityExtractor = new LlmEntityExtractor(
                     builder.textGenerationProvider,
-                    builder.maxEntitiesPerMemory, builder.maxRelationsPerMemory);
+                    builder.maxEntitiesPerMemory, builder.maxRelationsPerMemory,
+                    builder.llmGenerationOptions);
         } else if (builder.entityExtractionMode == EntityExtractionMode.CUSTOM
                 && builder.entityExtractor != null) {
             entityExtractor = builder.entityExtractor;
@@ -410,13 +426,32 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
             activePartitionIndex = 0;
         }
 
+        // ── SPLADE Index (auto-created when provider is configured) ──
+        com.spectrayan.spector.memory.cortex.MemorySpladeIndex memorySpladeIndex = null;
+        if (builder.sparseEncodingProvider != null) {
+            memorySpladeIndex = new com.spectrayan.spector.memory.cortex.MemorySpladeIndex(1);
+            log.info("SPLADE index enabled: provider={}", builder.sparseEncodingProvider.modelName());
+        }
+
+        // ── ColBERT Reranker (auto-created when provider is configured) ──
+        ColBERTReranker colbertReranker = null;
+        if (builder.tokenEmbeddingProvider != null) {
+            ColBERTTokenCache tokenCache = new ColBERTTokenCache(
+                    builder.tokenEmbeddingProvider.tokenDimensions(), 10_000);
+            colbertReranker = new ColBERTReranker(builder.tokenEmbeddingProvider, tokenCache);
+            log.info("ColBERT reranker enabled: provider={}, tokenDims={}",
+                    builder.tokenEmbeddingProvider.modelName(),
+                    builder.tokenEmbeddingProvider.tokenDimensions());
+        }
+
         // ── Ingestion Target ──
         this.cognitiveTarget = new CognitiveIngestionTarget(
                 quantizer, surpriseDetector, flashbulbPolicy,
                 tierRouter, index, wal, workingStore, builder.icnuWeights,
                 builder.semanticIndex, builder.tagExtractor, true,
                 hebbianGraph, temporalChain, entityExtractor, entityGraph,
-                bm25Index, textDataStore, activePartitionIndex);
+                bm25Index, textDataStore, activePartitionIndex,
+                memorySpladeIndex, builder.sparseEncodingProvider);
 
         // ── Partition Manager ──
         if (isDisk) {
@@ -447,7 +482,8 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
                 suppressionSet, habituationPenalty, prospectiveScheduler, wal,
                 quantizer.mins(), quantizer.scales(), semanticStrategy,
                 null, hebbianGraph, temporalChain, entityGraph, entityExtractor,
-                builder.graphScoringPolicy, bm25Index);
+                builder.graphScoringPolicy, bm25Index,
+                memorySpladeIndex, builder.sparseEncodingProvider, colbertReranker);
 
         recallPipeline.addListener(new LtpReconsolidationListener(index, tierRouter, wal));
         recallPipeline.addListener(new HebbianCoActivationListener(coActivationTracker));
@@ -564,8 +600,12 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
                                               String... tags) {
         return CompletableFuture.runAsync(() -> {
             try {
-                float[] vector = embeddingProvider.embed(text).vector();
-                cognitiveTarget.ingestCognitive(id, text, vector, type, tags, source, hints);
+                if (shouldChunk(text)) {
+                    rememberChunked(id, text, type, source, hints, null, tags);
+                } else {
+                    float[] vector = embeddingProvider.embed(text).vector();
+                    cognitiveTarget.ingestCognitive(id, text, vector, type, tags, source, hints);
+                }
                 checkCircadianTrigger(type);
             } catch (RuntimeException e) {
                 log.error("Failed to remember '{}': {}", id, e.getMessage(), e);
@@ -605,8 +645,12 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
                                               String... tags) {
         return CompletableFuture.runAsync(() -> {
             try {
-                float[] vector = embeddingProvider.embed(text).vector();
-                cognitiveTarget.ingestCognitive(id, text, vector, type, tags, source, context);
+                if (shouldChunk(text)) {
+                    rememberChunked(id, text, type, source, null, context, tags);
+                } else {
+                    float[] vector = embeddingProvider.embed(text).vector();
+                    cognitiveTarget.ingestCognitive(id, text, vector, type, tags, source, context);
+                }
                 checkCircadianTrigger(type);
             } catch (RuntimeException e) {
                 log.error("Failed to remember '{}': {}", id, e.getMessage(), e);
@@ -630,6 +674,96 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
                 });
             }
         }
+    }
+
+    /**
+     * Returns true if the text should be chunked before ingestion.
+     */
+    private boolean shouldChunk(String text) {
+        return chunker != null && text != null && text.length() > chunker.chunkSize();
+    }
+
+    /**
+     * Chunks text, parallel-embeds all chunks, and ingests each with the caller's
+     * cognitive metadata. The parent memory ID is added as a tag to all chunks.
+     *
+     * <p>If the caller provided tags, those tags are applied to every chunk.
+     * Each chunk ID follows the convention {@code parentId::chunk-N}.</p>
+     *
+     * @param id      parent memory ID
+     * @param text    full text to chunk
+     * @param type    memory tier
+     * @param source  memory source
+     * @param hints   ICNU hints (nullable — used when context is null)
+     * @param context ingestion context (nullable — used when hints is null)
+     * @param tags    caller-provided tags to apply to all chunks
+     */
+    private void rememberChunked(String id, String text, MemoryType type,
+                                  MemorySource source,
+                                  com.spectrayan.spector.memory.neurodivergent.IngestionHints hints,
+                                  IngestionContext context,
+                                  String... tags) {
+        var chunks = chunker.chunk(id, text);
+        if (chunks.isEmpty()) {
+            log.warn("[Remember] Chunker returned empty for '{}' ({} chars), skipping", id, text.length());
+            return;
+        }
+
+        // Parallel-embed all chunks
+        List<String> chunkTexts = chunks.stream().map(TextChunker.Chunk::text).toList();
+        List<PipelineEmbeddingResult> embeddings = parallelPipeline.embed(chunkTexts, EmbedConfig.DEFAULT);
+
+        // Build per-chunk tags: caller tags + parent ID tag
+        String parentTag = sanitizeTag(id);
+        String[] chunkTags;
+        if (tags != null && tags.length > 0) {
+            chunkTags = new String[tags.length + 1];
+            System.arraycopy(tags, 0, chunkTags, 0, tags.length);
+            chunkTags[tags.length] = parentTag;
+        } else {
+            chunkTags = new String[]{ parentTag };
+        }
+
+        int stored = 0;
+        List<String> failures = new ArrayList<>();
+
+        for (int i = 0; i < chunks.size(); i++) {
+            var chunk = chunks.get(i);
+            var embedding = embeddings.get(i);
+
+            if (!embedding.success()) {
+                failures.add(chunk.chunkId());
+                log.warn("[Remember] Embedding failed for chunk '{}': {}", chunk.chunkId(), embedding.error());
+                continue;
+            }
+
+            try {
+                if (context != null) {
+                    cognitiveTarget.ingestCognitive(chunk.chunkId(), chunk.text(),
+                            embedding.embedding(), type, chunkTags, source, context);
+                } else {
+                    cognitiveTarget.ingestCognitive(chunk.chunkId(), chunk.text(),
+                            embedding.embedding(), type, chunkTags, source, hints);
+                }
+                stored++;
+            } catch (RuntimeException e) {
+                failures.add(chunk.chunkId());
+                log.warn("[Remember] Ingestion failed for chunk '{}': {}", chunk.chunkId(), e.getMessage());
+            }
+        }
+
+        log.info("[Remember] Chunked '{}' → {} chunks stored ({} failed) from {} chars",
+                id.length() > 60 ? "..." + id.substring(id.length() - 57) : id,
+                stored, failures.size(), text.length());
+    }
+
+    /** Sanitizes a memory ID into a valid tag (lowercase, hyphens, no special chars). */
+    private static String sanitizeTag(String id) {
+        if (id == null) return "unknown";
+        return id.toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9\\-]", "-")
+                .replaceAll("-{2,}", "-")
+                .replaceAll("^-|-$", "");
     }
 
     @Override
@@ -1129,6 +1263,7 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         int entityGraphCapacity = 50_000;
         int maxEntitiesPerMemory = 10;
         int maxRelationsPerMemory = 20;
+        com.spectrayan.spector.embed.GenerationOptions llmGenerationOptions;
         GraphScoringPolicy graphScoringPolicy = GraphScoringPolicy.DEFAULT;
         int temporalRetentionDays = 7;
         com.spectrayan.spector.memory.synapse.TwoFactorConfig twoFactorConfig
@@ -1138,8 +1273,15 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         IdStrategy idStrategy = IdStrategy.TSID;
         MemoryIdGenerator idGenerator;
 
+        // SPLADE + ColBERT providers
+        SparseEncodingProvider sparseEncodingProvider;
+        TokenEmbeddingProvider tokenEmbeddingProvider;
+
         // Checkpoint daemon configuration
         int checkpointIntervalSeconds = 30;
+
+        // Chunking for remember() — default enabled with standard chunker
+        TextChunker chunker = new TextChunker();
 
         public Builder dimensions(int dimensions) { this.dimensions = dimensions; return this; }
         public Builder embeddingProvider(EmbeddingProvider p) { this.embeddingProvider = p; return this; }
@@ -1149,6 +1291,10 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         /** If true, Working memory is also persisted to disk in DISK mode (default: false). */
         public Builder persistWorkingMemory(boolean persist) { this.persistWorkingMemory = persist; return this; }
         public Builder reflectPolicy(CircadianPolicy p) { this.circadianPolicy = p; return this; }
+
+        /** Sets the text chunker for remember() auto-chunking (default: TextChunker(512, 64)). */
+        public Builder chunker(TextChunker chunker) { this.chunker = chunker; return this; }
+
         public Builder workingCapacity(int c) { this.workingCapacity = c; return this; }
         public Builder episodicPartitionCapacity(int c) { this.episodicPartitionCapacity = c; return this; }
         public Builder semanticCapacity(int c) { this.semanticCapacity = c; return this; }
@@ -1210,6 +1356,9 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         /** Max relations to extract per memory (default: 20). */
         public Builder maxRelationsPerMemory(int c) { this.maxRelationsPerMemory = c; return this; }
 
+        /** LLM generation options for entity extraction (temperature, maxTokens, topP). */
+        public Builder llmGenerationOptions(com.spectrayan.spector.embed.GenerationOptions opts) { this.llmGenerationOptions = opts; return this; }
+
         /** Graph scoring policy — configurable weights for cognitive graph steps (default: GraphScoringPolicy.DEFAULT). */
         public Builder graphScoringPolicy(GraphScoringPolicy policy) { this.graphScoringPolicy = policy; return this; }
 
@@ -1253,6 +1402,30 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
          * @return this builder
          */
         public Builder idGenerator(MemoryIdGenerator generator) { this.idGenerator = generator; return this; }
+
+        /**
+         * Sets the sparse encoding provider for SPLADE retrieval.
+         *
+         * <p>When provided, a {@code MemorySpladeIndex} is automatically created and wired
+         * into both the ingestion and recall pipelines, enabling SPLADE, SPLADE_HYBRID,
+         * and FULL_STACK text search modes.</p>
+         *
+         * @param provider the sparse encoding provider (e.g., OllamaSparseEncodingProvider)
+         * @return this builder
+         */
+        public Builder sparseEncodingProvider(SparseEncodingProvider provider) { this.sparseEncodingProvider = provider; return this; }
+
+        /**
+         * Sets the token embedding provider for ColBERT reranking.
+         *
+         * <p>When provided, a {@code ColBERTReranker} with a {@code ColBERTTokenCache}
+         * is automatically created and wired into the recall pipeline, enabling
+         * COLBERT_RERANK and FULL_STACK text search modes.</p>
+         *
+         * @param provider the token embedding provider (e.g., OllamaTokenEmbeddingProvider)
+         * @return this builder
+         */
+        public Builder tokenEmbeddingProvider(TokenEmbeddingProvider provider) { this.tokenEmbeddingProvider = provider; return this; }
 
         public SpectorMemory build() {
             if (dimensions <= 0 && embeddingProvider != null) {

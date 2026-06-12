@@ -37,7 +37,7 @@ import java.util.List;
  * Fused semantic recall strategy — HNSW vector search + cognitive header scoring.
  *
  * <h3>Problem (The Truncation Trap — Semantic Variant)</h3>
- * <p>The {@code SemanticMemoryStore} stores only 32-byte cognitive headers (no vectors).
+ * <p>The {@code SemanticMemoryStore} stores only 64-byte cognitive headers (no vectors).
  * This means flat-scanning the header slab cannot compute vector similarity — the
  * {@code alpha * similarity} term is entirely missing. Semantic recall was scoring
  * only {@code beta * importance * decay}, which is fundamentally broken for

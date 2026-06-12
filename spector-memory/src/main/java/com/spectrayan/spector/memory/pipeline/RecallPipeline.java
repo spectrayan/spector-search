@@ -37,6 +37,8 @@ import com.spectrayan.spector.memory.cortex.AbstractTierStore;
 import com.spectrayan.spector.memory.cortex.EpisodicMemoryStore.EpisodicPartition;
 import com.spectrayan.spector.memory.cortex.MemoryBM25Index;
 import com.spectrayan.spector.memory.cortex.MemoryBM25Index.BM25Candidate;
+import com.spectrayan.spector.memory.cortex.MemorySpladeIndex;
+import com.spectrayan.spector.memory.cortex.MemorySpladeIndex.SpladeCandidate;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.SemanticRecallStrategy;
 import com.spectrayan.spector.memory.cortex.TierRouter;
@@ -82,6 +84,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.spectrayan.spector.commons.concurrent.NativeOsMemory;
+
+import com.spectrayan.spector.embed.SparseEncodingProvider;
+import com.spectrayan.spector.embed.SparseEncodingResult;
+import com.spectrayan.spector.index.ColBERTReranker;
+import com.spectrayan.spector.index.ColBERTReranker.RerankCandidate;
+import com.spectrayan.spector.index.ColBERTReranker.RerankResult;
 
 
 
@@ -144,6 +152,15 @@ public final class RecallPipeline {
     // ── BM25 Text Search (nullable — graceful degradation) ──
     private final MemoryBM25Index bm25Index;
 
+    // ── SPLADE Sparse Search (nullable — graceful degradation) ──
+    private final MemorySpladeIndex spladeIndex;
+    private final SparseEncodingProvider spladeProvider;
+    private volatile boolean spladeWarnLogged = false;
+
+    // ── ColBERT v2 Reranker (nullable — graceful degradation) ──
+    private final ColBERTReranker colbertReranker;
+    private volatile boolean colbertWarnLogged = false;
+
     // ── Neurodivergent: Lateral feedback tracking ──
     // Maps memoryId → RetrievalMode for the most recent recall.
     // Used by SpectorMemory.reinforce()/suppress() to feed LateralEvaluator.
@@ -183,7 +200,8 @@ public final class RecallPipeline {
                            float[] calibrationScales) {
         this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
                 prospectiveScheduler, wal, calibrationMins, calibrationScales, null, null,
-                null, null, null, null, GraphScoringPolicy.DEFAULT, null);
+                null, null, null, null, GraphScoringPolicy.DEFAULT, null,
+                null, null, null);
     }
 
     /**
@@ -205,7 +223,8 @@ public final class RecallPipeline {
         this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
                 prospectiveScheduler, wal, calibrationMins, calibrationScales,
                 semanticRecallStrategy, null,
-                null, null, null, null, GraphScoringPolicy.DEFAULT, null);
+                null, null, null, null, GraphScoringPolicy.DEFAULT, null,
+                null, null, null);
     }
 
     /**
@@ -229,7 +248,8 @@ public final class RecallPipeline {
         this(embeddingProvider, tierRouter, index, suppressionSet, habituationPenalty,
                 prospectiveScheduler, wal, calibrationMins, calibrationScales,
                 semanticRecallStrategy, coActivationTracker,
-                null, null, null, null, GraphScoringPolicy.DEFAULT, null);
+                null, null, null, null, GraphScoringPolicy.DEFAULT, null,
+                null, null, null);
     }
 
     /**
@@ -251,7 +271,10 @@ public final class RecallPipeline {
                            EntityGraph entityGraph,
                            EntityExtractor entityExtractor,
                            GraphScoringPolicy graphScoringPolicy,
-                           MemoryBM25Index bm25Index) {
+                           MemoryBM25Index bm25Index,
+                           MemorySpladeIndex spladeIndex,
+                           SparseEncodingProvider spladeProvider,
+                           ColBERTReranker colbertReranker) {
         this.embeddingProvider = embeddingProvider;
         this.tierRouter = tierRouter;
         this.index = index;
@@ -269,6 +292,9 @@ public final class RecallPipeline {
         this.entityExtractor = entityExtractor;
         this.graphScoringPolicy = graphScoringPolicy != null ? graphScoringPolicy : GraphScoringPolicy.DEFAULT;
         this.bm25Index = bm25Index;
+        this.spladeIndex = spladeIndex;
+        this.spladeProvider = spladeProvider;
+        this.colbertReranker = colbertReranker;
     }
 
     /**
@@ -345,6 +371,31 @@ public final class RecallPipeline {
                 }
             } catch (RuntimeException e) {
                 log.warn("BM25 search failed, continuing with vector-only results", e);
+            }
+        }
+
+        // Step 3c: SPLADE learned sparse search
+        if (options.enableTextSearch() && options.textSearchMode().usesSPLADE()) {
+            if (spladeIndex != null && spladeProvider != null) {
+                try {
+                    SparseEncodingResult querySparse = spladeProvider.encode(queryText);
+                    List<SpladeCandidate> spladeHits =
+                            spladeIndex.search(querySparse.weights(), options.topK() * 2);
+                    if (!spladeHits.isEmpty()) {
+                        // Convert SPLADE candidates to BM25Candidate format for RRF fusion
+                        List<BM25Candidate> asBm25 = spladeHits.stream()
+                                .map(sc -> new BM25Candidate(
+                                        sc.id(), sc.spladeScore(), sc.partitionIndex()))
+                                .toList();
+                        fuseBM25Candidates(allResults, asBm25, options, nowMs);
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("SPLADE search failed, continuing without", e);
+                }
+            } else if (!spladeWarnLogged) {
+                log.warn("SPLADE search requested (mode={}) but SparseEncodingProvider/SpladeIndex " +
+                         "not configured — degrading to BM25", options.textSearchMode());
+                spladeWarnLogged = true;
             }
         }
 
@@ -631,6 +682,61 @@ public final class RecallPipeline {
         allResults.sort(Comparator.comparing(CognitiveResult::score).reversed());
         if (allResults.size() > options.topK()) {
             allResults = new ArrayList<>(allResults.subList(0, options.topK()));
+        }
+
+        // Step 6b: ColBERT v2 reranker (if enabled and provider available)
+        if (options.enableReranker() && options.textSearchMode().usesColBERT()) {
+            if (colbertReranker != null) {
+                try {
+                    int rerankerDepth = Math.min(options.rerankerDepth(), allResults.size());
+                    if (rerankerDepth > 0) {
+                        List<CognitiveResult> toRerank = allResults.subList(0, rerankerDepth);
+
+                        List<RerankCandidate> candidates = toRerank.stream()
+                                .map(r -> new RerankCandidate(
+                                        r.id(), r.text() != null ? r.text() : "", r.score()))
+                                .toList();
+
+                        List<RerankResult> reranked =
+                                colbertReranker.rerank(queryText, candidates, options.topK());
+
+                        // Build reranked result list: replace first-stage scores with combined scores
+                        Map<String, Float> rerankScores = new HashMap<>();
+                        for (RerankResult rr : reranked) {
+                            rerankScores.put(rr.id(), rr.combinedScore());
+                        }
+
+                        // Update scores for reranked candidates
+                        for (int i = 0; i < toRerank.size(); i++) {
+                            CognitiveResult r = toRerank.get(i);
+                            Float newScore = rerankScores.get(r.id());
+                            if (newScore != null) {
+                                allResults.set(i, new CognitiveResult(
+                                        r.id(), r.text(), newScore, r.importance(),
+                                        r.ageDays(), r.agentRecallCount(), r.valence(),
+                                        r.memoryType(), r.source(), r.synapticTags(),
+                                        r.decayFactor(), r.ltpAdjustedDecay(),
+                                        r.retrievalMode(), r.breakdown()));
+                            }
+                        }
+
+                        // Re-sort after reranking
+                        allResults.sort(Comparator.comparing(CognitiveResult::score).reversed());
+                        if (allResults.size() > options.topK()) {
+                            allResults = new ArrayList<>(allResults.subList(0, options.topK()));
+                        }
+
+                        log.debug("ColBERT reranked {} candidates → {} results",
+                                rerankerDepth, allResults.size());
+                    }
+                } catch (RuntimeException e) {
+                    log.warn("ColBERT reranking failed, keeping first-stage order", e);
+                }
+            } else if (!colbertWarnLogged) {
+                log.warn("ColBERT reranking requested (mode={}) but ColBERTReranker " +
+                         "not configured — skipping rerank step", options.textSearchMode());
+                colbertWarnLogged = true;
+            }
         }
 
         // Step 7: Fire async post-recall listeners (LTP reconsolidation + Hebbian)

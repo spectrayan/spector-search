@@ -55,8 +55,15 @@ public final class ContentTagExtractor implements TagExtractor {
     /** Maximum content-derived tags (path tags get priority). */
     private static final int MAX_CONTENT_TAGS = 5;
 
-    private static final Pattern SPLIT_PATTERN = Pattern.compile("[/\\\\._\\-\\s]+");
+    private static final Pattern SPLIT_PATTERN = Pattern.compile("[/\\\\._\\-:\\s]+");
     private static final Pattern ALPHA_ONLY = Pattern.compile("[^a-z0-9]");
+    private static final Pattern NUMERIC_ONLY = Pattern.compile("^\\d+$");
+
+    /** Strips chunk suffixes like "::chunk-3" or "#chunk-12" from document IDs. */
+    private static final Pattern CHUNK_SUFFIX = Pattern.compile("(::chunk-\\d+|#chunk-\\d+)$");
+
+    /** Strips common file extensions from document IDs. */
+    private static final Pattern FILE_EXTENSION = Pattern.compile("\\.(md|txt|java|py|js|ts|json|xml|yaml|yml|html|css|log|csv|pdf|docx?)$", Pattern.CASE_INSENSITIVE);
 
     /** Common English stop words to exclude from tags. */
     private static final Set<String> STOP_WORDS = Set.of(
@@ -73,9 +80,10 @@ public final class ContentTagExtractor implements TagExtractor {
             "what", "your", "more", "there", "first", "where", "those",
             "still", "here", "through", "while", "before", "between",
             "under", "never", "every", "because", "another",
-            // File-related stop words
+            // File & ingestion noise words
             "txt", "file", "doc", "docs", "test", "tests", "src", "main",
-            "java", "class", "chunk", "part"
+            "java", "class", "chunk", "part", "multipart", "uploaded",
+            "textchunk", "mdchunk", "index", "data", "temp", "tmp"
     );
 
     @Override
@@ -106,15 +114,23 @@ public final class ContentTagExtractor implements TagExtractor {
 
     /**
      * Extracts tags from document ID path segments.
-     * E.g., "stories/auth/login-flow.txt" → ["stories", "auth", "login", "flow"]
+     * Strips chunk suffixes and file extensions before splitting.
+     * E.g., "stories/auth/login-flow.txt::chunk-2" → ["stories", "auth", "login", "flow"]
      */
     private void extractPathTags(String id, Set<String> tags) {
         if (id == null) return;
 
-        String[] parts = SPLIT_PATTERN.split(id);
+        // Strip chunk suffix (e.g., "::chunk-0", "#chunk-3") — internal ingestion artifact
+        String cleanId = CHUNK_SUFFIX.matcher(id).replaceAll("");
+
+        // Strip file extension (e.g., ".md", ".txt") — not meaningful as a tag
+        cleanId = FILE_EXTENSION.matcher(cleanId).replaceAll("");
+
+        String[] parts = SPLIT_PATTERN.split(cleanId);
         for (String part : parts) {
             String clean = ALPHA_ONLY.matcher(part.toLowerCase(Locale.ROOT)).replaceAll("");
-            if (clean.length() > 2 && !STOP_WORDS.contains(clean)) {
+            // Skip pure-numeric tokens (chunk indices, temp file IDs, etc.)
+            if (clean.length() > 2 && !STOP_WORDS.contains(clean) && !NUMERIC_ONLY.matcher(clean).matches()) {
                 tags.add(clean);
             }
         }
@@ -133,7 +149,9 @@ public final class ContentTagExtractor implements TagExtractor {
 
         for (String word : words) {
             String clean = ALPHA_ONLY.matcher(word).replaceAll("");
-            if (clean.length() > 4 && !STOP_WORDS.contains(clean) && !tags.contains(clean)) {
+            // Skip pure-numeric tokens and stop words
+            if (clean.length() > 4 && !STOP_WORDS.contains(clean) && !tags.contains(clean)
+                    && !NUMERIC_ONLY.matcher(clean).matches()) {
                 candidates.add(clean);
             }
         }

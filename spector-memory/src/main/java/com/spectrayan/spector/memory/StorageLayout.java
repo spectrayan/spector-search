@@ -224,8 +224,8 @@ public final class StorageLayout {
     /** Magic bytes for text.dat files: "TXTD" (0x54585444). */
     public static final int TEXT_DAT_MAGIC = 0x54585444;
 
-    /** Current version of the text.dat format. */
-    public static final int TEXT_DAT_VERSION = 1;
+    /** Current version of the text.dat format (V2: mmap-backed off-heap reads). */
+    public static final int TEXT_DAT_VERSION = 2;
 
     /** Magic bytes for index.midx files: "MIDX" (0x4D494458). */
     public static final int INDEX_MIDX_MAGIC = 0x4D494458;

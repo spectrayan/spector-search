@@ -20,7 +20,7 @@
  * <h3>Biological Package Structure</h3>
  * <ul>
  *   <li>{@code cortex/} — Memory tiers (Working, Episodic, Semantic, Procedural) + source monitoring</li>
- *   <li>{@code synapse/} — 32-byte header layout, fused SIMD scoring, Bloom filter tags, bucket decay</li>
+ *   <li>{@code synapse/} — 64-byte header layout, fused SIMD scoring, Bloom filter tags, bucket decay</li>
  *   <li>{@code dopamine/} — Adaptive surprise detection (z-score importance assignment)</li>
  *   <li>{@code amygdala/} — Emotional valence and outcome-driven reinforcement (V2)</li>
  *   <li>{@code hippocampus/} — REM/Deep Sleep consolidation daemon</li>
