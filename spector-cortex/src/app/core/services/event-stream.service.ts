@@ -9,6 +9,7 @@ import { Injectable, inject, signal, OnDestroy, PLATFORM_ID } from '@angular/cor
 import { isPlatformBrowser } from '@angular/common';
 import { CortexStateService } from './cortex-state.service';
 import { SessionRecorderService } from './session-recorder.service';
+import { NotificationService } from './notification.service';
 import {
   QueryTraceEvent,
   SimdLaneEvent,
@@ -19,6 +20,8 @@ import {
   GpuKernelEvent,
   ClusterTopologyEvent,
   EmbeddingProjectionEvent,
+  IngestionProgressEvent,
+  IngestionCompletedEvent,
   AnyCortexEvent,
 } from '../models/cortex-events';
 
@@ -32,7 +35,7 @@ export interface EventStreamConfig {
 
 const DEFAULT_CONFIG: EventStreamConfig = {
   baseUrl: '/api/v1',
-  filter: 'cortex',
+  filter: 'cortex,ingestion',
   maxRetries: 10,
   initialRetryMs: 1000,
 };
@@ -43,6 +46,7 @@ export class EventStreamService implements OnDestroy {
   private readonly state = inject(CortexStateService);
   private readonly recorder = inject(SessionRecorderService);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly notificationService = inject(NotificationService);
 
   readonly isConnected = signal(false);
   readonly retryCount = signal(0);
@@ -105,6 +109,9 @@ export class EventStreamService implements OnDestroy {
     this.registerEventHandler('cortex.gpu.kernel');
     this.registerEventHandler('cortex.cluster.topology');
     this.registerEventHandler('cortex.embedding.projection');
+    // Ingestion task events (not cortex-prefixed)
+    this.registerEventHandler('ingestion.progress');
+    this.registerEventHandler('ingestion.completed');
   }
 
   private registerEventHandler(eventType: string): void {
@@ -153,6 +160,12 @@ export class EventStreamService implements OnDestroy {
         break;
       case 'cortex.embedding.projection':
         this.state.pushEmbeddingProjection(event as EmbeddingProjectionEvent);
+        break;
+      case 'ingestion.progress':
+        this.notificationService.onProgress(event as IngestionProgressEvent);
+        break;
+      case 'ingestion.completed':
+        this.notificationService.onCompleted(event as IngestionCompletedEvent);
         break;
     }
   }

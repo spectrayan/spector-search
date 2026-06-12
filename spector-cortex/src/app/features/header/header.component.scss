@@ -254,3 +254,168 @@
   font-weight: 700;
 }
 
+// ── Notification Bell ────────────────────────────────────────────────
+.notif-bell {
+  position: relative;
+
+  ::ng-deep .mat-badge-content {
+    font-size: 9px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+  }
+}
+
+::ng-deep .notif-panel {
+  min-width: 340px !important;
+  max-width: 400px !important;
+  max-height: 440px !important;
+  overflow-y: auto;
+  border-radius: 14px !important;
+
+  .mat-mdc-menu-content {
+    padding: 0 !important;
+  }
+}
+
+.notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.notif-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+  letter-spacing: -0.01em;
+}
+
+.notif-clear-btn {
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+
+  ::ng-deep .mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  color: var(--mat-sys-on-surface-variant);
+
+  span {
+    font-size: 13px;
+    font-weight: 500;
+  }
+}
+
+.notif-empty-icon {
+  font-size: 32px;
+  width: 32px;
+  height: 32px;
+  opacity: 0.4;
+}
+
+.notif-item {
+  padding: 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mat-sys-outline-variant) 40%, transparent);
+  transition: background 0.15s ease;
+  animation: notif-slide-in 0.25s ease-out;
+
+  &:hover {
+    background: color-mix(in srgb, var(--mat-sys-primary) 4%, transparent);
+  }
+
+  &.success {
+    .notif-type-icon {
+      color: #22c55e;
+    }
+  }
+
+  &.error {
+    .notif-type-icon {
+      color: var(--mat-sys-error);
+    }
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.notif-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notif-type-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--mat-sys-primary);
+  flex-shrink: 0;
+}
+
+.notif-desc {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-dismiss {
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+
+  ::ng-deep .mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+
+  .notif-item:hover & {
+    opacity: 1;
+  }
+}
+
+.notif-progress {
+  margin: 6px 0 2px;
+  border-radius: 4px;
+}
+
+.notif-meta {
+  font-size: 10px;
+  color: var(--mat-sys-on-surface-variant);
+  margin-top: 4px;
+  letter-spacing: 0.02em;
+}
+
+@keyframes notif-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

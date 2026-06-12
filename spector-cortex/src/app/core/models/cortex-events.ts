@@ -178,5 +178,33 @@ export type AnyCortexEvent =
   | MemorySnapshotEvent
   | GpuKernelEvent
   | ClusterTopologyEvent
-  | EmbeddingProjectionEvent;
+  | EmbeddingProjectionEvent
+  | IngestionProgressEvent
+  | IngestionCompletedEvent;
+
+/**
+ * Ingestion progress event — emitted periodically during async ingestion.
+ */
+export interface IngestionProgressEvent extends CortexEvent {
+  readonly eventType: 'ingestion.progress';
+  readonly taskId: string;
+  readonly description: string;
+  readonly chunksStored: number;
+  readonly totalChunks: number;
+  readonly failures: number;
+  readonly progressPercent: number;
+}
+
+/**
+ * Ingestion completed event — emitted when an async ingestion task finishes.
+ */
+export interface IngestionCompletedEvent extends CortexEvent {
+  readonly eventType: 'ingestion.completed';
+  readonly taskId: string;
+  readonly description: string;
+  readonly chunksStored: number;
+  readonly failures: number;
+  readonly durationMs: number;
+  readonly success: boolean;
+}
 

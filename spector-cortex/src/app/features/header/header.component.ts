@@ -8,11 +8,14 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatBadgeModule } from '@angular/material/badge';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 
 import { ThemeService } from '../../core/services/theme.service';
 import { CortexStateService } from '../../core/services/cortex-state.service';
 import { SessionRecorderService, RecordedSession } from '../../core/services/session-recorder.service';
 import { SessionReplayService, PLAYBACK_SPEEDS } from '../../core/services/session-replay.service';
+import { NotificationService } from '../../core/services/notification.service';
 import { PROFILE_PARAMS } from '../../core/models/memory-types';
 
 @Component({
@@ -26,6 +29,8 @@ import { PROFILE_PARAMS } from '../../core/models/memory-types';
     MatChipsModule,
     MatTooltipModule,
     MatMenuModule,
+    MatBadgeModule,
+    MatProgressBarModule,
     RouterLink,
   ],
   templateUrl: './header.component.html',
@@ -36,6 +41,7 @@ export class HeaderComponent {
   protected readonly state = inject(CortexStateService);
   protected readonly recorder = inject(SessionRecorderService);
   protected readonly replay = inject(SessionReplayService);
+  protected readonly notif = inject(NotificationService);
   protected readonly profileParams = PROFILE_PARAMS;
   protected readonly playbackSpeeds = PLAYBACK_SPEEDS;
 

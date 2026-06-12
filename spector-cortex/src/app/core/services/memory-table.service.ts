@@ -135,6 +135,56 @@ export interface MemoryGraphResponse {
   edges: GraphEdge[];
 }
 
+/** Response from async remember/ingest endpoints (202 Accepted). */
+export interface AcceptedResponse {
+  taskId: string;
+  id?: string;
+  fileName?: string;
+  documentId?: string;
+  path?: string;
+  status: 'accepted';
+}
+
+/** Response from file ingestion endpoint (legacy — kept for backward compat). */
+export interface FileIngestResponse {
+  status: string;
+  fileName: string;
+  chunksStored: number;
+  durationMs: number;
+}
+
+/** Request for directory ingestion. */
+export interface DirectoryIngestRequest {
+  path: string;
+  filePattern?: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  skipDirs?: string;
+}
+
+/** Response from directory ingestion endpoint (legacy). */
+export interface DirectoryIngestResponse {
+  status: string;
+  path: string;
+  filesProcessed: number;
+  totalChunks: number;
+  failures: number;
+}
+
+/** Task status from GET /memory/tasks/{taskId}. */
+export interface TaskStatusResponse {
+  taskId: string;
+  description: string;
+  type: string;
+  status: 'ACCEPTED' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  chunksStored: number;
+  totalChunks: number;
+  failures: number;
+  progressPercent: number;
+  durationMs: number;
+  startedAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class MemoryTableService {
   private readonly http = inject(HttpClient);
@@ -209,7 +259,7 @@ export class MemoryTableService {
 
   /** Returns full detail for a single memory by ID. */
   getMemoryById(id: string): Observable<MemoryRow> {
-    return this.http.get<MemoryRow>(`${this.API}/${id}`);
+    return this.http.get<MemoryRow>(`${this.API}/${encodeURIComponent(id)}`);
   }
 
   /** Returns memory system status. */
@@ -224,7 +274,7 @@ export class MemoryTableService {
   /** Returns the graph neighborhood for a specific memory. */
   getMemoryGraph(id: string, depth: number = 2): Observable<MemoryGraphResponse> {
     const params = new HttpParams().set('depth', depth.toString());
-    return this.http.get<MemoryGraphResponse>(`${this.API}/${id}/graph`, { params });
+    return this.http.get<MemoryGraphResponse>(`${this.API}/${encodeURIComponent(id)}/graph`, { params });
   }
 
   /** Returns a sampled overview of the entire memory graph. */
@@ -237,9 +287,33 @@ export class MemoryTableService {
   // WRITE — CRUD
   // ══════════════════════════════════════════════════════════════
 
-  /** Stores a new memory. */
-  remember(request: RememberRequest): Observable<string> {
-    return this.http.post(`${this.API}/remember`, request, { responseType: 'text' });
+  /** Stores a new memory (async — returns 202 Accepted with taskId). */
+  remember(request: RememberRequest): Observable<AcceptedResponse> {
+    return this.http.post<AcceptedResponse>(`${this.API}/remember`, request);
+  }
+
+  /** Uploads a file for chunked ingestion (async — returns 202 Accepted). */
+  ingestFile(file: File, tier: string = 'SEMANTIC', source: string = 'OBSERVED'): Observable<AcceptedResponse> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    formData.append('tier', tier);
+    formData.append('source', source);
+    return this.http.post<AcceptedResponse>(`${this.API}/ingest-file`, formData);
+  }
+
+  /** Ingests all files in a directory (async — returns 202 Accepted). */
+  ingestDirectory(request: DirectoryIngestRequest): Observable<AcceptedResponse> {
+    return this.http.post<AcceptedResponse>(`${this.API}/ingest-directory`, request);
+  }
+
+  /** Returns all active/recent ingestion tasks. */
+  getTasks(): Observable<TaskStatusResponse[]> {
+    return this.http.get<TaskStatusResponse[]>(`${this.API}/tasks`);
+  }
+
+  /** Returns status of a single task. */
+  getTaskStatus(taskId: string): Observable<TaskStatusResponse> {
+    return this.http.get<TaskStatusResponse>(`${this.API}/tasks/${encodeURIComponent(taskId)}`);
   }
 
   /** Tombstones (soft-deletes) a memory. */

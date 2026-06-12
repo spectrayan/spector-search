@@ -206,8 +206,8 @@ export const memoryMockInterceptor: HttpInterceptorFn = (req, next) => {
     ALL_ROWS.unshift(newRow);
 
     return of(new HttpResponse({
-      status: 200,
-      body: newRow.id,
+      status: 202,
+      body: { taskId: newRow.id, id: newRow.id, status: 'accepted' },
     })).pipe(delay(200));
   }
 

@@ -134,6 +134,64 @@
     </mat-select>
   </mat-form-field>
 
+  <!-- Notification Bell -->
+  <button mat-icon-button
+          [matMenuTriggerFor]="notifMenu"
+          class="notif-bell"
+          matTooltip="Notifications"
+          (menuOpened)="notif.markAllRead()">
+    <mat-icon [matBadge]="notif.unreadCount()"
+              matBadgeColor="accent"
+              matBadgeSize="small"
+              [matBadgeHidden]="notif.unreadCount() === 0">
+      notifications
+    </mat-icon>
+  </button>
+  <mat-menu #notifMenu="matMenu" class="notif-panel" xPosition="before">
+    <div class="notif-header" (click)="$event.stopPropagation()">
+      <span class="notif-title">Activity</span>
+      @if (notif.notifications().length > 0) {
+        <button mat-icon-button class="notif-clear-btn" (click)="notif.clearAll()" matTooltip="Clear all">
+          <mat-icon>clear_all</mat-icon>
+        </button>
+      }
+    </div>
+    @if (notif.notifications().length === 0) {
+      <div class="notif-empty" (click)="$event.stopPropagation()">
+        <mat-icon class="notif-empty-icon">inbox</mat-icon>
+        <span>No recent activity</span>
+      </div>
+    }
+    @for (n of notif.notifications(); track n.taskId) {
+      <div class="notif-item" [class.success]="n.type === 'success'" [class.error]="n.type === 'error'"
+           (click)="$event.stopPropagation()">
+        <div class="notif-item-header">
+          <mat-icon class="notif-type-icon">
+            {{ n.type === 'progress' ? 'hourglass_top' : n.type === 'success' ? 'check_circle' : 'error' }}
+          </mat-icon>
+          <span class="notif-desc">{{ n.description }}</span>
+          <button mat-icon-button class="notif-dismiss" (click)="notif.dismiss(n.taskId)">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        @if (n.type === 'progress') {
+          <mat-progress-bar mode="determinate" [value]="n.progress >= 0 ? n.progress : 0"
+                            class="notif-progress"></mat-progress-bar>
+        }
+        <div class="notif-meta cortex-mono">
+          @if (n.type === 'progress') {
+            {{ n.chunksStored }}/{{ n.totalChunks }} chunks
+          } @else {
+            {{ n.chunksStored }} chunks · {{ n.durationMs }}ms
+            @if (n.failures > 0) {
+              · {{ n.failures }} failed
+            }
+          }
+        </div>
+      </div>
+    }
+  </mat-menu>
+
   <!-- Theme Toggle -->
   <button mat-icon-button
           (click)="theme.toggle()"
