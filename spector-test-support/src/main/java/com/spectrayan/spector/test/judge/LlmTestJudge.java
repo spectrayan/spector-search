@@ -218,12 +218,18 @@ public class LlmTestJudge {
                                       int resultCount, long latencyMs) {
         if (rawResponse == null || rawResponse.isBlank()) return null;
 
-        // Strip thinking tags if present (qwen3 outputs <think>...</think>)
-        String cleaned = rawResponse.replaceAll("<think>.*?</think>", "").strip();
+        // Strip thinking tags if present (qwen3/gemma4 output <think>...</think>)
+        String cleaned = rawResponse.replaceAll("(?s)<think>.*?</think>", "").strip();
 
-        // Extract JSON object from response
+        // Extract JSON object from response (outside thinking tags)
         Matcher matcher = JSON_EXTRACT.matcher(cleaned);
-        if (!matcher.find()) return null;
+
+        // Fallback: if no JSON found after stripping, try inside the raw response
+        // (gemma4 sometimes puts the verdict JSON inside the thinking block)
+        if (!matcher.find()) {
+            matcher = JSON_EXTRACT.matcher(rawResponse);
+            if (!matcher.find()) return null;
+        }
 
         String jsonStr = matcher.group();
 
