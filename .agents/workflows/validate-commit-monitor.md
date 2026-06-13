@@ -76,19 +76,30 @@ git push origin main
 
 ### 5. Monitor GitHub Actions CI
 
-- Open the browser to: `https://github.com/spectrayan/spector/actions`
+> **IMPORTANT**: Use the user's existing Chrome browser — do NOT open a new browser window.
+> The user is already logged into GitHub in their active browser session. Opening a new
+> window loses the session and you won't be able to view detailed logs.
+
+- **Open a new tab** in the existing browser (use the active page ID from the browser state)
+  and navigate to: `https://github.com/spectrayan/spector/actions`
 - Locate the workflow run triggered by your latest push/commit.
-- Click into the run and monitor the build steps.
-- Wait until the run finishes (either Success or Failure).
+- Click into the run to view the job summary page.
+- Monitor every 30 seconds by reloading the page until the run completes.
+- If the run **succeeds**: proceed to the summary.
+- If the run **fails**: click into the failed job, expand the failing step,
+  and read the full error logs directly in the browser (you have access since
+  you're in the user's authenticated session).
 
 ### 6. Handle Build Failures (Loop)
 
 - **If the GitHub Actions run fails**:
-  1. Inspect the detailed logs for the failing step to locate the cause of the failure.
-  2. Implement a fix for the failure locally.
-  3. Re-run the relevant local validation checks from **Step 1**.
-  4. Create a new commit containing the fix.
-  5. Push the changes to GitHub.
-  6. Return to **Step 5** to monitor the new run.
+  1. Read the detailed logs from the failing step **directly in the browser tab**
+     (scroll down, expand collapsed sections, read error output).
+  2. Identify the root cause from the logs.
+  3. Implement a fix for the failure locally.
+  4. Re-run the relevant local validation checks from **Step 1**.
+  5. Create a new commit containing the fix.
+  6. Push the changes to GitHub.
+  7. Return to **Step 5** to monitor the new run (reuse the same browser tab).
 - **If the GitHub Actions run succeeds**:
   - The workflow is complete. Provide a final summary of the successful run.
