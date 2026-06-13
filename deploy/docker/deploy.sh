@@ -20,7 +20,6 @@ IMAGE_NAME="spector"
 CONTAINER_NAME="spector"
 DOCKERFILE="deploy/docker/Dockerfile"
 DATA_VOLUME="spector-data"
-HOST_PORT_HTTP=7700
 HOST_PORT_API=7070
 
 # Colors
@@ -98,13 +97,12 @@ run() {
     docker volume create "$DATA_VOLUME" > /dev/null 2>&1 || true
 
     log "Starting container '${CONTAINER_NAME}'..."
-    log "  HTTP (Nginx+Dashboard) → http://localhost:${HOST_PORT_HTTP}"
-    log "  API  (SpectorNode)     → http://localhost:${HOST_PORT_API}"
-    log "  Data volume            → ${DATA_VOLUME}"
+    log "  API (SpectorNode) → http://localhost:${HOST_PORT_API}"
+    log "  Data volume       → ${DATA_VOLUME}"
+    log "  Note: This is the headless engine. For the dashboard, use spector-enterprise."
 
     docker run -d \
         --name "$CONTAINER_NAME" \
-        -p "${HOST_PORT_HTTP}:3000" \
         -p "${HOST_PORT_API}:7070" \
         -v "${DATA_VOLUME}:/data" \
         --add-host=host.docker.internal:host-gateway \

@@ -1,10 +1,11 @@
 # ═══════════════════════════════════════════════════════════════════
-# Spector — Single Docker Image
+# Spector — Backend-Only Docker Image
 # ═══════════════════════════════════════════════════════════════════
 #
-# Packages everything in one image:
-#   - SpectorNode backend (REST/gRPC/MCP-SSE/Prometheus) on :7070
-#   - Nginx serving Angular dashboard + reverse proxy on :3000 (mapped to :7700 externally)
+# SpectorNode backend only (REST/gRPC/MCP-SSE/Prometheus) on :7070
+#
+# The Cortex dashboard has been moved to spector-enterprise.
+# This image runs the headless cognitive memory engine only.
 #
 # Build:
 #   docker build -f deploy/docker/Dockerfile -t spector .
@@ -37,9 +38,6 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 # ── Stage 2: Runtime ──────────────────────────────────────────────
 FROM eclipse-temurin:25-jre-alpine
 
-# Install Nginx
-RUN apk add --no-cache nginx
-
 # Create non-root user
 RUN addgroup -S spector && adduser -S spector -G spector
 
@@ -52,13 +50,6 @@ COPY --from=build /app/lib/             /app/lib/
 # Copy YAML config
 COPY deploy/docker/spector-docker.yml /app/spector.yml
 
-# Copy frontend (pre-built Angular dist)
-COPY spector-cortex/dist/spector-cortex/browser/ /usr/share/nginx/html/
-
-# Copy Nginx config
-RUN rm -f /etc/nginx/http.d/default.conf
-COPY deploy/docker/nginx.conf /etc/nginx/http.d/spector.conf
-
 # Copy entrypoint
 COPY deploy/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
@@ -66,10 +57,7 @@ RUN chmod +x /app/entrypoint.sh
 # Create data directories
 RUN mkdir -p /data/index /data/memory && chown -R spector:spector /data /app
 
-# Fix Nginx PID directory permissions
-RUN mkdir -p /run/nginx
-
-EXPOSE 3000
+EXPOSE 7070
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
     CMD wget -qO- http://localhost:7070/health || exit 1
