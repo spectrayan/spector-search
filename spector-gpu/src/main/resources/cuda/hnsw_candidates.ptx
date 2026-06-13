@@ -1,0 +1,268 @@
+// Spector Search — HNSW Candidate Distance PTX Kernels
+// Compute capability: compute_75 (Turing+)
+// Optimized for the HNSW access pattern: small batches (10-200 candidates per hop)
+//
+// Two kernels:
+//   hnsw_cosine_candidates(query, candidates, distances, K, D) — cosine similarity
+//   hnsw_l2_candidates(query, candidates, distances, K, D)     — L2 squared distance
+//
+// Grid: K blocks (one per candidate)
+// Block: min(D, 256) threads, cooperative shared-memory reduction
+
+.version 7.5
+.target sm_75
+.address_size 64
+
+// ═══════════════════════════════════════════════════════════════════
+// hnsw_cosine_candidates: cosine(query, candidates[blockIdx.x])
+// Same as batch_cosine but named for clarity in kernel selection
+// ═══════════════════════════════════════════════════════════════════
+.visible .entry hnsw_cosine_candidates(
+    .param .u64 param_query,
+    .param .u64 param_candidates,
+    .param .u64 param_distances,
+    .param .u32 param_K,
+    .param .u32 param_D
+)
+{
+    .reg .pred %p<4>;
+    .reg .f32 %f<16>;
+    .reg .b32 %r<16>;
+    .reg .b64 %rd<12>;
+
+    mov.u32 %r0, %ctaid.x;
+    ld.param.u32 %r1, [param_K];
+    setp.ge.u32 %p0, %r0, %r1;
+    @%p0 bra $hcos_end;
+
+    ld.param.u64 %rd0, [param_query];
+    ld.param.u64 %rd1, [param_candidates];
+    ld.param.u64 %rd2, [param_distances];
+    ld.param.u32 %r2, [param_D];
+
+    // candidate_ptr = candidates + idx * D * 4
+    mul.lo.s32 %r3, %r0, %r2;
+    mul.wide.s32 %rd3, %r3, 4;
+    add.s64 %rd1, %rd1, %rd3;
+
+    mov.u32 %r4, %tid.x;
+    mov.u32 %r5, %ntid.x;
+
+    mov.f32 %f0, 0f00000000;  // dot
+    mov.f32 %f1, 0f00000000;  // qn
+    mov.f32 %f2, 0f00000000;  // dn
+
+    mov.u32 %r6, %r4;
+$hcos_loop:
+    setp.ge.u32 %p1, %r6, %r2;
+    @%p1 bra $hcos_reduce;
+
+    mul.wide.u32 %rd4, %r6, 4;
+    add.s64 %rd5, %rd0, %rd4;
+    ld.global.f32 %f3, [%rd5];
+    add.s64 %rd6, %rd1, %rd4;
+    ld.global.f32 %f4, [%rd6];
+
+    fma.rn.f32 %f0, %f3, %f4, %f0;
+    fma.rn.f32 %f1, %f3, %f3, %f1;
+    fma.rn.f32 %f2, %f4, %f4, %f2;
+
+    add.u32 %r6, %r6, %r5;
+    bra.uni $hcos_loop;
+
+$hcos_reduce:
+    .shared .align 4 .f32 s_hcos[];
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_hcos;
+    add.u64 %rd9, %rd8, %rd7;
+    st.shared.f32 [%rd9], %f0;
+
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd9, %rd8, %rd7;
+    add.u64 %rd9, %rd9, %rd10;
+    st.shared.f32 [%rd9], %f1;
+
+    add.u64 %rd9, %rd8, %rd7;
+    add.u64 %rd9, %rd9, %rd10;
+    add.u64 %rd9, %rd9, %rd10;
+    st.shared.f32 [%rd9], %f2;
+
+    bar.sync 0;
+
+    // Reduction
+    shr.u32 %r7, %r5, 1;
+$hcos_red_loop:
+    setp.eq.u32 %p2, %r7, 0;
+    @%p2 bra $hcos_write;
+    setp.ge.u32 %p3, %r4, %r7;
+    @%p3 bra $hcos_red_sync;
+
+    // Reduce dot
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_hcos;
+    add.u64 %rd9, %rd8, %rd7;
+    ld.shared.f32 %f5, [%rd9];
+    add.u32 %r8, %r4, %r7;
+    mul.wide.u32 %rd10, %r8, 4;
+    add.u64 %rd11, %rd8, %rd10;
+    ld.shared.f32 %f6, [%rd11];
+    add.f32 %f5, %f5, %f6;
+    st.shared.f32 [%rd9], %f5;
+
+    // Reduce qn
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd9, %rd8, %rd7;
+    add.u64 %rd9, %rd9, %rd10;
+    ld.shared.f32 %f7, [%rd9];
+    add.u64 %rd11, %rd8, %rd10;
+    mul.wide.u32 %rd10, %r8, 4;
+    add.u64 %rd11, %rd11, %rd10;
+    ld.shared.f32 %f8, [%rd11];
+    add.f32 %f7, %f7, %f8;
+    st.shared.f32 [%rd9], %f7;
+
+    // Reduce dn
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd9, %rd8, %rd7;
+    add.u64 %rd9, %rd9, %rd10;
+    add.u64 %rd9, %rd9, %rd10;
+    ld.shared.f32 %f9, [%rd9];
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd11, %rd8, %rd10;
+    add.u64 %rd11, %rd11, %rd10;
+    mul.wide.u32 %rd10, %r8, 4;
+    add.u64 %rd11, %rd11, %rd10;
+    ld.shared.f32 %f10, [%rd11];
+    add.f32 %f9, %f9, %f10;
+    st.shared.f32 [%rd9], %f9;
+
+$hcos_red_sync:
+    bar.sync 0;
+    shr.u32 %r7, %r7, 1;
+    bra.uni $hcos_red_loop;
+
+$hcos_write:
+    setp.ne.u32 %p2, %r4, 0;
+    @%p2 bra $hcos_end;
+
+    mov.u64 %rd8, s_hcos;
+    ld.shared.f32 %f11, [%rd8];          // dot
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd9, %rd8, %rd10;
+    ld.shared.f32 %f12, [%rd9];          // qn
+    add.u64 %rd9, %rd9, %rd10;
+    ld.shared.f32 %f13, [%rd9];          // dn
+
+    sqrt.approx.f32 %f14, %f12;
+    sqrt.approx.f32 %f15, %f13;
+    mul.f32 %f14, %f14, %f15;
+
+    mov.f32 %f15, 0f00000000;
+    setp.gt.f32 %p2, %f14, 0f00000000;
+    @%p2 div.approx.f32 %f15, %f11, %f14;
+
+    mul.wide.u32 %rd7, %r0, 4;
+    add.s64 %rd9, %rd2, %rd7;
+    st.global.f32 [%rd9], %f15;
+
+$hcos_end:
+    ret;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// hnsw_l2_candidates: ||query - candidates[blockIdx.x]||²
+// ═══════════════════════════════════════════════════════════════════
+.visible .entry hnsw_l2_candidates(
+    .param .u64 param_query,
+    .param .u64 param_candidates,
+    .param .u64 param_distances,
+    .param .u32 param_K,
+    .param .u32 param_D
+)
+{
+    .reg .pred %p<4>;
+    .reg .f32 %f<8>;
+    .reg .b32 %r<12>;
+    .reg .b64 %rd<10>;
+
+    mov.u32 %r0, %ctaid.x;
+    ld.param.u32 %r1, [param_K];
+    setp.ge.u32 %p0, %r0, %r1;
+    @%p0 bra $hl2_end;
+
+    ld.param.u64 %rd0, [param_query];
+    ld.param.u64 %rd1, [param_candidates];
+    ld.param.u64 %rd2, [param_distances];
+    ld.param.u32 %r2, [param_D];
+
+    mul.lo.s32 %r3, %r0, %r2;
+    mul.wide.s32 %rd3, %r3, 4;
+    add.s64 %rd1, %rd1, %rd3;
+
+    mov.u32 %r4, %tid.x;
+    mov.u32 %r5, %ntid.x;
+
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r6, %r4;
+$hl2_loop:
+    setp.ge.u32 %p1, %r6, %r2;
+    @%p1 bra $hl2_reduce;
+
+    mul.wide.u32 %rd4, %r6, 4;
+    add.s64 %rd5, %rd0, %rd4;
+    ld.global.f32 %f1, [%rd5];
+    add.s64 %rd6, %rd1, %rd4;
+    ld.global.f32 %f2, [%rd6];
+    sub.f32 %f3, %f1, %f2;
+    fma.rn.f32 %f0, %f3, %f3, %f0;
+
+    add.u32 %r6, %r6, %r5;
+    bra.uni $hl2_loop;
+
+$hl2_reduce:
+    .shared .align 4 .f32 s_hl2[];
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_hl2;
+    add.u64 %rd9, %rd8, %rd7;
+    st.shared.f32 [%rd9], %f0;
+    bar.sync 0;
+
+    shr.u32 %r7, %r5, 1;
+$hl2_red_loop:
+    setp.eq.u32 %p2, %r7, 0;
+    @%p2 bra $hl2_write;
+    setp.ge.u32 %p3, %r4, %r7;
+    @%p3 bra $hl2_red_sync;
+
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_hl2;
+    add.u64 %rd9, %rd8, %rd7;
+    ld.shared.f32 %f4, [%rd9];
+    add.u32 %r8, %r4, %r7;
+    mul.wide.u32 %rd7, %r8, 4;
+    add.u64 %rd8, s_hl2, %rd7;
+    ld.shared.f32 %f5, [%rd8];
+    add.f32 %f4, %f4, %f5;
+    mov.u64 %rd8, s_hl2;
+    mul.wide.u32 %rd7, %r4, 4;
+    add.u64 %rd9, %rd8, %rd7;
+    st.shared.f32 [%rd9], %f4;
+
+$hl2_red_sync:
+    bar.sync 0;
+    shr.u32 %r7, %r7, 1;
+    bra.uni $hl2_red_loop;
+
+$hl2_write:
+    setp.ne.u32 %p2, %r4, 0;
+    @%p2 bra $hl2_end;
+
+    mov.u64 %rd8, s_hl2;
+    ld.shared.f32 %f6, [%rd8];
+    mul.wide.u32 %rd7, %r0, 4;
+    add.s64 %rd9, %rd2, %rd7;
+    st.global.f32 [%rd9], %f6;
+
+$hl2_end:
+    ret;
+}

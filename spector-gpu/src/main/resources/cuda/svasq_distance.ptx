@@ -1,0 +1,285 @@
+// Spector Search — SVASQ Quantized Distance PTX Kernels
+// Compute capability: compute_75 (Turing+)
+// Asymmetric distance: query in float32, database in INT8 quantized codes
+//
+// Two kernels:
+//   svasq8_l2_distance(qTilde, codes, norms, results, constL2Q, N, D)
+//       L2 ≈ exactNormSq + constL2Q - 2 × Σ(qTilde[d] × z[d])
+//
+//   svasq8_dot_product(qTilde, codes, results, dotOffset, N, D)
+//       IP ≈ Σ(qTilde[d] × z[d]) + dotOffset
+//
+// Memory layout per vector:
+//   [2-byte float16 norm] [D bytes INT8 codes]
+//   But here norms and codes are passed as separate arrays for efficiency.
+//
+// Grid: N blocks (one per database vector)
+// Block: min(D, 256) threads, cooperative shared-memory reduction
+
+.version 7.5
+.target sm_75
+.address_size 64
+
+// ═══════════════════════════════════════════════════════════════════
+// svasq8_l2_distance: Asymmetric L2 distance
+//   L2 ≈ exactNormSq + constL2Q - 2 × dot(qTilde, z_int8)
+//
+// params:
+//   qTilde   (float*) — pre-scaled query vector [D floats]
+//   codes    (int8*)  — INT8 quantized codes [N × D bytes]
+//   norms    (short*) — float16 norm headers [N × 2 bytes]
+//   results  (float*) — output distances [N floats]
+//   constL2Q (float)  — query-side L2 constant
+//   N        (int)    — number of database vectors
+//   D        (int)    — vector dimensionality (padded)
+// ═══════════════════════════════════════════════════════════════════
+.visible .entry svasq8_l2_distance(
+    .param .u64 param_qTilde,
+    .param .u64 param_codes,
+    .param .u64 param_norms,
+    .param .u64 param_results,
+    .param .f32 param_constL2Q,
+    .param .u32 param_N,
+    .param .u32 param_D
+)
+{
+    .reg .pred %p<4>;
+    .reg .f32 %f<12>;
+    .reg .b16 %h<2>;
+    .reg .b32 %r<14>;
+    .reg .b64 %rd<12>;
+
+    // idx = blockIdx.x (which database vector)
+    mov.u32 %r0, %ctaid.x;
+    ld.param.u32 %r1, [param_N];
+    setp.ge.u32 %p0, %r0, %r1;
+    @%p0 bra $svasq_l2_end;
+
+    // Load params
+    ld.param.u64 %rd0, [param_qTilde];
+    ld.param.u64 %rd1, [param_codes];
+    ld.param.u64 %rd2, [param_norms];
+    ld.param.u64 %rd3, [param_results];
+    ld.param.f32 %f8, [param_constL2Q];
+    ld.param.u32 %r2, [param_D];
+
+    // codes_ptr = codes + idx * D (byte addressing, 1 byte per code)
+    mul.wide.u32 %rd4, %r0, 1;           // idx as u64
+    cvt.u64.u32 %rd5, %r2;               // D as u64
+    mul.lo.u64 %rd4, %rd4, %rd5;         // idx * D
+    // Actually: codes_ptr = codes + blockIdx.x * D
+    mul.lo.s32 %r3, %r0, %r2;
+    cvt.s64.s32 %rd4, %r3;
+    add.s64 %rd1, %rd1, %rd4;
+
+    mov.u32 %r4, %tid.x;
+    mov.u32 %r5, %ntid.x;
+
+    // Accumulate dot product: Σ(qTilde[d] × z[d])
+    // z[d] is INT8, needs widening to float32
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r6, %r4;
+$svasq_l2_loop:
+    setp.ge.u32 %p1, %r6, %r2;
+    @%p1 bra $svasq_l2_reduce;
+
+    // Load qTilde[d] (float32)
+    mul.wide.u32 %rd5, %r6, 4;
+    add.s64 %rd6, %rd0, %rd5;
+    ld.global.f32 %f1, [%rd6];
+
+    // Load codes[idx*D + d] (INT8), widen to float32
+    cvt.u64.u32 %rd7, %r6;
+    add.s64 %rd8, %rd1, %rd7;
+    ld.global.s8 %r7, [%rd8];            // signed INT8 load → s32
+    cvt.rn.f32.s32 %f2, %r7;             // INT8 → float32
+
+    // dot += qTilde[d] * z[d]
+    fma.rn.f32 %f0, %f1, %f2, %f0;
+
+    add.u32 %r6, %r6, %r5;
+    bra.uni $svasq_l2_loop;
+
+$svasq_l2_reduce:
+    // Shared memory reduction for dot product
+    .shared .align 4 .f32 s_svasq_l2[];
+    mul.wide.u32 %rd5, %r4, 4;
+    mov.u64 %rd6, s_svasq_l2;
+    add.u64 %rd7, %rd6, %rd5;
+    st.shared.f32 [%rd7], %f0;
+    bar.sync 0;
+
+    // Power-of-2 reduction
+    shr.u32 %r8, %r5, 1;
+$svasq_l2_red:
+    setp.eq.u32 %p2, %r8, 0;
+    @%p2 bra $svasq_l2_write;
+    setp.ge.u32 %p3, %r4, %r8;
+    @%p3 bra $svasq_l2_sync;
+
+    mul.wide.u32 %rd5, %r4, 4;
+    mov.u64 %rd6, s_svasq_l2;
+    add.u64 %rd7, %rd6, %rd5;
+    ld.shared.f32 %f3, [%rd7];
+    add.u32 %r9, %r4, %r8;
+    mul.wide.u32 %rd5, %r9, 4;
+    add.u64 %rd8, %rd6, %rd5;
+    ld.shared.f32 %f4, [%rd8];
+    add.f32 %f3, %f3, %f4;
+    st.shared.f32 [%rd7], %f3;
+
+$svasq_l2_sync:
+    bar.sync 0;
+    shr.u32 %r8, %r8, 1;
+    bra.uni $svasq_l2_red;
+
+$svasq_l2_write:
+    setp.ne.u32 %p2, %r4, 0;
+    @%p2 bra $svasq_l2_end;
+
+    // dot = s_svasq_l2[0]
+    mov.u64 %rd6, s_svasq_l2;
+    ld.shared.f32 %f5, [%rd6];
+
+    // Load exactNormSq from float16 norm header
+    // norms_ptr = norms + idx * 2  (2 bytes per float16)
+    mul.lo.s32 %r10, %r0, 2;
+    cvt.s64.s32 %rd9, %r10;
+    add.s64 %rd10, %rd2, %rd9;
+    ld.global.u16 %h0, [%rd10];
+
+    // Convert float16 → float32
+    cvt.f32.f16 %f6, %h0;
+
+    // L2 = exactNormSq + constL2Q - 2 * dot
+    mov.f32 %f7, 0fC0000000;              // -2.0f
+    fma.rn.f32 %f9, %f7, %f5, %f8;       // constL2Q + (-2)*dot
+    add.f32 %f9, %f9, %f6;               // + exactNormSq
+
+    // Clamp to non-negative (numerical precision)
+    mov.f32 %f10, 0f00000000;
+    max.f32 %f9, %f9, %f10;
+
+    // Store result
+    mul.wide.u32 %rd5, %r0, 4;
+    add.s64 %rd11, %rd3, %rd5;
+    st.global.f32 [%rd11], %f9;
+
+$svasq_l2_end:
+    ret;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// svasq8_dot_product: Asymmetric inner product
+//   IP ≈ Σ(qTilde[d] × z[d]) + dotOffset
+//
+// params:
+//   qTilde    (float*) — pre-scaled query vector [D floats]
+//   codes     (int8*)  — INT8 quantized codes [N × D bytes]
+//   results   (float*) — output scores [N floats]
+//   dotOffset (float)  — query-side mean correction constant
+//   N         (int)    — number of database vectors
+//   D         (int)    — vector dimensionality (padded)
+// ═══════════════════════════════════════════════════════════════════
+.visible .entry svasq8_dot_product(
+    .param .u64 param_qTilde,
+    .param .u64 param_codes,
+    .param .u64 param_results,
+    .param .f32 param_dotOffset,
+    .param .u32 param_N,
+    .param .u32 param_D
+)
+{
+    .reg .pred %p<4>;
+    .reg .f32 %f<8>;
+    .reg .b32 %r<12>;
+    .reg .b64 %rd<10>;
+
+    mov.u32 %r0, %ctaid.x;
+    ld.param.u32 %r1, [param_N];
+    setp.ge.u32 %p0, %r0, %r1;
+    @%p0 bra $svasq_dot_end;
+
+    ld.param.u64 %rd0, [param_qTilde];
+    ld.param.u64 %rd1, [param_codes];
+    ld.param.u64 %rd2, [param_results];
+    ld.param.f32 %f5, [param_dotOffset];
+    ld.param.u32 %r2, [param_D];
+
+    // codes_ptr += idx * D
+    mul.lo.s32 %r3, %r0, %r2;
+    cvt.s64.s32 %rd3, %r3;
+    add.s64 %rd1, %rd1, %rd3;
+
+    mov.u32 %r4, %tid.x;
+    mov.u32 %r5, %ntid.x;
+
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r6, %r4;
+$svasq_dot_loop:
+    setp.ge.u32 %p1, %r6, %r2;
+    @%p1 bra $svasq_dot_reduce;
+
+    // Load qTilde[d]
+    mul.wide.u32 %rd4, %r6, 4;
+    add.s64 %rd5, %rd0, %rd4;
+    ld.global.f32 %f1, [%rd5];
+
+    // Load codes[d] as signed INT8 → float32
+    cvt.u64.u32 %rd6, %r6;
+    add.s64 %rd7, %rd1, %rd6;
+    ld.global.s8 %r7, [%rd7];
+    cvt.rn.f32.s32 %f2, %r7;
+
+    fma.rn.f32 %f0, %f1, %f2, %f0;
+
+    add.u32 %r6, %r6, %r5;
+    bra.uni $svasq_dot_loop;
+
+$svasq_dot_reduce:
+    .shared .align 4 .f32 s_svasq_dot[];
+    mul.wide.u32 %rd4, %r4, 4;
+    mov.u64 %rd5, s_svasq_dot;
+    add.u64 %rd6, %rd5, %rd4;
+    st.shared.f32 [%rd6], %f0;
+    bar.sync 0;
+
+    shr.u32 %r8, %r5, 1;
+$svasq_dot_red:
+    setp.eq.u32 %p2, %r8, 0;
+    @%p2 bra $svasq_dot_write;
+    setp.ge.u32 %p3, %r4, %r8;
+    @%p3 bra $svasq_dot_sync;
+
+    mul.wide.u32 %rd4, %r4, 4;
+    mov.u64 %rd5, s_svasq_dot;
+    add.u64 %rd6, %rd5, %rd4;
+    ld.shared.f32 %f3, [%rd6];
+    add.u32 %r9, %r4, %r8;
+    mul.wide.u32 %rd4, %r9, 4;
+    add.u64 %rd7, %rd5, %rd4;
+    ld.shared.f32 %f4, [%rd7];
+    add.f32 %f3, %f3, %f4;
+    st.shared.f32 [%rd6], %f3;
+
+$svasq_dot_sync:
+    bar.sync 0;
+    shr.u32 %r8, %r8, 1;
+    bra.uni $svasq_dot_red;
+
+$svasq_dot_write:
+    setp.ne.u32 %p2, %r4, 0;
+    @%p2 bra $svasq_dot_end;
+
+    mov.u64 %rd5, s_svasq_dot;
+    ld.shared.f32 %f6, [%rd5];
+    // IP = dot + dotOffset
+    add.f32 %f6, %f6, %f5;
+
+    mul.wide.u32 %rd4, %r0, 4;
+    add.s64 %rd8, %rd2, %rd4;
+    st.global.f32 [%rd8], %f6;
+
+$svasq_dot_end:
+    ret;
+}

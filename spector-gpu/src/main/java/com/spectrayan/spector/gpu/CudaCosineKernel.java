@@ -51,7 +51,7 @@ import com.spectrayan.spector.commons.error.ErrorCode;
  * @see SimilarityKernel
  * @see GpuCapability
  */
-public class CudaCosineKernel implements SimilarityKernel {
+public class CudaCosineKernel implements SimilarityKernel, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(CudaCosineKernel.class);
 
@@ -76,6 +76,9 @@ public class CudaCosineKernel implements SimilarityKernel {
     /** Whether GPU is currently active for this kernel. */
     private final boolean gpuActive;
 
+    /** Shared kernel launcher — lazily initialized, reused across calls. */
+    private volatile CudaKernelLauncher sharedLauncher;
+
     /**
      * Creates a CudaCosineKernel.
      *
@@ -83,12 +86,21 @@ public class CudaCosineKernel implements SimilarityKernel {
      * transparently falls back to CPU SIMD.</p>
      */
     public CudaCosineKernel() {
-        this.gpuActive = GpuCapability.isAvailable();
-        if (gpuActive) {
-            log.info("CudaCosineKernel initialized with GPU acceleration");
+        boolean available = GpuCapability.isAvailable();
+        CudaKernelLauncher launcher = null;
+        if (available) {
+            try {
+                launcher = new CudaKernelLauncher();
+                log.info("CudaCosineKernel initialized with GPU acceleration");
+            } catch (Exception e) {
+                log.warn("CudaKernelLauncher init failed, using CPU SIMD: {}", e.getMessage());
+                available = false;
+            }
         } else {
             log.info("CudaCosineKernel initialized with CPU SIMD fallback (GPU unavailable)");
         }
+        this.gpuActive = available;
+        this.sharedLauncher = launcher;
     }
 
     /**
@@ -98,6 +110,7 @@ public class CudaCosineKernel implements SimilarityKernel {
      */
     CudaCosineKernel(boolean forceGpuActive) {
         this.gpuActive = forceGpuActive;
+        this.sharedLauncher = null;
     }
 
     @Override
@@ -161,18 +174,30 @@ public class CudaCosineKernel implements SimilarityKernel {
     // ─────────────────────────────────────────────────────────────────────────────
 
     private float[] computeGpu(float[] query, float[] database, int numVectors, int dimensions) {
-        // Use the kernel launcher for actual GPU dispatch
+        // Use the shared kernel launcher for actual GPU dispatch
+        CudaKernelLauncher launcher = this.sharedLauncher;
+        if (launcher == null) {
+            return computeCpuSimd(query, database, numVectors, dimensions);
+        }
         try {
-            CudaKernelLauncher launcher = new CudaKernelLauncher();
-            try {
-                return launcher.batchCosine(query, database, numVectors, dimensions);
-            } finally {
-                launcher.close();
-            }
+            return launcher.batchCosine(query, database, numVectors, dimensions);
         } catch (Exception e) {
             log.debug("GPU kernel launch failed, using CPU SIMD: {}", e.getMessage());
             return computeCpuSimd(query, database, numVectors, dimensions);
         }
+    }
+
+    @Override
+    public void close() {
+        if (sharedLauncher != null) {
+            try {
+                sharedLauncher.close();
+            } catch (Exception e) {
+                log.warn("Error closing shared kernel launcher", e);
+            }
+            sharedLauncher = null;
+        }
+        normCache.clear();
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

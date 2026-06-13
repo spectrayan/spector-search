@@ -1,0 +1,382 @@
+// Spector Search — Batch Similarity PTX Kernels
+// Compute capability: compute_75 (Turing+), JIT-compiled to actual GPU at load time
+// Grid: N blocks (one per database vector)
+// Block: min(dims, 256) threads, cooperative shared-memory reduction
+//
+// Three kernels:
+//   batch_cosine(query, database, results, N, D) — cosine similarity
+//   batch_dot(query, database, results, N, D)    — dot product
+//   batch_l2(query, database, results, N, D)     — L2 squared distance
+
+.version 7.5
+.target sm_75
+.address_size 64
+
+// ═══════════════════════════════════════════════════════════════════
+// batch_cosine: cosine(query, database[blockIdx.x])
+// Uses 3× shared memory for dot, queryNorm, docNorm reduction
+// ═══════════════════════════════════════════════════════════════════
+.visible .entry batch_cosine(
+    .param .u64 param_query,
+    .param .u64 param_database,
+    .param .u64 param_results,
+    .param .u32 param_N,
+    .param .u32 param_D
+)
+{
+    .reg .pred %p<4>;
+    .reg .f32 %f<16>;
+    .reg .b32 %r<16>;
+    .reg .b64 %rd<12>;
+
+    // idx = blockIdx.x (which database vector)
+    mov.u32 %r0, %ctaid.x;
+    ld.param.u32 %r1, [param_N];
+    setp.ge.u32 %p0, %r0, %r1;
+    @%p0 bra $cosine_end;
+
+    // Load params
+    ld.param.u64 %rd0, [param_query];
+    ld.param.u64 %rd1, [param_database];
+    ld.param.u64 %rd2, [param_results];
+    ld.param.u32 %r2, [param_D];
+
+    // db_ptr = database + idx * D * 4
+    mul.lo.s32 %r3, %r0, %r2;
+    mul.wide.s32 %rd3, %r3, 4;
+    add.s64 %rd1, %rd1, %rd3;
+
+    // tid = threadIdx.x, blockDim = ntid.x
+    mov.u32 %r4, %tid.x;
+    mov.u32 %r5, %ntid.x;
+
+    // Accumulate: dot, queryNorm, docNorm
+    mov.f32 %f0, 0f00000000;  // dot_acc
+    mov.f32 %f1, 0f00000000;  // qn_acc
+    mov.f32 %f2, 0f00000000;  // dn_acc
+
+    // Loop: d = tid; d < D; d += blockDim
+    mov.u32 %r6, %r4;
+$cosine_loop:
+    setp.ge.u32 %p1, %r6, %r2;
+    @%p1 bra $cosine_reduce;
+
+    mul.wide.u32 %rd4, %r6, 4;
+    add.s64 %rd5, %rd0, %rd4;
+    ld.global.f32 %f3, [%rd5];    // query[d]
+    add.s64 %rd6, %rd1, %rd4;
+    ld.global.f32 %f4, [%rd6];    // db[d]
+
+    fma.rn.f32 %f0, %f3, %f4, %f0;  // dot += q*v
+    fma.rn.f32 %f1, %f3, %f3, %f1;  // qn += q*q
+    fma.rn.f32 %f2, %f4, %f4, %f2;  // dn += v*v
+
+    add.u32 %r6, %r6, %r5;
+    bra.uni $cosine_loop;
+
+$cosine_reduce:
+    // Store to shared memory: s_dot[tid], s_qn[tid], s_dn[tid]
+    // shared layout: [blockDim floats for dot][blockDim for qn][blockDim for dn]
+    .shared .align 4 .f32 s_cosine[];
+
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_cosine;
+    add.u64 %rd9, %rd8, %rd7;
+    st.shared.f32 [%rd9], %f0;           // s_dot[tid]
+
+    mul.wide.u32 %rd10, %r5, 4;         // blockDim * 4
+    add.u64 %rd9, %rd9, %rd10;
+    st.shared.f32 [%rd9], %f1;           // s_qn[tid]
+
+    add.u64 %rd9, %rd9, %rd10;
+    st.shared.f32 [%rd9], %f2;           // s_dn[tid]
+
+    bar.sync 0;
+
+    // Block reduction (power-of-2 stride)
+    shr.u32 %r7, %r5, 1;  // s = blockDim / 2
+$cosine_red_loop:
+    setp.eq.u32 %p2, %r7, 0;
+    @%p2 bra $cosine_write;
+    setp.ge.u32 %p3, %r4, %r7;
+    @%p3 bra $cosine_red_sync;
+
+    // s_dot[tid] += s_dot[tid + s]
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_cosine;
+
+    // dot reduction
+    add.u64 %rd9, %rd8, %rd7;
+    ld.shared.f32 %f5, [%rd9];
+    add.u32 %r8, %r4, %r7;
+    mul.wide.u32 %rd10, %r8, 4;
+    add.u64 %rd11, %rd8, %rd10;
+    ld.shared.f32 %f6, [%rd11];
+    add.f32 %f5, %f5, %f6;
+    st.shared.f32 [%rd9], %f5;
+
+    // qn reduction (offset by blockDim*4)
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd9, %rd8, %rd7;
+    add.u64 %rd9, %rd9, %rd10;
+    ld.shared.f32 %f7, [%rd9];
+    add.u64 %rd11, %rd8, %rd10;
+    mul.wide.u32 %rd10, %r8, 4;
+    add.u64 %rd11, %rd11, %rd10;
+    ld.shared.f32 %f8, [%rd11];
+    add.f32 %f7, %f7, %f8;
+    st.shared.f32 [%rd9], %f7;
+
+    // dn reduction (offset by 2*blockDim*4)
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd9, %rd8, %rd7;
+    add.u64 %rd9, %rd9, %rd10;
+    add.u64 %rd9, %rd9, %rd10;
+    ld.shared.f32 %f9, [%rd9];
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd11, %rd8, %rd10;
+    add.u64 %rd11, %rd11, %rd10;
+    mul.wide.u32 %rd10, %r8, 4;
+    add.u64 %rd11, %rd11, %rd10;
+    ld.shared.f32 %f10, [%rd11];
+    add.f32 %f9, %f9, %f10;
+    st.shared.f32 [%rd9], %f9;
+
+$cosine_red_sync:
+    bar.sync 0;
+    shr.u32 %r7, %r7, 1;
+    bra.uni $cosine_red_loop;
+
+$cosine_write:
+    // Only thread 0 writes result
+    setp.ne.u32 %p2, %r4, 0;
+    @%p2 bra $cosine_end;
+
+    mov.u64 %rd8, s_cosine;
+    ld.shared.f32 %f11, [%rd8];          // dot sum
+
+    mul.wide.u32 %rd10, %r5, 4;
+    add.u64 %rd9, %rd8, %rd10;
+    ld.shared.f32 %f12, [%rd9];          // qn sum
+
+    add.u64 %rd9, %rd9, %rd10;
+    ld.shared.f32 %f13, [%rd9];          // dn sum
+
+    // denom = sqrt(qn) * sqrt(dn)
+    sqrt.approx.f32 %f14, %f12;
+    sqrt.approx.f32 %f15, %f13;
+    mul.f32 %f14, %f14, %f15;
+
+    // result = (denom > 0) ? dot/denom : 0
+    mov.f32 %f15, 0f00000000;
+    setp.gt.f32 %p2, %f14, 0f00000000;
+    @%p2 div.approx.f32 %f15, %f11, %f14;
+
+    mul.wide.u32 %rd7, %r0, 4;
+    add.s64 %rd9, %rd2, %rd7;
+    st.global.f32 [%rd9], %f15;
+
+$cosine_end:
+    ret;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// batch_dot: dot(query, database[blockIdx.x])
+// Single shared memory array for dot-product reduction
+// ═══════════════════════════════════════════════════════════════════
+.visible .entry batch_dot(
+    .param .u64 param_query,
+    .param .u64 param_database,
+    .param .u64 param_results,
+    .param .u32 param_N,
+    .param .u32 param_D
+)
+{
+    .reg .pred %p<4>;
+    .reg .f32 %f<8>;
+    .reg .b32 %r<12>;
+    .reg .b64 %rd<10>;
+
+    // idx = blockIdx.x
+    mov.u32 %r0, %ctaid.x;
+    ld.param.u32 %r1, [param_N];
+    setp.ge.u32 %p0, %r0, %r1;
+    @%p0 bra $dot_end;
+
+    // Load params
+    ld.param.u64 %rd0, [param_query];
+    ld.param.u64 %rd1, [param_database];
+    ld.param.u64 %rd2, [param_results];
+    ld.param.u32 %r2, [param_D];
+
+    // db_ptr = database + idx * D * 4
+    mul.lo.s32 %r3, %r0, %r2;
+    mul.wide.s32 %rd3, %r3, 4;
+    add.s64 %rd1, %rd1, %rd3;
+
+    mov.u32 %r4, %tid.x;
+    mov.u32 %r5, %ntid.x;
+
+    // Accumulate dot product
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r6, %r4;
+$dot_loop:
+    setp.ge.u32 %p1, %r6, %r2;
+    @%p1 bra $dot_reduce;
+
+    mul.wide.u32 %rd4, %r6, 4;
+    add.s64 %rd5, %rd0, %rd4;
+    ld.global.f32 %f1, [%rd5];
+    add.s64 %rd6, %rd1, %rd4;
+    ld.global.f32 %f2, [%rd6];
+    fma.rn.f32 %f0, %f1, %f2, %f0;
+
+    add.u32 %r6, %r6, %r5;
+    bra.uni $dot_loop;
+
+$dot_reduce:
+    .shared .align 4 .f32 s_dot[];
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_dot;
+    add.u64 %rd9, %rd8, %rd7;
+    st.shared.f32 [%rd9], %f0;
+    bar.sync 0;
+
+    shr.u32 %r7, %r5, 1;
+$dot_red_loop:
+    setp.eq.u32 %p2, %r7, 0;
+    @%p2 bra $dot_write;
+    setp.ge.u32 %p3, %r4, %r7;
+    @%p3 bra $dot_red_sync;
+
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_dot;
+    add.u64 %rd9, %rd8, %rd7;
+    ld.shared.f32 %f3, [%rd9];
+    add.u32 %r8, %r4, %r7;
+    mul.wide.u32 %rd7, %r8, 4;
+    add.u64 %rd8, s_dot, %rd7;
+    ld.shared.f32 %f4, [%rd8];
+    add.f32 %f3, %f3, %f4;
+    mov.u64 %rd8, s_dot;
+    mul.wide.u32 %rd7, %r4, 4;
+    add.u64 %rd9, %rd8, %rd7;
+    st.shared.f32 [%rd9], %f3;
+
+$dot_red_sync:
+    bar.sync 0;
+    shr.u32 %r7, %r7, 1;
+    bra.uni $dot_red_loop;
+
+$dot_write:
+    setp.ne.u32 %p2, %r4, 0;
+    @%p2 bra $dot_end;
+
+    mov.u64 %rd8, s_dot;
+    ld.shared.f32 %f5, [%rd8];
+    mul.wide.u32 %rd7, %r0, 4;
+    add.s64 %rd9, %rd2, %rd7;
+    st.global.f32 [%rd9], %f5;
+
+$dot_end:
+    ret;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// batch_l2: ||query - database[blockIdx.x]||²
+// Single shared memory array for squared-distance reduction
+// ═══════════════════════════════════════════════════════════════════
+.visible .entry batch_l2(
+    .param .u64 param_query,
+    .param .u64 param_database,
+    .param .u64 param_results,
+    .param .u32 param_N,
+    .param .u32 param_D
+)
+{
+    .reg .pred %p<4>;
+    .reg .f32 %f<8>;
+    .reg .b32 %r<12>;
+    .reg .b64 %rd<10>;
+
+    mov.u32 %r0, %ctaid.x;
+    ld.param.u32 %r1, [param_N];
+    setp.ge.u32 %p0, %r0, %r1;
+    @%p0 bra $l2_end;
+
+    ld.param.u64 %rd0, [param_query];
+    ld.param.u64 %rd1, [param_database];
+    ld.param.u64 %rd2, [param_results];
+    ld.param.u32 %r2, [param_D];
+
+    mul.lo.s32 %r3, %r0, %r2;
+    mul.wide.s32 %rd3, %r3, 4;
+    add.s64 %rd1, %rd1, %rd3;
+
+    mov.u32 %r4, %tid.x;
+    mov.u32 %r5, %ntid.x;
+
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r6, %r4;
+$l2_loop:
+    setp.ge.u32 %p1, %r6, %r2;
+    @%p1 bra $l2_reduce;
+
+    mul.wide.u32 %rd4, %r6, 4;
+    add.s64 %rd5, %rd0, %rd4;
+    ld.global.f32 %f1, [%rd5];
+    add.s64 %rd6, %rd1, %rd4;
+    ld.global.f32 %f2, [%rd6];
+    sub.f32 %f3, %f1, %f2;          // diff = q - v
+    fma.rn.f32 %f0, %f3, %f3, %f0;  // acc += diff*diff
+
+    add.u32 %r6, %r6, %r5;
+    bra.uni $l2_loop;
+
+$l2_reduce:
+    .shared .align 4 .f32 s_l2[];
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_l2;
+    add.u64 %rd9, %rd8, %rd7;
+    st.shared.f32 [%rd9], %f0;
+    bar.sync 0;
+
+    shr.u32 %r7, %r5, 1;
+$l2_red_loop:
+    setp.eq.u32 %p2, %r7, 0;
+    @%p2 bra $l2_write;
+    setp.ge.u32 %p3, %r4, %r7;
+    @%p3 bra $l2_red_sync;
+
+    mul.wide.u32 %rd7, %r4, 4;
+    mov.u64 %rd8, s_l2;
+    add.u64 %rd9, %rd8, %rd7;
+    ld.shared.f32 %f4, [%rd9];
+    add.u32 %r8, %r4, %r7;
+    mul.wide.u32 %rd7, %r8, 4;
+    add.u64 %rd8, s_l2, %rd7;
+    ld.shared.f32 %f5, [%rd8];
+    add.f32 %f4, %f4, %f5;
+    mov.u64 %rd8, s_l2;
+    mul.wide.u32 %rd7, %r4, 4;
+    add.u64 %rd9, %rd8, %rd7;
+    st.shared.f32 [%rd9], %f4;
+
+$l2_red_sync:
+    bar.sync 0;
+    shr.u32 %r7, %r7, 1;
+    bra.uni $l2_red_loop;
+
+$l2_write:
+    setp.ne.u32 %p2, %r4, 0;
+    @%p2 bra $l2_end;
+
+    mov.u64 %rd8, s_l2;
+    ld.shared.f32 %f6, [%rd8];
+    mul.wide.u32 %rd7, %r0, 4;
+    add.s64 %rd9, %rd2, %rd7;
+    st.global.f32 [%rd9], %f6;
+
+$l2_end:
+    ret;
+}

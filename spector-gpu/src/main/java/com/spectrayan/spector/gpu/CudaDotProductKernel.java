@@ -269,21 +269,28 @@ public final class CudaDotProductKernel implements SimilarityKernel, AutoCloseab
     }
 
     private String loadPtxResource() {
+        // Try compiled PTX first (shipped as pre-compiled resource)
         try (var is = getClass().getResourceAsStream("/cuda/batch_similarity.ptx")) {
-            if (is == null) {
-                // Try .cu source as fallback (would need nvcc compilation in production)
-                try (var cuIs = getClass().getResourceAsStream("/cuda/batch_similarity.cu")) {
-                    if (cuIs == null) return null;
-                    // In production, PTX would be pre-compiled. For now, return null
-                    // to trigger CPU fallback when only .cu source is available.
-                    return null;
-                }
+            if (is != null) {
+                log.debug("Loaded batch_similarity.ptx from /cuda/batch_similarity.ptx");
+                return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
             }
-            return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         } catch (Exception e) {
-            log.warn("Failed to load PTX resource: {}", e.getMessage());
-            return null;
+            log.warn("Failed to load batch_similarity.ptx: {}", e.getMessage());
         }
+
+        // Fallback: try the simpler per-kernel PTX (older format, single kernel per file)
+        try (var is = getClass().getResourceAsStream("/kernels/batch_cosine.ptx")) {
+            if (is != null) {
+                log.debug("Loaded fallback PTX from /kernels/batch_cosine.ptx");
+                return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load fallback PTX: {}", e.getMessage());
+        }
+
+        log.warn("No PTX resources found, GPU acceleration unavailable for dot-product kernel");
+        return null;
     }
 
     // ── GPU Execution ───────────────────────────────────────────────────────────
