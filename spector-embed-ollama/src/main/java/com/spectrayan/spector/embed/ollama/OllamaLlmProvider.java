@@ -269,17 +269,42 @@ public class OllamaLlmProvider implements TextGenerationProvider {
      * Parses the Ollama /api/generate response to extract the "response" field.
      *
      * <p>Response format: {@code {"model":"...","response":"generated text","done":true,...}}</p>
+     *
+     * <p>Thinking models (gemma4, qwen3) may return content in a separate "thinking" field
+     * while the "response" field is empty or contains only the final answer. When "response"
+     * is blank, we fall back to the "thinking" field content.</p>
      */
     private String parseGenerateResponse(String json) {
         try (var parser = MAPPER.createParser(json)) {
+            String responseText = null;
+            String thinkingText = null;
+
             while (parser.nextToken() != null) {
-                if (parser.currentToken() == tools.jackson.core.JsonToken.PROPERTY_NAME
-                        && "response".equals(parser.currentName())) {
-                    parser.nextToken(); // move to value
-                    String response = parser.getText();
-                    return response != null ? response.strip() : "";
+                if (parser.currentToken() == tools.jackson.core.JsonToken.PROPERTY_NAME) {
+                    String fieldName = parser.currentName();
+                    if ("response".equals(fieldName)) {
+                        parser.nextToken();
+                        responseText = parser.getText();
+                    } else if ("thinking".equals(fieldName)) {
+                        parser.nextToken();
+                        thinkingText = parser.getText();
+                    }
                 }
             }
+
+            // Prefer "response" field; fall back to "thinking" for thinking models
+            if (responseText != null && !responseText.isBlank()) {
+                return responseText.strip();
+            }
+            if (thinkingText != null && !thinkingText.isBlank()) {
+                log.debug("Ollama response was blank; using 'thinking' field content ({}B)",
+                        thinkingText.length());
+                return thinkingText.strip();
+            }
+            if (responseText != null) {
+                return ""; // Explicitly empty response
+            }
+
             throw new GenerationException("No 'response' field in Ollama generate response");
         } catch (GenerationException e) {
             throw e;
