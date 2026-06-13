@@ -125,6 +125,33 @@ Computes cosine similarity with cached norm computation.
 | Falls back to dot product | For normalized inputs |
 | Tolerance | ≤1e-6 vs CPU SIMD |
 
+### HNSW Candidate Distance Kernel
+
+Computes distances for HNSW graph traversal candidates — optimized for the small-batch, repeated-invocation pattern of HNSW search.
+
+| Property | Value |
+|----------|-------|
+| Input | query (float32[D]) + candidates (float32[K × D]) |
+| Output | distances/similarities (float32[K]) |
+| Metrics | Cosine similarity and L2 squared distance |
+| Batch size | 10–200 candidates (typical HNSW hop) |
+| GPU threshold | ≥32 candidates (below: CPU SIMD faster) |
+
+### SVASQ Quantized Distance Kernel
+
+Asymmetric distance computation on SVASQ INT8-quantized vectors — the highest-throughput kernel since it operates on Spector's actual storage format.
+
+| Property | Value |
+|----------|-------|
+| Input | qTilde (float32[D]) + codes (int8[N × D]) + norms (float16[N]) |
+| Output | distances (float32[N]) |
+| Metrics | L2 (≈ normSq + constL2Q - 2·dot) and Inner Product (≈ dot + offset) |
+| GPU threshold | ≥1024 vectors |
+| Formula | Matches `SvasqSimdKernel` exactly |
+
+> [!TIP]
+> The SVASQ kernel operates on INT8 codes directly — no dequantization to float32. This gives 4× memory bandwidth savings compared to the float32 batch kernels, enabling even larger batches in GPU memory.
+
 ### ⏱️ Batch GPU Search
 
 ```mermaid

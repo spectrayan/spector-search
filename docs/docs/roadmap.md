@@ -4,12 +4,12 @@ Spector is under active development. This page details planned improvements, the
 
 ---
 
-## 📜 Priority: OpenClaw Integration
+## ✅ Priority: OpenClaw Integration
 
-### 📜 OpenClaw Integration — Spector as Main Memory {#openclaw}
+### ✅ OpenClaw Integration — Spector as Main Memory {#openclaw}
 
-!!! info "Status: Planned"
-    Medium effort. First-class integration with the OpenClaw autonomous agent framework.
+!!! success "Completed"
+    Implemented as an OpenClaw plugin (`plugins/openclaw`). Spector runs as the primary long-term memory backend for OpenClaw agents via MCP stdio transport. Includes install scripts for Windows/Linux, embedding provider configuration (Ollama / OpenAI-compatible), and full plugin manifest.
 
 Integrate Spector Memory as the **primary long-term memory backend** for [OpenClaw](https://openclaw.ai) — the open-source autonomous AI agent framework that runs as a local gateway across WhatsApp, Telegram, Slack, and Discord.
 
@@ -81,12 +81,12 @@ OpenClaw provides the agentic loop (observe → reason → act) and multi-channe
 
 ---
 
-## 📜 Planned — Client SDKs & Documentation
+## ✅ Completed — Client SDKs & Documentation
 
-### 📜 Python SDK — MCP Client Wrapper {#python-sdk}
+### ✅ Python SDK — MCP Client Wrapper {#python-sdk}
 
-!!! info "Status: Planned"
-    Low-medium effort. Thin wrapper over MCP stdio transport.
+!!! success "Completed"
+    Implemented in `sdks/python` as the `spector-sdk` package. Thin wrapper over MCP stdio transport with zero mandatory dependencies. Published with `pyproject.toml`, Python 3.10+ support. Documentation at `docs/sdk-usage/python-sdk.md`.
 
 A lightweight Python package that wraps Spector's MCP server via subprocess/stdio transport, giving Python developers a native-feeling API without touching Java:
 
@@ -113,10 +113,10 @@ explanation = mem.why_not("mem-42", "theme preference?")
 
 ---
 
-### 📜 Documentation Split — User Guide vs Architecture Guide {#docs-split}
+### ✅ Documentation Split — User Guide vs Architecture Guide {#docs-split}
 
-!!! info "Status: Planned"
-    Low effort. Critical for reducing complexity-intimidation.
+!!! success "Completed"
+    Docs split into "Getting Started" tab (quickstart, SDK usage, MCP server, CLI) and "Architecture" tab (core concepts, deep dives, internals). Agent developers never see `SynapticHeaderConstants` in their onboarding path.
 
 Separate documentation into two tracks to prevent the "19 packages overwhelm developers" perception:
 
@@ -804,43 +804,43 @@ RecallOptions.builder()
 
 | # | Improvement | Category | Effort | Status |
 |---|------------|----------|--------|--------|
-| 1 | **OpenClaw integration** | Agentic AI | Medium | 📜 Planned |
-| 2 | **Python SDK (MCP wrapper)** | Client SDKs | Low-Medium | 📜 Planned |
-| 3 | **ProfileAdaptor (contextual bandit)** | Agentic AI | Low-Medium | 📜 Planned |
-| 4 | **Documentation split** | Documentation | Low | 📜 Planned |
-| 5 | **GPU kernel dispatch** | Compute | Medium | 📜 Infra ready |
-| 6 | **Project Valhalla** | Runtime | Medium | 🔄 Prepared |
+| 1 | **ProfileAdaptor (contextual bandit)** | Agentic AI | Low-Medium | 📜 Planned |
+| 2 | **GPU kernel dispatch** | Compute | Medium | 📜 Infra ready |
+| 3 | **Project Valhalla** | Runtime | Medium | 🔄 Prepared |
 
 ### 🔬 Research & Future
 
 | # | Improvement | Category | Effort | Status |
 |---|------------|----------|--------|--------|
-| 7 | **TypeScript/JS SDK** | Client SDKs | Medium | 🔬 Future |
-| 8 | **RecallMode.REPLAY (WAL time-travel)** | Agentic AI | High | 🔬 Research |
-| 9 | **LoRA adapter routing** | Agentic AI | High | 🔬 Research |
-| 10 | **SVASQ-PQ hybrid** | Compression | Very High | 🔬 Research |
-| 11 | **Flat-mode SVASQ** | Compression | Medium | 🔬 Research |
-| 12 | **NPU acceleration** | Compute | High | 🔬 Exploratory |
-| 13 | **WASM edge runtime** | Runtime | High | 🔬 Exploratory |
-| 14 | **Adaptive bit-width** | Compression | Very High | 🔴 Not planned |
-| 15 | **SPLARE sparse autoencoder** | Retrieval | High | 🔬 Research |
-| 16 | **ColPali vision-language** | Retrieval | Very High | 🔬 Research |
+| 4 | **TypeScript/JS SDK** | Client SDKs | Medium | 🔬 Future |
+| 5 | **RecallMode.REPLAY (WAL time-travel)** | Agentic AI | High | 🔬 Research |
+| 6 | **LoRA adapter routing** | Agentic AI | High | 🔬 Research |
+| 7 | **SVASQ-PQ hybrid** | Compression | Very High | 🔬 Research |
+| 8 | **Flat-mode SVASQ** | Compression | Medium | 🔬 Research |
+| 9 | **NPU acceleration** | Compute | High | 🔬 Exploratory |
+| 10 | **WASM edge runtime** | Runtime | High | 🔬 Exploratory |
+| 11 | **Adaptive bit-width** | Compression | Very High | 🔴 Not planned |
+| 12 | **SPLARE sparse autoencoder** | Retrieval | High | 🔬 Research |
+| 13 | **ColPali vision-language** | Retrieval | Very High | 🔬 Research |
 
 ### ✅ Completed
 
 | # | Improvement | Category | Effort |
 |---|------------|----------|--------|
-| 17 | **Native MCP Server** | Agentic AI | Medium |
-| 18 | **Streamable HTTP transport** | Agentic AI | Medium |
-| 19 | **3-Layer Cognitive Graph** | Graph Memory | High |
-| 20 | **Cross-layer promotion** | Graph Memory | Medium |
-| 21 | **Entity graph decay + merging** | Graph Memory | Medium |
-| 22 | **Graph scoring weights** | Graph Memory | Low |
-| 23 | **Temporal chain pruning** | Graph Memory | Low |
-| 24 | **SVASQ-4** | Compression | Medium |
-| 25 | **Padding-aware storage** | Compression | Low |
-| 26 | **Norm header f16** | Compression | Very Low |
-| 27 | **Structured Concurrency** | Runtime | Low |
-| 28 | **4-Layer Retrieval Stack** | Retrieval | High |
-| 29 | **ColBERT v2 reranking** | Retrieval | Medium |
+| 17 | **OpenClaw integration** | Agentic AI | Medium |
+| 18 | **Python SDK (MCP wrapper)** | Client SDKs | Low-Medium |
+| 19 | **Documentation split** | Documentation | Low |
+| 20 | **Native MCP Server** | Agentic AI | Medium |
+| 21 | **Streamable HTTP transport** | Agentic AI | Medium |
+| 22 | **3-Layer Cognitive Graph** | Graph Memory | High |
+| 23 | **Cross-layer promotion** | Graph Memory | Medium |
+| 24 | **Entity graph decay + merging** | Graph Memory | Medium |
+| 25 | **Graph scoring weights** | Graph Memory | Low |
+| 26 | **Temporal chain pruning** | Graph Memory | Low |
+| 27 | **SVASQ-4** | Compression | Medium |
+| 28 | **Padding-aware storage** | Compression | Low |
+| 29 | **Norm header f16** | Compression | Very Low |
+| 30 | **Structured Concurrency** | Runtime | Low |
+| 31 | **4-Layer Retrieval Stack** | Retrieval | High |
+| 32 | **ColBERT v2 reranking** | Retrieval | Medium |
 
