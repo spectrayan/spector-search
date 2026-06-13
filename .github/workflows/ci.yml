@@ -172,6 +172,17 @@ jobs:
           retention-days: 14
 
   # ═══════════════════════════════════════════════════════════════════════
+  # Publish to GitHub Packages (auto on main, after CI passes)
+  # ═══════════════════════════════════════════════════════════════════════
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/publish-packages.yml
+    permissions:
+      contents: read
+      packages: write
+
+  # ═══════════════════════════════════════════════════════════════════════
   # Nightly Full Dataset Benchmark
   # ═══════════════════════════════════════════════════════════════════════
   nightly-benchmark:

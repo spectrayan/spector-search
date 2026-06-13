@@ -1,8 +1,9 @@
 name: Publish to GitHub Packages
 
+# Reusable workflow — called by CI after successful build+test
+# Also supports manual dispatch for ad-hoc publishing
 on:
-  push:
-    branches: [ main ]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -13,15 +14,11 @@ env:
   JAVA_VERSION: '25'
   JAVA_DISTRIBUTION: 'temurin'
 
-concurrency:
-  group: publish-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   publish:
-    name: Build & Publish to GitHub Packages
+    name: Publish to GitHub Packages
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -33,12 +30,6 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: 'maven'
-
-      - name: Build & test
-        run: |
-          mvn -B clean verify \
-            --no-transfer-progress \
-            -Dproject.build.outputTimestamp=2024-01-01T00:00:00Z
 
       - name: Generate Maven settings for GitHub Packages
         run: |
@@ -55,6 +46,7 @@ jobs:
           </settings>
           EOF
 
+      # Skip tests — CI already ran them before calling this workflow
       - name: Deploy to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
