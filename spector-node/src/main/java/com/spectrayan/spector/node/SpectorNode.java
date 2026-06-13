@@ -252,11 +252,7 @@ public class SpectorNode implements AutoCloseable {
             // Streamable HTTP (MCP 2025-03-26) — single endpoint at /mcp
             sb.service("/mcp", mcpTransport.streamableHttpService());
 
-            // Legacy SSE endpoints (backward compat for older clients)
-            sb.service("/mcp/sse", mcpTransport.sseService());
-            sb.service("/mcp/message", mcpTransport.messageService());
-
-            log.info("MCP Streamable HTTP enabled at /mcp (legacy SSE at /mcp/sse)");
+            log.info("MCP Streamable HTTP enabled at /mcp (stateless mode)");
         } else if (nodeConfig.mcpEnabled()) {
             log.warn("MCP enabled but no SpectorRuntime available — MCP disabled");
         }
@@ -264,7 +260,7 @@ public class SpectorNode implements AutoCloseable {
         // ── CORS ──
         sb.decorator(CorsService.builderForAnyOrigin()
                 .allowRequestMethods(HttpMethod.GET, HttpMethod.POST, HttpMethod.DELETE, HttpMethod.OPTIONS)
-                .allowRequestHeaders("Content-Type", "X-API-Key", "Authorization")
+                .allowRequestHeaders("Content-Type", "X-API-Key", "Authorization", "Mcp-Session-Id")
                 .newDecorator());
 
         // ── Response compression (configurable) ──
@@ -377,7 +373,21 @@ public class SpectorNode implements AutoCloseable {
     }
 
     /**
-     * Stops the server and closes the engine.
+     * Stops the server and closes all subsystems (engine, memory, graphs).
+     *
+     * <h3>Shutdown Order</h3>
+     * <ol>
+     *   <li>Publish stopping event (notifies SSE clients)</li>
+     *   <li>Stop telemetry publishers</li>
+     *   <li>Stop HTTP/gRPC server (drain in-flight requests)</li>
+     *   <li>Stop MCP server</li>
+     *   <li>Close runtime (engine + memory + graph persistence)</li>
+     * </ol>
+     *
+     * <p>When backed by a {@link SpectorRuntime}, the runtime handles closing
+     * both the engine and memory subsystem (including flush of HebbianGraph,
+     * TemporalChain, EntityGraph). When standalone (no runtime), the engine
+     * is closed directly.</p>
      */
     @Override
     public void close() {
@@ -396,7 +406,18 @@ public class SpectorNode implements AutoCloseable {
         if (mcpServer != null) {
             mcpServer.stop();
         }
-        engine.close();
+
+        // Close runtime (handles engine + memory shutdown) or engine directly.
+        // Runtime.close() flushes all cognitive graphs and WAL before releasing
+        // off-heap memory. Doing this via runtime avoids double-closing engine.
+        if (runtime != null) {
+            runtime.close();
+        } else {
+            engine.close();
+            if (memory != null) {
+                memory.close();
+            }
+        }
         log.info("SpectorNode '{}' stopped", nodeConfig.nodeId());
     }
 
@@ -447,10 +468,14 @@ public class SpectorNode implements AutoCloseable {
         SpectorRuntime runtime = SpectorRuntime.from(props, embedder, llmProvider);
         SpectorNode node = SpectorNode.create(runtime, nodeConfig);
 
+        // ── JVM Shutdown Hook (SIGTERM from Docker, Ctrl+C, etc.) ──
+        // SpectorNode.close() handles the full shutdown lifecycle:
+        //   server stop → memory flush (graphs, WAL) → engine close
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.info("JVM shutdown hook: stopping SpectorNode...");
             node.close();
-            runtime.close();
-        }));
+            log.info("JVM shutdown hook: SpectorNode stopped cleanly");
+        }, "spector-node-shutdown"));
         node.start();
 
         log.info("Spector ready — http://localhost:{}/health (memory={})",
