@@ -15,48 +15,46 @@ Use this workflow when:
 Ensure all checks pass locally to mimic the GitHub Actions CI environment exactly:
 
 - **Check License Headers**:
-  ```powershell
+  ```bash
   mvn -B license:check --no-transfer-progress
   ```
   *If this fails, run `mvn license:format` to apply headers, then stage the changes.*
 
 - **Build with Reproducible Output**:
-  ```powershell
+  ```bash
   mvn -B clean install --no-transfer-progress -Dproject.build.outputTimestamp=2024-01-01T00:00:00Z
   ```
 
 - **Verify Reproducible JARs**:
-  ```powershell
+  ```bash
   mvn -B package -DskipTests --no-transfer-progress -Dproject.build.outputTimestamp=2024-01-01T00:00:00Z -pl '!spector-bench'
   ```
 
 - **Verify No Dynamic Version Ranges**:
-  ```powershell
-  mvn -B dependency:tree --no-transfer-progress | Select-String -Pattern '\[(.*,.*)\]|\[.*,\)|\(.*,.*\]|LATEST|RELEASE|SNAPSHOT' | Where-Object { $_.Line -notmatch 'com.spectrayan' -and $_.Line -notmatch 'Building ' -and $_.Line -notmatch 'Reactor Summary' }
+  ```bash
+  mvn -B dependency:tree --no-transfer-progress | grep -E '\[(.*,.*)\]|\[.*,\)|\(.*,.*\]|LATEST|RELEASE|SNAPSHOT' | grep -v 'com.spectrayan' | grep -v 'Building ' | grep -v 'Reactor Summary'
   ```
   *The output must be empty. If dynamic versions are detected, pin them in the respective POM files.*
 
 - **Run Cognitive Benchmark Property Tests**:
-  ```powershell
+  ```bash
   mvn -B test -pl spector-bench --no-transfer-progress -DskipBenchTests=false -Dtest="*PropertyTest"
   ```
 
 - **Run Cognitive Benchmark Unit Tests**:
-  ```powershell
+  ```bash
   mvn -B test -pl spector-bench --no-transfer-progress -DskipBenchTests=false -Dtest="*Test,!*PropertyTest,!*IntegrationTest"
   ```
 
 - **Build Documentation**:
-  ```powershell
-  cd docs
-  python -m mkdocs build --clean
-  cd ..
+  ```bash
+  cd docs && python -m mkdocs build --clean && cd ..
   ```
 
 ### 2. Verify Local Test Coverage
 
 - **Generate Coverage Report**:
-  ```powershell
+  ```bash
   mvn -B jacoco:report-aggregate --no-transfer-progress
   ```
 - **Verify Coverage Baselines**:
@@ -64,14 +62,14 @@ Ensure all checks pass locally to mimic the GitHub Actions CI environment exactl
 
 ### 3. Create Incremental Commits
 
-Follow the [Incremental Commits Skill](file:///d:/git/spector-search/.agents/skills/incremental-commits/SKILL.md):
+Follow the [Incremental Commits Skill](.agents/skills/incremental-commits/SKILL.md):
 - Group changes logically by component in strict priority order.
 - Commit each group separately using Conventional Commits format.
 
 ### 4. Push to Origin
 
 Push the commits to the remote branch:
-```powershell
+```bash
 git push origin main
 ```
 *(or the current active branch)*

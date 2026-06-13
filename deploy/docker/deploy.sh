@@ -20,7 +20,7 @@ IMAGE_NAME="spector"
 CONTAINER_NAME="spector"
 DOCKERFILE="deploy/docker/Dockerfile"
 DATA_VOLUME="spector-data"
-HOST_PORT_HTTP=3000
+HOST_PORT_HTTP=7700
 HOST_PORT_API=7070
 
 # Colors
@@ -75,7 +75,7 @@ build() {
 stop() {
     if docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
         log "Stopping container '${CONTAINER_NAME}'..."
-        docker stop "$CONTAINER_NAME" > /dev/null
+        docker stop --timeout 30 "$CONTAINER_NAME" > /dev/null
         ok "Container stopped"
     fi
     if docker ps -aq -f "name=${CONTAINER_NAME}" | grep -q .; then

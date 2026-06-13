@@ -68,11 +68,11 @@ After daily records are complete:
 
 ### 4. Merge & Build Graphs
 
-```powershell
+```bash
 # Merge all day files + biographical into corpus.jsonl
-Get-Content datasets/cognitive-benchmark/corpus-day-*.jsonl,
-             datasets/cognitive-benchmark/corpus-biographical.jsonl |
-    Set-Content datasets/cognitive-benchmark/corpus.jsonl
+cat datasets/cognitive-benchmark/corpus-day-*.jsonl \
+    datasets/cognitive-benchmark/corpus-biographical.jsonl \
+    > datasets/cognitive-benchmark/corpus.jsonl
 ```
 
 Then run the Java `GraphBuilder` to regenerate:
@@ -87,9 +87,9 @@ Write to `datasets/cognitive-benchmark/queries.jsonl` and `qrels.tsv`.
 
 ### 6. Validate & Benchmark
 
-```powershell
+```bash
 # Run the 3-way benchmark
-.\scripts\cognitive-benchmark.ps1 -DatasetDir datasets/cognitive-benchmark
+./scripts/cognitive-benchmark.sh -DatasetDir datasets/cognitive-benchmark
 ```
 
 Check:

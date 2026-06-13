@@ -14,14 +14,14 @@
 #   docker compose down -v             # stop, remove, delete data
 #
 # Endpoints:
-#   Dashboard:    http://localhost:3000
-#   Health:       http://localhost:3000/health
-#   Metrics:      http://localhost:3000/metrics
-#   Engine API:   http://localhost:3000/api/v1/engine/status
-#   Memory API:   http://localhost:3000/api/v1/memory/status
-#   Events SSE:   http://localhost:3000/api/v1/events
-#   MCP:          http://localhost:3000/mcp          (Streamable HTTP)
-#   MCP (legacy): http://localhost:3000/mcp/sse      (SSE transport)
+#   Dashboard:    http://localhost:7700
+#   Health:       http://localhost:7700/health
+#   Metrics:      http://localhost:7700/metrics
+#   Engine API:   http://localhost:7700/api/v1/engine/status
+#   Memory API:   http://localhost:7700/api/v1/memory/status
+#   Events SSE:   http://localhost:7700/api/v1/events
+#   MCP:          http://localhost:7700/mcp          (Streamable HTTP)
+#   MCP (legacy): http://localhost:7700/mcp/sse      (SSE transport)
 #   Direct API:   http://localhost:7070/api/v1/engine/status
 #
 # Prerequisites:
@@ -40,7 +40,7 @@ services:
     image: spector
     container_name: spector
     ports:
-      - "3000:80"
+      - "7700:80"
       - "7070:7070"
     environment:
       - SPECTOR_PORT=7070
@@ -49,6 +49,7 @@ services:
     volumes:
       - spector-data:/data
     restart: unless-stopped
+    stop_grace_period: 30s
     # Allow connection to host services (Ollama)
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -15,14 +15,14 @@ This skill is automatically triggered when the user requests roadmap modificatio
 
 - The repository root must contain this skill package under `.agents/skills/update-roadmap/`
 - The helper scripts must be located at:
-  - Windows: `.agents/skills/update-roadmap/scripts/update-roadmap.ps1`
-  - Unix/Linux/macOS: `.agents/skills/update-roadmap/scripts/update-roadmap.sh`
+  - `.agents/skills/update-roadmap/scripts/update-roadmap.sh` (Unix/macOS/Git Bash on Windows)
+  - `.agents/skills/update-roadmap/scripts/update-roadmap.ps1` (Windows PowerShell fallback)
 - The root must contain `README.md` with the checklist under `## 📈 Roadmap`
 - The docs folder must contain `docs/docs/roadmap.md` with the Summary Table and categories.
 
 ## Instructions for the Agent
 
-When this skill is triggered, you must **never** manually edit the Markdown files (`README.md` or `docs/docs/roadmap.md`). Instead, you must run the PowerShell script `update-roadmap.ps1` or Bash script `update-roadmap.sh` located inside this skill package depending on your operating system environment.
+When this skill is triggered, you must **never** manually edit the Markdown files (`README.md` or `docs/docs/roadmap.md`). Instead, run the appropriate update-roadmap script located inside this skill package. Prefer the shell script (`.sh`) for cross-platform compatibility; fall back to the PowerShell script (`.ps1`) only if running in a pure Windows PowerShell environment without Bash/Git Bash available.
 
 ### Action Mapping
 
@@ -30,13 +30,9 @@ Determine the appropriate action verb based on the user's request:
 
 #### 1. Add Action (`-Action Add`)
 Use when introducing a new feature, index, optimization, or research target.
-- **Syntax (Windows)**:
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File .agents/skills/update-roadmap/scripts/update-roadmap.ps1 -Action Add -Name "<Feature Name>" -Description "<One-line description>" -Category <Compression|Agentic|Compute|Runtime|Distributed> -Status <Planned|Exploratory|Research> -Compression "<savings>" -Recall "<impact>" -Effort <Low|Medium|High> -DetailText "<Detailed markdown specifications>"
-  ```
-- **Syntax (Unix/Linux/macOS)**:
+- **Syntax**:
   ```bash
-  .agents/skills/update-roadmap/scripts/update-roadmap.sh -Action Add -Name "<Feature Name>" -Description "<One-line description>" -Category <Compression|Agentic|Compute|Runtime|Distributed> -Status <Planned|Exploratory|Research> -Compression "<savings>" -Recall "<impact>" -Effort <Low|Medium|High> -DetailText "<Detailed markdown specifications>"
+  bash .agents/skills/update-roadmap/scripts/update-roadmap.sh -Action Add -Name "<Feature Name>" -Description "<One-line description>" -Category <Compression|Agentic|Compute|Runtime|Distributed> -Status <Planned|Exploratory|Research> -Compression "<savings>" -Recall "<impact>" -Effort <Low|Medium|High> -DetailText "<Detailed markdown specifications>"
   ```
 - **Arguments**:
   - `-Name`: The exact name of the feature.
@@ -50,13 +46,9 @@ Use when introducing a new feature, index, optimization, or research target.
 
 #### 2. Complete Action (`-Action Complete`)
 Use when a feature is successfully implemented, verified, and merged.
-- **Syntax (Windows)**:
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File .agents/skills/update-roadmap/scripts/update-roadmap.ps1 -Action Complete -Name "<Feature Name>"
-  ```
-- **Syntax (Unix/Linux/macOS)**:
+- **Syntax**:
   ```bash
-  .agents/skills/update-roadmap/scripts/update-roadmap.sh -Action Complete -Name "<Feature Name>"
+  bash .agents/skills/update-roadmap/scripts/update-roadmap.sh -Action Complete -Name "<Feature Name>"
   ```
 - **Behavior**:
   - Marks the checkbox completed in `README.md` (`- [x] **Feature Name**`).
@@ -65,13 +57,9 @@ Use when a feature is successfully implemented, verified, and merged.
 
 #### 3. Deprioritize Action (`-Action Deprioritize`)
 Use when a feature is put on hold, marked not planned, or deferred.
-- **Syntax (Windows)**:
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File .agents/skills/update-roadmap/scripts/update-roadmap.ps1 -Action Deprioritize -Name "<Feature Name>"
-  ```
-- **Syntax (Unix/Linux/macOS)**:
+- **Syntax**:
   ```bash
-  .agents/skills/update-roadmap/scripts/update-roadmap.sh -Action Deprioritize -Name "<Feature Name>"
+  bash .agents/skills/update-roadmap/scripts/update-roadmap.sh -Action Deprioritize -Name "<Feature Name>"
   ```
 - **Behavior**:
   - Updates Summary Table status to `🔴 Not planned`.
@@ -79,13 +67,9 @@ Use when a feature is put on hold, marked not planned, or deferred.
 
 #### 4. Remove Action (`-Action Remove`)
 Use when a feature is entirely excised from the project scope.
-- **Syntax (Windows)**:
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File .agents/skills/update-roadmap/scripts/update-roadmap.ps1 -Action Remove -Name "<Feature Name>"
-  ```
-- **Syntax (Unix/Linux/macOS)**:
+- **Syntax**:
   ```bash
-  .agents/skills/update-roadmap/scripts/update-roadmap.sh -Action Remove -Name "<Feature Name>"
+  bash .agents/skills/update-roadmap/scripts/update-roadmap.sh -Action Remove -Name "<Feature Name>"
   ```
 - **Behavior**:
   - Deletes checkbox from `README.md`.

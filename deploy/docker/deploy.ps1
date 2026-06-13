@@ -37,7 +37,7 @@ $ImageName     = "spector"
 $ContainerName = "spector"
 $Dockerfile    = "deploy/docker/Dockerfile"
 $DataVolume    = "spector-data"
-$HostPortHttp  = 3000
+$HostPortHttp  = 7700
 $HostPortApi   = 7070
 
 # ── Navigate to project root ──────────────────────────────────────
@@ -92,7 +92,7 @@ function Invoke-Stop {
     $running = docker ps -q -f "name=$ContainerName" 2>$null
     if ($running) {
         Write-Log "Stopping container '$ContainerName'..."
-        docker stop $ContainerName | Out-Null
+        docker stop --timeout 30 $ContainerName | Out-Null
         Write-Ok "Container stopped"
     }
 

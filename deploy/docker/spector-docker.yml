@@ -15,7 +15,7 @@ spector:
 
   engine:
     dimensions: 1024
-    capacity: 100000
+    capacity: 10000
     similarity: COSINE
     index-type: HNSW
     persistence-mode: DISK
@@ -32,7 +32,7 @@ spector:
     persistence-mode: DISK
     persistence-path: /data/memory
     dimensions: 1024
-    capacity: 100000
+    capacity: 10000
     decay-enabled: true
     consolidation-interval: 120s
     default-ingestion-tier: SEMANTIC

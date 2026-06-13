@@ -4,7 +4,7 @@
 #
 # Packages everything in one image:
 #   - SpectorNode backend (REST/gRPC/MCP-SSE/Prometheus) on :7070
-#   - Nginx serving Angular dashboard + reverse proxy on :3000
+#   - Nginx serving Angular dashboard + reverse proxy on :3000 (mapped to :7700 externally)
 #
 # Build:
 #   docker build -f deploy/docker/Dockerfile -t spector .
