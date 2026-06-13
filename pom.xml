@@ -105,8 +105,8 @@
         <armeria.version>1.39.1</armeria.version>
 
         <!-- Test dependency versions -->
-        <junit.version>5.11.4</junit.version>
-        <assertj.version>3.27.3</assertj.version>
+        <junit.version>6.1.0</junit.version>
+        <assertj.version>3.27.7</assertj.version>
         <mockito.version>5.17.0</mockito.version>
 
         <!-- Plugin versions -->
