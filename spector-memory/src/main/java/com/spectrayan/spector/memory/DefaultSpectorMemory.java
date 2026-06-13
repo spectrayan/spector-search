@@ -202,6 +202,9 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
     private final TextChunker chunker;
     private final ParallelEmbeddingPipeline parallelPipeline;
 
+    // ── Multimodal Attachment Processing ──
+    private final com.spectrayan.spector.memory.pipeline.AttachmentProcessor attachmentProcessor;
+
     private DefaultSpectorMemory(Builder builder) {
         this.dimensions = builder.dimensions;
         this.persistenceMode = builder.persistenceMode;
@@ -556,6 +559,15 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         } else {
             this.shutdownHook = null;
         }
+
+        // ── Multimodal Attachment Processor ──
+        if (!builder.sensoryExtractors.isEmpty()) {
+            this.attachmentProcessor = new com.spectrayan.spector.memory.pipeline.AttachmentProcessor(
+                    builder.sensoryExtractors, builder.assetStore);
+            log.info("AttachmentProcessor initialized with {} extractors", builder.sensoryExtractors.size());
+        } else {
+            this.attachmentProcessor = null;
+        }
     }
 
     /**
@@ -662,6 +674,16 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
     }
 
     @Override
+    public CompletableFuture<String> remember(String text, MemoryType type,
+                                               MemorySource source,
+                                               IngestionContext context,
+                                               String... tags) {
+        String generatedId = idGenerator.generate();
+        return remember(generatedId, text, type, source, context, tags)
+                .thenApply(v -> generatedId);
+    }
+
+    @Override
     public CompletableFuture<Void> remember(String id, String text, MemoryType type,
                                               MemorySource source,
                                               IngestionContext context,
@@ -674,6 +696,12 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
                     float[] vector = embeddingProvider.embed(text).vector();
                     cognitiveTarget.ingestCognitive(id, text, vector, type, tags, source, context);
                 }
+
+                // Process attachments if present in context metadata
+                if (context != null && context.hasAttachments()) {
+                    processAttachments(id, context, type, source, tags);
+                }
+
                 checkCircadianTrigger(type);
             } catch (RuntimeException e) {
                 log.error("Failed to remember '{}': {}", id, e.getMessage(), e);
@@ -787,6 +815,49 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
                 .replaceAll("[^a-z0-9\\-]", "-")
                 .replaceAll("-{2,}", "-")
                 .replaceAll("^-|-$", "");
+    }
+
+    /**
+     * Processes attachments from IngestionContext and creates sub-memories.
+     *
+     * <p>Each extracted chunk from an attachment is stored as a separate memory
+     * with a Hebbian edge linking it to the parent memory.</p>
+     */
+    private void processAttachments(String parentId, IngestionContext context,
+                                     MemoryType type, MemorySource source, String[] tags) {
+        if (attachmentProcessor == null) {
+            log.debug("No AttachmentProcessor configured — skipping attachments for '{}'", parentId);
+            return;
+        }
+
+        List<com.spectrayan.spector.memory.pipeline.AttachmentProcessor.AttachmentResult> results =
+                attachmentProcessor.processAttachments(parentId, context);
+
+        if (results.isEmpty()) {
+            log.debug("No attachment chunks produced for '{}'", parentId);
+            return;
+        }
+
+        int ingested = 0;
+        for (var result : results) {
+            try {
+                // Build sub-memory context with Hebbian edge to parent
+                var subContext = IngestionContext.builder()
+                        .metadata(result.metadata())
+                        .hebbianEdge(parentId, 0.8f)  // strong link to parent
+                        .build();
+
+                float[] vector = embeddingProvider.embed(result.text()).vector();
+                cognitiveTarget.ingestCognitive(
+                        result.chunkId(), result.text(), vector, type, tags, source, subContext);
+                ingested++;
+            } catch (RuntimeException e) {
+                log.warn("[Attachment] Failed to ingest chunk '{}': {}", result.chunkId(), e.getMessage());
+            }
+        }
+
+        log.info("[Attachment] Processed {} attachment chunks for parent '{}' ({} ingested)",
+                results.size(), parentId, ingested);
     }
 
     @Override
@@ -1328,6 +1399,10 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
         // Chunking for remember() — default enabled with standard chunker
         TextChunker chunker = new TextChunker();
 
+        // Multimodal attachment processing
+        java.util.List<com.spectrayan.spector.ingestion.sensory.SensoryExtractor> sensoryExtractors = java.util.List.of();
+        com.spectrayan.spector.ingestion.sensory.AssetStore assetStore;
+
         public Builder dimensions(int dimensions) { this.dimensions = dimensions; return this; }
         public Builder embeddingProvider(EmbeddingProvider p) { this.embeddingProvider = p; return this; }
         public Builder persistence(Path p) { this.persistencePath = p; return this; }
@@ -1471,6 +1546,18 @@ public final class DefaultSpectorMemory implements SpectorMemory, SpectorMemoryA
          * @return this builder
          */
         public Builder tokenEmbeddingProvider(TokenEmbeddingProvider provider) { this.tokenEmbeddingProvider = provider; return this; }
+
+        /** Registers sensory extractors for multimodal attachment processing. */
+        public Builder sensoryExtractors(java.util.List<com.spectrayan.spector.ingestion.sensory.SensoryExtractor> extractors) {
+            this.sensoryExtractors = extractors != null ? extractors : java.util.List.of();
+            return this;
+        }
+
+        /** Sets the asset store for persisting original attachment files. */
+        public Builder assetStore(com.spectrayan.spector.ingestion.sensory.AssetStore store) {
+            this.assetStore = store;
+            return this;
+        }
 
         public SpectorMemory build() {
             if (dimensions <= 0 && embeddingProvider != null) {

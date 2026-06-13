@@ -168,6 +168,57 @@ public interface SpectorMemory extends AutoCloseable {
                                        com.spectrayan.spector.memory.neurodivergent.IngestionHints hints,
                                        String... tags);
 
+    /**
+     * Ingests a memory with auto-generated ID and full cognitive context.
+     *
+     * <p>This is the richest auto-ID overload — carries metadata (source modality,
+     * asset URIs), ICNU hints, entities, Hebbian edges, and temporal links in
+     * a single {@link IngestionContext}. Preferred for multimodal ingestion.</p>
+     *
+     * @param text    the memory content (or extracted caption/transcript)
+     * @param type    cognitive tier
+     * @param source  provenance source
+     * @param context consolidated cognitive metadata (metadata, hints, entities, etc.)
+     * @param tags    synaptic tag strings
+     * @return a future that completes with the generated ID
+     */
+    CompletableFuture<String> remember(String text, MemoryType type,
+                                       MemorySource source,
+                                       IngestionContext context,
+                                       String... tags);
+
+    /**
+     * Ingests a file as a memory with auto-generated ID.
+     *
+     * <p>Convenience method that builds an {@link IngestionContext} with the file path
+     * in the {@code attachments} metadata key. The pipeline auto-detects MIME type,
+     * routes to the appropriate {@code SensoryExtractor}, and stores extracted
+     * content as sub-memories linked to the parent.</p>
+     *
+     * <p>If {@code text} is null or blank, the extracted caption/transcript
+     * becomes the memory text. If {@code text} is provided, it serves as the
+     * semantic anchor with the file as an attachment.</p>
+     *
+     * @param filePath local file path to ingest
+     * @param text     optional text description (null = use extracted text)
+     * @param type     cognitive tier
+     * @param source   provenance source
+     * @param tags     synaptic tag strings
+     * @return a future that completes with the generated ID
+     */
+    default CompletableFuture<String> rememberFile(java.nio.file.Path filePath,
+                                                    String text,
+                                                    MemoryType type,
+                                                    MemorySource source,
+                                                    String... tags) {
+        String effectiveText = (text != null && !text.isBlank()) ? text : filePath.getFileName().toString();
+        IngestionContext context = IngestionContext.builder()
+                .metadata(com.spectrayan.spector.memory.model.SourceModality.ATTACHMENTS_KEY,
+                        filePath.toAbsolutePath().toString())
+                .build();
+        return remember(effectiveText, type, source, context, tags);
+    }
+
     /** Performs fused cognitive scoring across all relevant memory tiers. */
     List<CognitiveResult> recall(String queryText, RecallOptions options);
 

@@ -17,6 +17,7 @@ import com.spectrayan.spector.core.similarity.VectorOps;
 import com.spectrayan.spector.index.VectorIndex;
 import com.spectrayan.spector.ingestion.IngestionTarget;
 import com.spectrayan.spector.memory.model.MemoryType;
+import com.spectrayan.spector.memory.model.SourceModality;
 import com.spectrayan.spector.memory.cortex.MemorySource;
 import com.spectrayan.spector.memory.cortex.TierRouter;
 import com.spectrayan.spector.memory.cortex.WorkingMemoryStore;
@@ -537,6 +538,12 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
             flags = (byte) (flags | SynapticHeaderConstants.FLAG_PINNED);
         }
 
+        // Step 4b: Encode source modality from metadata (if provided)
+        SourceModality modality = context.sourceModality();
+        if (modality != null && modality != SourceModality.TEXT) {
+            flags = SynapticHeaderConstants.withSourceModality(flags, modality.ordinal());
+        }
+
         // Step 6: Build cognitive header (use override timestamp if provided)
         float l2Norm = computeL2Norm(vector);
         byte valence = (hints != null) ? hints.valence() : (byte) 0;
@@ -567,8 +574,9 @@ public final class CognitiveIngestionTarget implements IngestionTarget {
             semanticIndex.add(id, storeIndex, vector);
         }
 
-        // Step 8: Register in ID index
-        index.register(id, new MemoryLocation(type, offset, storeIndex), text, source, tags);
+        // Step 8: Register in ID index (with metadata for multimodal memories)
+        java.util.Map<String, String> metadata = context.hasMetadata() ? context.metadata() : null;
+        index.register(id, new MemoryLocation(type, offset, storeIndex), text, source, tags, metadata);
 
         // Step 9: WAL append
         wal.appendRemember(id, quantized);

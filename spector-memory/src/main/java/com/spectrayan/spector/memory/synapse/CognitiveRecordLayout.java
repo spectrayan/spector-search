@@ -14,6 +14,7 @@ package com.spectrayan.spector.memory.synapse;
 
 import com.spectrayan.spector.core.quantization.ScalarQuantizer;
 import com.spectrayan.spector.memory.model.MemoryType;
+import com.spectrayan.spector.memory.model.SourceModality;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -95,6 +96,17 @@ public record CognitiveRecordLayout(int quantizedVecBytes, HeaderLayout headerLa
     /** Reads the synaptic tags (Bloom filter) at the given record offset. */
     public long readSynapticTags(MemorySegment segment, long offset) {
         return headerLayout.readSynapticTags(segment, offset);
+    }
+
+    /**
+     * Reads the source modality (TEXT, IMAGE, AUDIO, VIDEO) from the flags byte.
+     *
+     * <p>Extracts bits 6-7 from the flags byte and maps to a {@link SourceModality}.
+     * Existing records with zeroed bits return {@code SourceModality.TEXT}.</p>
+     */
+    public SourceModality readSourceModality(MemorySegment segment, long offset) {
+        byte flags = headerLayout.readFlags(segment, offset);
+        return SourceModality.fromOrdinal(SynapticHeaderConstants.sourceModalityOrdinal(flags));
     }
 
     /** Reads the valence byte at the given record offset. */
@@ -339,6 +351,36 @@ public record CognitiveRecordLayout(int quantizedVecBytes, HeaderLayout headerLa
                                                           short centroidId, MemoryType memoryType,
                                                           byte valence, byte arousal) {
             byte flags = SynapticHeaderConstants.withMemoryType((byte) 0, memoryType.ordinal());
+            return new CognitiveHeader(timestampMs, synapticTags, exactNorm, importance,
+                    0, centroidId, valence, flags, arousal, 1.0f);
+        }
+
+        /**
+         * Creates a new header with source modality for multimodal ingestion.
+         *
+         * <p>Encodes both the memory type (bits 1-2) and source modality (bits 6-7)
+         * into the flags byte. Used by the ingestion pipeline when processing
+         * non-text content (images, audio, video).</p>
+         *
+         * @param timestampMs  when the memory was formed (epoch millis)
+         * @param synapticTags 64-bit Bloom filter of contextual markers
+         * @param exactNorm    L2 norm for SIMD distance computation
+         * @param importance   base importance (set by Prediction Error engine)
+         * @param centroidId   IVF partition routing ID
+         * @param memoryType   cognitive memory tier
+         * @param modality     source modality (TEXT, IMAGE, AUDIO, VIDEO)
+         * @param valence      signed emotion/reward (-128 to +127)
+         * @param arousal      emotional intensity (unsigned 0-255)
+         */
+        public static CognitiveHeader createWithModality(long timestampMs, long synapticTags,
+                                                          float exactNorm, float importance,
+                                                          short centroidId, MemoryType memoryType,
+                                                          SourceModality modality,
+                                                          byte valence, byte arousal) {
+            byte flags = SynapticHeaderConstants.withMemoryType((byte) 0, memoryType.ordinal());
+            if (modality != null && modality != SourceModality.TEXT) {
+                flags = SynapticHeaderConstants.withSourceModality(flags, modality.ordinal());
+            }
             return new CognitiveHeader(timestampMs, synapticTags, exactNorm, importance,
                     0, centroidId, valence, flags, arousal, 1.0f);
         }

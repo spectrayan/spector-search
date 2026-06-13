@@ -62,7 +62,9 @@ public final class MemoryIndex {
     private static final int INDEX_MAGIC = 0x4D494458;
 
     /** File format version. */
-    private static final int INDEX_VERSION = 1;
+    private static final int INDEX_VERSION = 2;
+    /** V1 format (no metadata) — still loadable for backward compatibility. */
+    private static final int INDEX_VERSION_V1 = 1;
 
     /** File header: 4B magic + 4B version + 4B count + 4B reserved = 16 bytes. */
     private static final int FILE_HEADER_BYTES = 16;
@@ -81,6 +83,9 @@ public final class MemoryIndex {
     private final ConcurrentHashMap<String, String> texts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, MemorySource> sources = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, String[]> tags = new ConcurrentHashMap<>();
+
+    // ── Multimodal metadata: id → metadata map  [lazy — only non-empty for multimodal memories] ──
+    private final ConcurrentHashMap<String, Map<String, String>> metadataMap = new ConcurrentHashMap<>();
 
     // ── Reverse index: (type, offset) → id  [O(1) lookup for recall result assembly] ──
     private final ConcurrentHashMap<Long, String> reverseIndex = new ConcurrentHashMap<>();
@@ -109,10 +114,31 @@ public final class MemoryIndex {
      */
     public void register(String id, MemoryLocation location, String text,
                           MemorySource source, String[] tagArray) {
+        register(id, location, text, source, tagArray, null);
+    }
+
+    /**
+     * Registers a new memory in the index with optional multimodal metadata.
+     *
+     * @param id       unique memory identifier
+     * @param location physical storage location
+     * @param text     raw text content
+     * @param source   provenance source
+     * @param tagArray synaptic tag strings
+     * @param metadata multimodal metadata (nullable — omitted for text-only memories)
+     */
+    public void register(String id, MemoryLocation location, String text,
+                          MemorySource source, String[] tagArray,
+                          Map<String, String> metadata) {
         locations.put(id, location);
         texts.put(id, text);
         sources.put(id, source);
         tags.put(id, tagArray);
+
+        // Only store metadata if non-empty (zero cost for text-only memories)
+        if (metadata != null && !metadata.isEmpty()) {
+            metadataMap.put(id, Map.copyOf(metadata));
+        }
 
         // O(1) reverse index
         reverseIndex.put(reverseKey(location.type(), location.offset()), id);
@@ -126,6 +152,7 @@ public final class MemoryIndex {
         texts.remove(id);
         sources.remove(id);
         tags.remove(id);
+        metadataMap.remove(id);
 
         // Clean reverse index
         if (loc != null) {
@@ -163,6 +190,18 @@ public final class MemoryIndex {
      */
     public String[] tags(String id) {
         return tags.getOrDefault(id, EMPTY_TAGS);
+    }
+
+    /** Shared empty metadata map — avoids allocation on cache miss. */
+    private static final Map<String, String> EMPTY_METADATA = Map.of();
+
+    /**
+     * Returns the multimodal metadata for a memory ID.
+     *
+     * <p>Returns an empty map for text-only memories (never null).</p>
+     */
+    public Map<String, String> metadata(String id) {
+        return metadataMap.getOrDefault(id, EMPTY_METADATA);
     }
 
     /**
@@ -292,16 +331,19 @@ public final class MemoryIndex {
     /**
      * Saves the entire index to a binary file.
      *
-     * <h3>File Format</h3>
+     * <h3>File Format (V2)</h3>
      * <pre>
-     *   [4B magic: "MIDX"]  [4B version: 1]  [4B entry_count]  [4B reserved]
+     *   [4B magic: "MIDX"]  [4B version: 2]  [4B entry_count]  [4B reserved]
      *   For each entry:
      *     [4B id_len] [N id_bytes]
      *     [4B type_ordinal] [8B offset] [4B partition_index]
      *     [4B text_len] [N text_bytes]
      *     [4B source_ordinal]
      *     [4B tag_count] { [4B tag_len] [N tag_bytes] }*
+     *     [4B metadata_count] { [4B key_len] [N key_bytes] [4B val_len] [N val_bytes] }*
      * </pre>
+     *
+     * <p>V1 files (no metadata section) are still loadable for backward compatibility.</p>
      *
      * @param filePath path to write the index file
      */
@@ -335,8 +377,9 @@ public final class MemoryIndex {
                 String text = texts.getOrDefault(id, "");
                 MemorySource source = sources.getOrDefault(id, MemorySource.OBSERVED);
                 String[] tagArray = tags.getOrDefault(id, new String[0]);
+                Map<String, String> meta = metadataMap.getOrDefault(id, Map.of());
 
-                writeEntry(ch, id, loc, text, source, tagArray);
+                writeEntry(ch, id, loc, text, source, tagArray, meta);
             }
 
             ch.force(true);
@@ -384,15 +427,17 @@ public final class MemoryIndex {
                         Integer.toHexString(magic), Integer.toHexString(INDEX_MAGIC));
                 return index;
             }
-            if (version != INDEX_VERSION) {
-                log.warn("Unsupported MemoryIndex version: {} (expected {}), starting fresh",
-                        version, INDEX_VERSION);
+            if (version != INDEX_VERSION && version != INDEX_VERSION_V1) {
+                log.warn("Unsupported MemoryIndex version: {} (expected {} or {}), starting fresh",
+                        version, INDEX_VERSION, INDEX_VERSION_V1);
                 return index;
             }
 
+            boolean hasMetadata = (version >= INDEX_VERSION);
+
             // Read entries
             for (int i = 0; i < entryCount; i++) {
-                readEntry(ch, index);
+                readEntry(ch, index, hasMetadata);
             }
 
             log.info("MemoryIndex loaded: {} entries from {}", index.size(), filePath);
@@ -407,7 +452,8 @@ public final class MemoryIndex {
     // ── Internal serialization helpers ──
 
     private void writeEntry(FileChannel ch, String id, MemoryLocation loc,
-                             String text, MemorySource source, String[] tagArray) throws IOException {
+                             String text, MemorySource source, String[] tagArray,
+                             Map<String, String> metadata) throws IOException {
         byte[] idBytes = id.getBytes(StandardCharsets.UTF_8);
         byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
 
@@ -418,8 +464,23 @@ public final class MemoryIndex {
                 + 4                        // source
                 + 4;                       // tag count
 
-        for (String tag : tagArray) {
-            size += 4 + tag.getBytes(StandardCharsets.UTF_8).length;
+        // Pre-compute tag byte arrays
+        byte[][] tagBytesArray = new byte[tagArray.length][];
+        for (int i = 0; i < tagArray.length; i++) {
+            tagBytesArray[i] = tagArray[i].getBytes(StandardCharsets.UTF_8);
+            size += 4 + tagBytesArray[i].length;
+        }
+
+        // V2: metadata map (4B count + entries)
+        size += 4; // metadata count
+        byte[][] metaKeyBytes = new byte[metadata.size()][];
+        byte[][] metaValBytes = new byte[metadata.size()][];
+        int mi = 0;
+        for (Map.Entry<String, String> me : metadata.entrySet()) {
+            metaKeyBytes[mi] = me.getKey().getBytes(StandardCharsets.UTF_8);
+            metaValBytes[mi] = me.getValue().getBytes(StandardCharsets.UTF_8);
+            size += 4 + metaKeyBytes[mi].length + 4 + metaValBytes[mi].length;
+            mi++;
         }
 
         ByteBuffer buf = ByteBuffer.allocate(size);
@@ -442,17 +503,25 @@ public final class MemoryIndex {
 
         // Tags
         buf.putInt(tagArray.length);
-        for (String tag : tagArray) {
-            byte[] tagBytes = tag.getBytes(StandardCharsets.UTF_8);
+        for (byte[] tagBytes : tagBytesArray) {
             buf.putInt(tagBytes.length);
             buf.put(tagBytes);
+        }
+
+        // V2: Metadata map
+        buf.putInt(metadata.size());
+        for (int j = 0; j < metaKeyBytes.length; j++) {
+            buf.putInt(metaKeyBytes[j].length);
+            buf.put(metaKeyBytes[j]);
+            buf.putInt(metaValBytes[j].length);
+            buf.put(metaValBytes[j]);
         }
 
         buf.flip();
         ch.write(buf);
     }
 
-    private static void readEntry(FileChannel ch, MemoryIndex index) throws IOException {
+    private static void readEntry(FileChannel ch, MemoryIndex index, boolean hasMetadata) throws IOException {
         // ID
         String id = readString(ch);
 
@@ -486,7 +555,24 @@ public final class MemoryIndex {
             tagArray[t] = readString(ch);
         }
 
-        index.register(id, loc, text, source, tagArray);
+        // V2: Metadata map
+        Map<String, String> metadata = null;
+        if (hasMetadata) {
+            ByteBuffer metaCountBuf = ByteBuffer.allocate(4);
+            ch.read(metaCountBuf);
+            metaCountBuf.flip();
+            int metaCount = metaCountBuf.getInt();
+            if (metaCount > 0) {
+                metadata = new java.util.HashMap<>(metaCount);
+                for (int m = 0; m < metaCount; m++) {
+                    String key = readString(ch);
+                    String value = readString(ch);
+                    metadata.put(key, value);
+                }
+            }
+        }
+
+        index.register(id, loc, text, source, tagArray, metadata);
     }
 
     private static String readString(FileChannel ch) throws IOException {

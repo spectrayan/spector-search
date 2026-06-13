@@ -58,7 +58,7 @@ import java.lang.foreign.ValueLayout;
  *   bit 3:   consolidated (has been reflected into Semantic tier)
  *   bit 4:   pinned (exempt from decay/pruning)
  *   bit 5:   resolved (Zeigarnik Effect — unresolved tasks resist decay)
- *   bits 6-7: reserved
+ *   bit 6-7: source_modality (2 bits → 4 modalities: TEXT, IMAGE, AUDIO, VIDEO)
  * </pre>
  *
  * @see HeaderLayout
@@ -150,6 +150,10 @@ public final class SynapticHeaderConstants {
     public static final byte FLAG_PINNED       = 0x10;
     /** Bit 5: Memory is resolved (Zeigarnik Effect — unresolved memories resist time-decay). */
     public static final byte FLAG_RESOLVED     = 0x20;
+    /** Bits 6-7: Source modality (2 bits → 4 modalities: TEXT=0, IMAGE=1, AUDIO=2, VIDEO=3). */
+    public static final byte FLAG_MODALITY_MASK  = (byte) 0xC0;
+    /** Number of bits to shift to read/write source modality from flags. */
+    public static final int  FLAG_MODALITY_SHIFT = 6;
 
     // ── Convenience methods ──
 
@@ -198,5 +202,24 @@ public final class SynapticHeaderConstants {
      */
     public static byte withMemoryType(byte flags, int typeOrdinal) {
         return (byte) ((flags & ~FLAG_TYPE_MASK) | ((typeOrdinal << FLAG_TYPE_SHIFT) & FLAG_TYPE_MASK));
+    }
+
+    /**
+     * Extracts the 2-bit source modality ordinal (0–3) from the flags byte.
+     *
+     * @see com.spectrayan.spector.memory.model.SourceModality
+     */
+    public static int sourceModalityOrdinal(byte flags) {
+        return (flags & 0xFF & FLAG_MODALITY_MASK) >>> FLAG_MODALITY_SHIFT;
+    }
+
+    /**
+     * Encodes a source modality ordinal into a flags byte, preserving other bits.
+     *
+     * @see com.spectrayan.spector.memory.model.SourceModality
+     */
+    public static byte withSourceModality(byte flags, int modalityOrdinal) {
+        return (byte) ((flags & ~FLAG_MODALITY_MASK)
+                | ((modalityOrdinal << FLAG_MODALITY_SHIFT) & (FLAG_MODALITY_MASK & 0xFF)));
     }
 }

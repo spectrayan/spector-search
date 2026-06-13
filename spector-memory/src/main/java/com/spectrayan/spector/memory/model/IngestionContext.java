@@ -17,7 +17,10 @@ import com.spectrayan.spector.commons.error.SpectorValidationException;
 import com.spectrayan.spector.memory.graph.ExtractedEntity;
 import com.spectrayan.spector.memory.neurodivergent.IngestionHints;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Consolidated cognitive metadata for memory ingestion.
@@ -69,17 +72,30 @@ public record IngestionContext(
         List<ExtractedEntity> entities,
         List<HebbianEdgeHint> hebbianEdges,
         List<TemporalLinkHint> temporalLinks,
-        Long overrideTimestampMs
+        Long overrideTimestampMs,
+        Map<String, String> metadata
 ) {
 
-    /** Backward-compatible constructor — no timestamp override. */
+    /** Canonical constructor — enforces unmodifiable metadata. */
+    public IngestionContext {
+        metadata = metadata != null ? Collections.unmodifiableMap(new HashMap<>(metadata)) : Map.of();
+    }
+
+    /** Backward-compatible constructor — no timestamp override, no metadata. */
     public IngestionContext(IngestionHints hints, List<ExtractedEntity> entities,
                             List<HebbianEdgeHint> hebbianEdges, List<TemporalLinkHint> temporalLinks) {
-        this(hints, entities, hebbianEdges, temporalLinks, null);
+        this(hints, entities, hebbianEdges, temporalLinks, null, null);
+    }
+
+    /** Backward-compatible constructor — timestamp override, no metadata. */
+    public IngestionContext(IngestionHints hints, List<ExtractedEntity> entities,
+                            List<HebbianEdgeHint> hebbianEdges, List<TemporalLinkHint> temporalLinks,
+                            Long overrideTimestampMs) {
+        this(hints, entities, hebbianEdges, temporalLinks, overrideTimestampMs, null);
     }
 
     /** Empty context — triggers all automatic pipelines with novelty-only importance. */
-    public static final IngestionContext EMPTY = new IngestionContext(null, null, null, null, null);
+    public static final IngestionContext EMPTY = new IngestionContext(null, null, null, null, null, null);
 
     /** Returns true if pre-extracted entities are provided. */
     public boolean hasEntities() { return entities != null && !entities.isEmpty(); }
@@ -95,6 +111,61 @@ public record IngestionContext(
 
     /** Returns true if a timestamp override is provided. */
     public boolean hasTimestampOverride() { return overrideTimestampMs != null && overrideTimestampMs > 0; }
+
+    /** Returns true if metadata entries are provided. */
+    public boolean hasMetadata() { return metadata != null && !metadata.isEmpty(); }
+
+    /**
+     * Returns the source modality from metadata, or {@code null} if not specified.
+     *
+     * <p>Reads the {@value com.spectrayan.spector.memory.model.SourceModality#METADATA_KEY}
+     * key from the metadata map. The ingestion pipeline extracts this value and
+     * encodes it into the binary header flags byte.</p>
+     */
+    public com.spectrayan.spector.memory.model.SourceModality sourceModality() {
+        String val = metadata != null ? metadata.get(SourceModality.METADATA_KEY) : null;
+        return val != null ? SourceModality.fromName(val) : null;
+    }
+
+    /**
+     * Returns the source asset URI from metadata, or {@code null} if not specified.
+     *
+     * <p>Reads the {@value com.spectrayan.spector.memory.model.SourceModality#URI_KEY}
+     * key from the metadata map.</p>
+     */
+    public String sourceUri() {
+        return metadata != null ? metadata.get(SourceModality.URI_KEY) : null;
+    }
+
+    /**
+     * Returns the comma-separated attachment paths/URIs, or {@code null} if none.
+     *
+     * <p>Reads the {@value com.spectrayan.spector.memory.model.SourceModality#ATTACHMENTS_KEY}
+     * key from the metadata map.</p>
+     */
+    public String attachments() {
+        return metadata != null ? metadata.get(SourceModality.ATTACHMENTS_KEY) : null;
+    }
+
+    /** Returns true if attachments are specified in metadata. */
+    public boolean hasAttachments() {
+        String att = attachments();
+        return att != null && !att.isBlank();
+    }
+
+    /**
+     * Parses the attachments string into individual paths/URIs.
+     *
+     * @return list of attachment paths/URIs (never null, may be empty)
+     */
+    public List<String> attachmentList() {
+        String att = attachments();
+        if (att == null || att.isBlank()) return List.of();
+        return java.util.Arrays.stream(att.split(","))
+                .map(String::strip)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
 
     /** Returns the effective timestamp — override if provided, otherwise wall-clock time. */
     public long effectiveTimestampMs() {
@@ -153,6 +224,7 @@ public record IngestionContext(
         private java.util.List<HebbianEdgeHint> hebbianEdges;
         private java.util.List<TemporalLinkHint> temporalLinks;
         private Long overrideTimestampMs;
+        private java.util.Map<String, String> metadata;
 
         public Builder hints(IngestionHints hints) {
             this.hints = hints;
@@ -197,8 +269,39 @@ public record IngestionContext(
             return this;
         }
 
+        /** Sets the full metadata map. */
+        public Builder metadata(Map<String, String> metadata) {
+            this.metadata = metadata != null ? new java.util.HashMap<>(metadata) : null;
+            return this;
+        }
+
+        /** Adds a single metadata key-value pair. */
+        public Builder metadata(String key, String value) {
+            if (key == null) return this;
+            if (this.metadata == null) this.metadata = new java.util.HashMap<>();
+            this.metadata.put(key, value);
+            return this;
+        }
+
+        /** Convenience: sets source modality in metadata. */
+        public Builder sourceModality(SourceModality modality) {
+            if (modality != null) {
+                return metadata(SourceModality.METADATA_KEY, modality.name());
+            }
+            return this;
+        }
+
+        /** Convenience: sets source URI in metadata. */
+        public Builder sourceUri(String uri) {
+            if (uri != null && !uri.isBlank()) {
+                return metadata(SourceModality.URI_KEY, uri);
+            }
+            return this;
+        }
+
         public IngestionContext build() {
-            return new IngestionContext(hints, entities, hebbianEdges, temporalLinks, overrideTimestampMs);
+            return new IngestionContext(hints, entities, hebbianEdges, temporalLinks,
+                    overrideTimestampMs, metadata);
         }
     }
 }

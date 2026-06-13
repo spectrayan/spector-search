@@ -30,6 +30,7 @@ import com.spectrayan.spector.memory.model.CognitiveResult.RetrievalMode;
 import com.spectrayan.spector.memory.model.MemoryType;
 import com.spectrayan.spector.memory.model.RecallMode;
 import com.spectrayan.spector.memory.model.ScoringMode;
+import com.spectrayan.spector.memory.model.SourceModality;
 import com.spectrayan.spector.memory.model.RecallOptions;
 import com.spectrayan.spector.memory.model.ScoreBreakdown;
 import com.spectrayan.spector.memory.model.TextSearchMode;
@@ -440,7 +441,7 @@ public final class RecallPipeline {
                         r.id(), r.text(), newScore, r.importance(), r.ageDays(),
                         r.agentRecallCount(), r.valence(), r.memoryType(), r.source(),
                         r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay(),
-                        r.retrievalMode(), bd));
+                        r.retrievalMode(), bd, r.trace(), r.sourceModality(), r.metadata()));
             }
         }
 
@@ -474,7 +475,7 @@ public final class RecallPipeline {
                                 r.id(), r.text(), boostedScore, r.importance(), r.ageDays(),
                                 r.agentRecallCount(), r.valence(), r.memoryType(), r.source(),
                                 r.synapticTags(), r.decayFactor(), r.ltpAdjustedDecay(),
-                                r.retrievalMode(), r.breakdown()));
+                                r.retrievalMode(), r.breakdown(), r.trace(), r.sourceModality(), r.metadata()));
                     }
                 }
             }
@@ -559,10 +560,15 @@ public final class RecallPipeline {
                             String text = index.text(neighborId);
                             MemorySource source = index.source(neighborId);
                             String[] tags = index.tags(neighborId);
+                            java.util.Map<String, String> nMeta = index.metadata(neighborId);
+                            SourceModality nModality = nMeta != null
+                                    ? SourceModality.fromName(nMeta.get(SourceModality.METADATA_KEY))
+                                    : SourceModality.TEXT;
                             CognitiveResult candidate = new CognitiveResult(
                                     neighborId, text, graphScore, seed.importance(), 0f,
                                     (short) 0, (byte) 0, seed.memoryType(), source,
-                                    tags, 1.0f, 1.0f);
+                                    tags, 1.0f, 1.0f, RetrievalMode.STANDARD, null, null,
+                                    nModality, nMeta);
                             // Cross-layer dedup: keep best score
                             graphCandidates.merge(neighborId, candidate,
                                     (a, b) -> a.score() >= b.score() ? a : b);
@@ -642,10 +648,15 @@ public final class RecallPipeline {
                                 String text = index.text(memId);
                                 MemorySource source = index.source(memId);
                                 String[] tags = index.tags(memId);
+                                java.util.Map<String, String> eMeta = index.metadata(memId);
+                                SourceModality eModality = eMeta != null
+                                        ? SourceModality.fromName(eMeta.get(SourceModality.METADATA_KEY))
+                                        : SourceModality.TEXT;
                                 CognitiveResult candidate = new CognitiveResult(
                                         memId, text, entityScore, 0.5f, 0f,
                                         (short) 0, (byte) 0, MemoryType.SEMANTIC, source,
-                                        tags, 1.0f, 1.0f);
+                                        tags, 1.0f, 1.0f, RetrievalMode.STANDARD, null, null,
+                                        eModality, eMeta);
                                 // Cross-layer dedup: keep best score
                                 graphCandidates.merge(memId, candidate,
                                         (a, b) -> a.score() >= b.score() ? a : b);
@@ -716,7 +727,8 @@ public final class RecallPipeline {
                                         r.ageDays(), r.agentRecallCount(), r.valence(),
                                         r.memoryType(), r.source(), r.synapticTags(),
                                         r.decayFactor(), r.ltpAdjustedDecay(),
-                                        r.retrievalMode(), r.breakdown()));
+                                        r.retrievalMode(), r.breakdown(), r.trace(),
+                                        r.sourceModality(), r.metadata()));
                             }
                         }
 
@@ -932,7 +944,8 @@ public final class RecallPipeline {
                         existing.ageDays(), existing.agentRecallCount(), existing.valence(),
                         existing.memoryType(), existing.source(), existing.synapticTags(),
                         existing.decayFactor(), existing.ltpAdjustedDecay(),
-                        existing.retrievalMode(), existing.breakdown()));
+                        existing.retrievalMode(), existing.breakdown(), existing.trace(),
+                        existing.sourceModality(), existing.metadata()));
             } else {
                 // BM25-only result — create from index metadata
                 String text = index.text(id);
@@ -943,10 +956,15 @@ public final class RecallPipeline {
                 MemoryIndex.MemoryLocation loc = index.locate(id);
                 MemoryType type = loc != null ? loc.type() : MemoryType.SEMANTIC;
 
+                java.util.Map<String, String> bm25Meta = index.metadata(id);
+                SourceModality bm25Modality = bm25Meta != null
+                        ? SourceModality.fromName(bm25Meta.get(SourceModality.METADATA_KEY))
+                        : SourceModality.TEXT;
                 vectorResults.add(new CognitiveResult(
                         id, text, rrfScore, 0f, 0f,
                         (short) 0, (byte) 0, type, source,
-                        tags, 1.0f, 1.0f));
+                        tags, 1.0f, 1.0f, CognitiveResult.RetrievalMode.STANDARD, null, null,
+                        bm25Modality, bm25Meta));
             }
         }
 
@@ -1195,11 +1213,17 @@ public final class RecallPipeline {
                 /* finalScore */       sr.score()
         );
 
+        // Read source modality from flags byte (bits 6-7)
+        SourceModality modality = SourceModality.fromOrdinal(
+                SynapticHeaderConstants.sourceModalityOrdinal(header.flags()));
+        java.util.Map<String, String> metadata = id != null ? index.metadata(id) : java.util.Map.of();
+
         return new CognitiveResult(
                 id != null ? id : "unknown-" + sr.index(),
                 text, sr.score(), header.importance(), ageDays,
                 header.agentRecallCount(), header.valence(), type, source,
-                tags, rawDecay, ltpDecay, mode, breakdown
+                tags, rawDecay, ltpDecay, mode, breakdown, null,
+                modality, metadata
         );
     }
 
@@ -1281,10 +1305,15 @@ public final class RecallPipeline {
             String text = index.text(chainId);
             MemorySource source = index.source(chainId);
             String[] tags = index.tags(chainId);
+            java.util.Map<String, String> cMeta = index.metadata(chainId);
+            SourceModality cModality = cMeta != null
+                    ? SourceModality.fromName(cMeta.get(SourceModality.METADATA_KEY))
+                    : SourceModality.TEXT;
             CognitiveResult candidate = new CognitiveResult(
                     chainId, text, chainScore, seed.importance(), 0f,
                     (short) 0, (byte) 0, seed.memoryType(), source,
-                    tags, 1.0f, 1.0f);
+                    tags, 1.0f, 1.0f, CognitiveResult.RetrievalMode.STANDARD, null, null,
+                    cModality, cMeta);
             // Cross-layer dedup: keep best score
             graphCandidates.merge(chainId, candidate,
                     (a, b) -> a.score() >= b.score() ? a : b);
@@ -1390,11 +1419,16 @@ public final class RecallPipeline {
                     float ageDays = (float) ((nowMs - layout.readTimestamp(seg, offset))
                             / (double) (24 * 60 * 60 * 1000));
 
+                    java.util.Map<String, String> rMeta = snapshot.index().metadata(memId);
+                    SourceModality rModality = rMeta != null
+                            ? SourceModality.fromName(rMeta.get(SourceModality.METADATA_KEY))
+                            : SourceModality.TEXT;
                     results.add(new CognitiveResult(
                             memId, text, importance, importance,
                             Math.max(0, ageDays),
                             (short) 0, valence, MemoryType.SEMANTIC, source,
-                            memTags, 1.0f, 1.0f));
+                            memTags, 1.0f, 1.0f, CognitiveResult.RetrievalMode.STANDARD, null, null,
+                            rModality, rMeta));
 
                 } catch (RuntimeException e) {
                     log.debug("REPLAY: skipping memory '{}': {}", memId, e.getMessage());

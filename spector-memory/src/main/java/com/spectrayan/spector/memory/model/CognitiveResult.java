@@ -14,6 +14,8 @@ package com.spectrayan.spector.memory.model;
 
 import com.spectrayan.spector.memory.cortex.MemorySource;
 
+import java.util.Map;
+
 /**
  * Immutable result record returned by {@link SpectorMemory#recall}.
  *
@@ -36,6 +38,8 @@ import com.spectrayan.spector.memory.cortex.MemorySource;
  * @param retrievalMode   how this result was retrieved (Standard, Lateral, Hyperfocus)
  * @param breakdown       decomposed scoring trace (nullable for backward compat)
  * @param trace           per-step pipeline scoring trace (nullable — only populated when enableTrace=true)
+ * @param sourceModality  what the memory originally was before ingestion (TEXT, IMAGE, AUDIO, VIDEO)
+ * @param metadata        multimodal metadata (source_uri, etc.) — empty map for text-only memories
  */
 public record CognitiveResult(
         String id,
@@ -52,8 +56,16 @@ public record CognitiveResult(
         float ltpAdjustedDecay,
         RetrievalMode retrievalMode,
         ScoreBreakdown breakdown,
-        RecallTrace trace
+        RecallTrace trace,
+        SourceModality sourceModality,
+        Map<String, String> metadata
 ) {
+
+    /** Compact constructor — defaults null modality/metadata. */
+    public CognitiveResult {
+        if (sourceModality == null) sourceModality = SourceModality.TEXT;
+        if (metadata == null) metadata = Map.of();
+    }
 
     /**
      * How a memory was retrieved — enables the LLM to reason about result provenance.
@@ -86,7 +98,7 @@ public record CognitiveResult(
                             float ltpAdjustedDecay) {
         this(id, text, score, importance, ageDays, agentRecallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
-                RetrievalMode.STANDARD, null, null);
+                RetrievalMode.STANDARD, null, null, null, null);
     }
 
     /**
@@ -99,7 +111,7 @@ public record CognitiveResult(
                             float ltpAdjustedDecay, RetrievalMode retrievalMode) {
         this(id, text, score, importance, ageDays, agentRecallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
-                retrievalMode, null, null);
+                retrievalMode, null, null, null, null);
     }
 
     /**
@@ -113,7 +125,7 @@ public record CognitiveResult(
                             ScoreBreakdown breakdown) {
         this(id, text, score, importance, ageDays, agentRecallCount, valence,
                 memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
-                retrievalMode, breakdown, null);
+                retrievalMode, breakdown, null, null, null);
     }
 
     /**
@@ -143,7 +155,30 @@ public record CognitiveResult(
     public CognitiveResult withTrace(RecallTrace trace) {
         return new CognitiveResult(id, text, score, importance, ageDays, agentRecallCount,
                 valence, memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
-                retrievalMode, breakdown, trace);
+                retrievalMode, breakdown, trace, sourceModality, metadata);
+    }
+
+    /**
+     * Returns a copy of this result with the given modality and metadata.
+     */
+    public CognitiveResult withModality(SourceModality modality, Map<String, String> metadata) {
+        return new CognitiveResult(id, text, score, importance, ageDays, agentRecallCount,
+                valence, memoryType, source, synapticTags, decayFactor, ltpAdjustedDecay,
+                retrievalMode, breakdown, trace, modality, metadata);
+    }
+
+    /**
+     * Returns true if this memory is multimodal (non-text source).
+     */
+    public boolean isMultimodal() {
+        return sourceModality != null && sourceModality != SourceModality.TEXT;
+    }
+
+    /**
+     * Returns the source asset URI, or null if this is a text-only memory.
+     */
+    public String sourceUri() {
+        return metadata != null ? metadata.get(SourceModality.URI_KEY) : null;
     }
 
     /**

@@ -120,6 +120,16 @@ public record CognitiveRecord(
         return SynapticHeaderConstants.isResolved(flags);
     }
 
+    /** Returns the source modality (TEXT, IMAGE, AUDIO, VIDEO) decoded from the flags byte. */
+    public SourceModality sourceModality() {
+        return SourceModality.fromOrdinal(SynapticHeaderConstants.sourceModalityOrdinal(flags));
+    }
+
+    /** Returns true if this memory is multimodal (non-text source). */
+    public boolean isMultimodal() {
+        return sourceModality() != SourceModality.TEXT;
+    }
+
     /** Returns the creation timestamp as an Instant. */
     public Instant createdAt() {
         return Instant.ofEpochMilli(timestampMs);
@@ -175,6 +185,8 @@ public record CognitiveRecord(
         node.put("consolidated", isConsolidated());
         node.put("pinned", isPinned());
         node.put("resolved", isResolved());
+        node.put("sourceModality", sourceModality().name());
+        node.put("multimodal", isMultimodal());
         node.put("partitionIndex", partitionIndex);
         node.put("byteOffset", byteOffset);
         if (quantizedVector != null) {
