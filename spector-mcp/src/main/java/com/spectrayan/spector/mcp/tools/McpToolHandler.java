@@ -17,6 +17,7 @@ package com.spectrayan.spector.mcp.tools;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,6 +100,21 @@ public abstract class McpToolHandler {
      */
     public abstract McpSchema.CallToolResult execute(SpectorEngine engine,
                                                       Map<String, Object> args) throws Exception;
+
+    /**
+     * OAuth 2.1 scopes required to invoke this tool.
+     *
+     * <p>Returns an empty set by default (no restrictions in OSS mode).
+     * Enterprise reads this for tool filtering at {@code list_tools} time
+     * and request-time authorization.</p>
+     *
+     * @return unmodifiable set of required scope strings
+     * @see com.spectrayan.spector.commons.security.SpectorScopes
+     * @see com.spectrayan.spector.commons.security.SpectorRoles
+     */
+    public Set<String> requiredScopes() {
+        return Set.of();
+    }
 
     // ═══════════════════════════════════════════════════════════════
     //  Tool Specification Builder

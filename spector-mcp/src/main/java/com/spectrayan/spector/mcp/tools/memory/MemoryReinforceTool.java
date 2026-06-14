@@ -16,6 +16,8 @@
 package com.spectrayan.spector.mcp.tools.memory;
 
 import java.util.Map;
+import java.util.Set;
+import com.spectrayan.spector.commons.security.SpectorScopes;
 
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.memory.SpectorMemory;
@@ -36,6 +38,8 @@ public final class MemoryReinforceTool extends MemoryToolHandler {
     }
 
     @Override public String name() { return "memory_reinforce"; }
+
+    @Override public Set<String> requiredScopes() { return Set.of(SpectorScopes.MEMORY_WRITE); }
 
     @Override
     public String description() {

@@ -16,6 +16,8 @@
 package com.spectrayan.spector.mcp.tools.memory;
 
 import java.util.Map;
+import java.util.Set;
+import com.spectrayan.spector.commons.security.SpectorScopes;
 
 import io.modelcontextprotocol.spec.McpSchema;
 
@@ -47,6 +49,8 @@ public final class MemoryRememberTool extends MemoryToolHandler {
     }
 
     @Override public String name() { return "memory_remember"; }
+
+    @Override public Set<String> requiredScopes() { return Set.of(SpectorScopes.MEMORY_WRITE); }
 
     @Override
     public String description() {

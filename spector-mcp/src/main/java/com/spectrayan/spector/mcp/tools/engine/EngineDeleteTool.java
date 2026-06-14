@@ -18,6 +18,8 @@ package com.spectrayan.spector.mcp.tools.engine;
 import com.spectrayan.spector.mcp.tools.McpToolHandler;
 
 import java.util.Map;
+import java.util.Set;
+import com.spectrayan.spector.commons.security.SpectorScopes;
 
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.mcp.schema.ToolSchemaBuilder;
@@ -36,6 +38,11 @@ public final class EngineDeleteTool extends McpToolHandler {
     @Override
     public String name() {
         return "engine_delete";
+    }
+
+    @Override
+    public Set<String> requiredScopes() {
+        return Set.of(SpectorScopes.SEARCH_WRITE);
     }
 
     @Override

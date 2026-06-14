@@ -16,6 +16,8 @@
 package com.spectrayan.spector.mcp.tools.memory;
 
 import java.util.Map;
+import java.util.Set;
+import com.spectrayan.spector.commons.security.SpectorScopes;
 
 import com.spectrayan.spector.engine.SpectorEngine;
 import com.spectrayan.spector.memory.SpectorMemory;
@@ -38,6 +40,8 @@ public final class MemoryIntrospectTool extends MemoryToolHandler {
     }
 
     @Override public String name() { return "memory_introspect"; }
+
+    @Override public Set<String> requiredScopes() { return Set.of(SpectorScopes.MEMORY_READ); }
 
     @Override
     public String description() {
